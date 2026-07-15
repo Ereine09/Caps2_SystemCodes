@@ -1,0 +1,632 @@
+<?php
+require_once __DIR__ . '/includes/auth.php';
+require_customer_login();
+
+$cart = get_customer_cart();
+if (empty($cart)) {
+    header('Location: ' . BASE_URL . '/customer/products.php');
+    exit();
+}
+
+$errors = [];
+$success_message = '';
+$stock_deducted = false; 
+$order_details = null;
+
+$admin_message = "Please scan the QR code below and enter the 13-digit GCash reference number after payment. Your order will be processed once payment is verified.";
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $fulfillment_type = $_POST['fulfillment_type'] ?? 'pickup';
+    $delivery_address = trim($_POST['delivery_address'] ?? '');
+    $delivery_phone = trim($_POST['delivery_phone'] ?? '');
+    $delivery_instructions = trim($_POST['delivery_instructions'] ?? '');
+    $pickup_date = trim($_POST['pickup_date'] ?? '');
+    $pickup_time = trim($_POST['pickup_time'] ?? '');
+    $payment_method = $_POST['payment_method'] ?? 'cod'; 
+    $gcash_reference_number = trim($_POST['gcash_reference_number'] ?? '');
+    $delivery_fee = 0;
+
+    if ($fulfillment_type === 'delivery') {
+        if ($delivery_address === '') {
+            $errors[] = 'Delivery address is required for delivery orders.';
+        }
+        if ($delivery_phone === '') {
+            $errors[] = 'Delivery phone number is required.';
+        }
+        if (!is_delivery_area_allowed($delivery_address)) {
+            $errors[] = 'Delivery is currently limited to Caloocan, 10th Avenue, and Grace Park.';
+        }
+
+        // Calculate Delivery Fee for Backend
+        $addr_lower = strtolower($delivery_address);
+        $subtotal = cart_subtotal();
+        if (strpos($addr_lower, '10th ave') !== false || strpos($addr_lower, '10th avenue') !== false || strpos($addr_lower, 'grace park') !== false) {
+            $delivery_fee = 0;
+        } elseif (strpos($addr_lower, 'caloocan') !== false) {
+            $delivery_fee = ($subtotal >= 2000) ? 0 : 50;
+        }
+
+        if ($payment_method === 'pay_at_shop') {
+            $errors[] = 'Pay at shop is only available for pickup orders.';
+        }
+    } else {
+        if ($pickup_date === '') {
+            $errors[] = 'Pick-up date is required for pickup orders.';
+        }
+        if ($pickup_time === '') {
+            $errors[] = 'Pick-up time is required for pickup orders.';
+        }
+        if ($payment_method === 'cod') {
+            $errors[] = 'Cash on delivery is only available for delivery orders.';
+        }
+    }
+
+    if ($payment_method === 'gcash') {
+        if ($gcash_reference_number === '') {
+            $errors[] = 'GCash reference number is required for GCash payments.';
+        } elseif (!preg_match('/^\d{13}$/', $gcash_reference_number)) {
+            $errors[] = 'Please enter a valid 13-digit GCash reference number.';
+        }
+    }
+    // No specific validation needed for 'pay_at_shop' as it's an in-person payment
+    // if ($payment_method === 'pay_at_shop') {
+    // }
+
+    $items_to_deduct = [];
+    foreach ($cart as $item) {
+        // Fix: Check for both 'product_id' and 'id' in case the cart array uses the product's primary key name
+        $product_id = (int) ($item['product_id'] ?? $item['id'] ?? 0);
+        $requested_quantity = (int) ($item['quantity'] ?? 0);
+        $available_stock = get_product_stock($product_id); 
+
+        if ($requested_quantity > $available_stock) {
+            $errors[] = 'Insufficient stock for ' . htmlspecialchars($item['name']) . '. Only ' . $available_stock . ' available.';
+        } else {
+            $items_to_deduct[] = ['product_id' => $product_id, 'quantity' => $requested_quantity];
+        }
+    }
+
+    if (empty($errors)) {
+        $details = [
+            'delivery_address' => $delivery_address,
+            'delivery_phone' => $delivery_phone,
+            'delivery_instructions' => $delivery_instructions,
+            'pickup_date' => $pickup_date,
+            'pickup_time' => $pickup_time,
+            'payment_method' => $payment_method,
+            'gcash_reference_number' => ($payment_method === 'gcash') ? $gcash_reference_number : null,
+            'delivery_fee' => $delivery_fee
+        ];
+
+        // Ensure we are using the global connection defined in config.php
+        $GLOBALS['conn']->begin_transaction();
+
+        $deduction_successful = true;
+        foreach ($items_to_deduct as $item) {
+            if (!deduct_product_stock($item['product_id'], $item['quantity'])) {
+                $errors[] = 'Failed to deduct stock for product ID ' . $item['product_id'] . '. Please try again.';
+                $deduction_successful = false;
+                break;
+            }
+        }
+
+        if ($deduction_successful) {
+            $stock_deducted = true; 
+            $order_id = create_customer_order((int) current_customer()['id'], $fulfillment_type, $details, $cart);
+            if ($order_id !== null) {
+                $GLOBALS['conn']->commit();
+                clear_customer_cart();
+
+                // --- Loyalty Points Logic ---
+                $customer_id = (int) current_customer()['id'];
+                
+                // Fetch previous loyalty points before any updates
+                $previous_points_query = mysqli_query($conn, "SELECT loyalty_points FROM customers WHERE id = " . $customer_id);
+                $previous_points_row = mysqli_fetch_assoc($previous_points_query);
+                $previous_points = (float)($previous_points_row['loyalty_points'] ?? 0.00);
+
+                $order_total = cart_subtotal(); // cart_subtotal() gives the total before delivery fee for point calculation
+                $points_earned = round($order_total / 100, 2); // P100 = 1 point
+
+                if ($points_earned > 0) {
+                    // Get customer name and email for notifications
+                    $client_stmt = $conn->prepare("SELECT name, email FROM customers WHERE id = ? LIMIT 1");
+                    $client_stmt->bind_param("i", $customer_id);
+                    $client_stmt->execute();
+                    $client = $client_stmt->get_result()->fetch_assoc();
+                    $client_name = $client['name'] ?? 'Customer';
+                    $client_email = $client['email'] ?? '';
+
+                    // Record loyalty transaction
+                    $transaction_stmt = $conn->prepare("INSERT INTO loyalty_transactions (customer_id, user_id, product_name, quantity_kg, points_earned, order_id) VALUES (?, NULL, ?, ?, ?, ?)"); // user_id is NULL for customer-initiated transactions
+                    // For purchases, product_name can be 'Online Purchase', quantity_kg can be 0 or derived if applicable
+                    $product_name_for_transaction = 'Online Purchase (Order #' . $order_id . ')';
+                    $zero_kg = 0.00; // No direct kg for this point earning method
+                    $transaction_stmt->bind_param("isddi", $customer_id, $product_name_for_transaction, $zero_kg, $points_earned, $order_id);
+                    $transaction_stmt->execute();
+                    $transaction_id = (int) $conn->insert_id;
+
+                    // Sync points again after adding transaction
+                    $new_total_points = notifications_sync_customer_loyalty_points($conn, $customer_id);
+
+                    // Send notifications
+                    notifications_create($conn, [
+                        'user_id' => NULL, // Customer-initiated action, no staff user_id
+                        'customer_id' => $customer_id,
+                        'type' => 'points_earned',
+                        'channel' => 'both',
+                        'title' => 'You earned ' . notifications_format_points($points_earned) . ' points!',
+                        'message' => $client_name . ' earned ' . notifications_format_points($points_earned) . ' points from your purchase. New usable balance: ' . notifications_format_points($new_total_points) . ' points. Points expire after ' . notifications_expiry_months() . ' months.',
+                        'reference_table' => 'loyalty_transactions',
+                        'reference_id' => $transaction_id,
+                        'points_value' => $points_earned,
+                        'email_to' => $client_email
+                    ]);
+
+                    foreach (notifications_crossed_thresholds($previous_points, $new_total_points) as $threshold) {
+                        notifications_create($conn, [
+                            'user_id' => NULL, // Customer-initiated action, no staff user_id
+                            'customer_id' => $customer_id,
+                            'type' => 'reward_redeemable',
+                            'channel' => 'in_app',
+                            'title' => 'You can now redeem a reward',
+                            'message' => $client_name . ' now has ' . notifications_format_points($new_total_points) . ' usable points and unlocked the ' . notifications_format_points($threshold) . '-point reward tier.',
+                            'reference_table' => 'loyalty_transactions',
+                            'reference_id' => $transaction_id,
+                            'points_value' => $new_total_points,
+                            'email_to' => $client_email
+                        ]);
+                    }
+                }
+                // --- End Loyalty Points Logic ---
+
+                $order_details = get_order_by_id($order_id, (int) current_customer()['id']);
+                $success_message = 'Your order was successfully placed.';
+            } else {
+                $GLOBALS['conn']->rollback();
+                $errors[] = 'Unable to place your order at this time. Please try again later.';
+            }
+        } else {
+            $GLOBALS['conn']->rollback();
+        }
+    }
+}
+?>
+<?php $page_title = 'Checkout'; ?>
+<?php include __DIR__ . '/includes/header.php'; ?>
+
+<!-- Free Map Alternative: Leaflet.js (No API Key or Billing Required) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+<style>
+    /* Layout fix */
+    .checkout-grid {
+        display: grid;
+        grid-template-columns: 1fr 1.2fr;
+        gap: 30px;
+        align-items: start;
+        margin-top: 20px;
+    }
+
+    .checkout-summary, .checkout-form {
+        background: #fff;
+        padding: 20px;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+    }
+
+    /* Fix for radio buttons and labels alignment */
+    .option-group {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+
+    .option-label {
+        display: flex;
+        align-items: center; /* Magic para pumantay sa gitna */
+        gap: 8px;
+        cursor: pointer;
+        font-weight: 500;
+        color: #334155;
+    }
+
+    .form-row {
+        margin-bottom: 15px;
+    }
+
+    .form-row label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 600;
+        color: #1e293b;
+    }
+
+    input[type="text"], input[type="date"], input[type="time"], textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        box-sizing: border-box;
+    }
+
+    /* Organized Summary Table */
+    .summary-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+    .summary-table th { text-align: left; padding: 10px; color: #64748b; font-size: 0.75rem; text-transform: uppercase; border-bottom: 2px solid #f1f5f9; }
+    .summary-table td { padding: 12px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; vertical-align: middle; }
+    
+    .summary-footer {
+        background: #f8fafc;
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+    }
+    .summary-line { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95rem; color: #475569; }
+    .summary-line.total { border-top: 2px solid #e2e8f0; margin-top: 15px; padding-top: 15px; font-weight: 800; color: #1e293b; font-size: 1.2rem; }
+    .summary-item-img { width: 45px; height: 45px; object-fit: contain; border-radius: 6px; background: #fff; border: 1px solid #eee; }
+
+    /* GCash Section Styling */
+    .payment-options {
+        border-top: 1px solid #eee;
+        padding-top: 20px;
+        margin-top: 20px;
+    }
+
+    .payment-method-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        cursor: pointer;
+    }
+
+    /* Modal Zoomer */
+    .modal-zoomer {
+        display: none;
+        position: fixed;
+        z-index: 9999;
+        padding-top: 100px;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.9);
+    }
+
+    .modal-content-zoomer {
+        margin: auto;
+        display: block;
+        width: 80%;
+        max-width: 500px;
+        animation: zoom 0.6s;
+    }
+
+    @keyframes zoom { from {transform:scale(0)} to {transform:scale(1)} }
+
+    .close-zoomer {
+        position: absolute;
+        top: 50px;
+        right: 35px;
+        color: #f1f1f1;
+        font-size: 40px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .gcash-details {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 15px;
+        background-color: #f8fafc;
+        margin-top: 10px;
+    }
+
+    .qr-wrapper {
+        cursor: pointer;
+        display: inline-block;
+        border: 1px solid #cbd5e1;
+        padding: 5px;
+        background: #fff;
+        text-align: center;
+    }
+
+    .qr-wrapper img { width: 150px; height: auto; }
+
+    @media (max-width: 900px) {
+        .checkout-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<section class="customer-panel">
+    <div class="section-header">
+        <h2>Checkout</h2>
+        <p>Review your cart and provide delivery or pickup details.</p>
+    </div>
+
+    <?php if ($errors): ?>
+        <div class="alert-message alert-error">
+            <ul><?php foreach ($errors as $error): ?><li><?php echo htmlspecialchars($error); ?></li><?php endforeach; ?></ul>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($success_message && $order_details): ?>
+        <div class="alert-message alert-success">
+            <p><?php echo htmlspecialchars($success_message); ?></p>
+            <p>Order Number: <strong><?php echo htmlspecialchars($order_details['order_number']); ?></strong></p>
+            <a class="button" href="<?php echo BASE_URL; ?>/customer/orders.php?id=<?php echo $order_details['id']; ?>">View Order Details</a>
+        </div>
+    <?php else: ?>
+        <div class="checkout-grid">
+            <div class="checkout-summary">
+                <h3>Order Summary</h3>
+                <table class="summary-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th style="text-align:center;">Qty</th>
+                            <th style="text-align:right;">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($cart as $item): ?>
+                            <tr>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <img src="<?php echo htmlspecialchars($item['image_url'] ?: BASE_URL.'/assets/img/placeholder.png'); ?>" class="summary-item-img">
+                                        <span style="font-weight:600;"><?php echo htmlspecialchars($item['name']); ?></span>
+                                    </div>
+                                </td>
+                                <td style="text-align:center;">x<?php echo $item['quantity']; ?></td>
+                                <td style="text-align:right; font-weight:700;">PHP <?php echo number_format($item['unit_price'] * $item['quantity'], 2); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <div class="summary-footer">
+                    <div class="summary-line"><span>Subtotal</span><span>PHP <?php echo number_format(cart_subtotal(), 2); ?></span></div>
+                    <div class="summary-line"><span>Delivery Fee</span><span id="delivery-fee-display" style="font-weight: 700; color: #1e293b;">PHP 0.00</span></div>
+                    <div class="summary-line" style="color: #10b981; font-weight: 600;"><span>Points to Earn</span><span>+<?php echo number_format(cart_subtotal() / 100, 2); ?> pts</span></div>
+                    <div class="summary-line total"><span>Total to Pay</span><span id="total-to-pay-display">PHP <?php echo number_format(cart_subtotal(), 2); ?></span></div>
+                </div>
+                <div style="margin-top: 15px; text-align: center;">
+                    <a href="cart.php" style="color: #6366f1; font-size: 0.85rem; text-decoration: none; font-weight: 600;"><i class="fas fa-edit"></i> Edit Items in Cart</a>
+                </div>
+            </div>
+
+            <form method="POST" action="" class="checkout-form" id="checkout-form">
+                <h3>Fulfillment Method</h3>
+                <div class="option-group">
+                    <label class="option-label">
+                        <input type="radio" name="fulfillment_type" value="pickup" <?php echo (!isset($_POST['fulfillment_type']) || $_POST['fulfillment_type'] === 'pickup') ? 'checked' : ''; ?> onchange="toggleFulfillmentFields()"> Pick-up
+                    </label>
+                    <label class="option-label">
+                        <input type="radio" name="fulfillment_type" value="delivery" <?php echo (isset($_POST['fulfillment_type']) && $_POST['fulfillment_type'] === 'delivery') ? 'checked' : ''; ?> onchange="toggleFulfillmentFields()"> Delivery
+                    </label>
+                </div>
+
+                <div id="pickup-fields" style="<?php echo (!isset($_POST['fulfillment_type']) || $_POST['fulfillment_type'] === 'pickup') ? '' : 'display:none;'; ?>">
+                    <div class="form-row">
+                        <label for="pickup_date">Pick-up Date</label>
+                        <input type="date" name="pickup_date" id="pickup_date" value="<?php echo htmlspecialchars($_POST['pickup_date'] ?? ''); ?>" />
+                    </div>
+                    <div class="form-row">
+                        <label for="pickup_time">Pick-up Time</label>
+                        <input type="time" name="pickup_time" id="pickup_time" value="<?php echo htmlspecialchars($_POST['pickup_time'] ?? ''); ?>" />
+                    </div>
+                </div>
+
+                <div id="delivery-fields" style="<?php echo (isset($_POST['fulfillment_type']) && $_POST['fulfillment_type'] === 'delivery') ? '' : 'display:none;'; ?>">
+                    <div class="form-row">
+                        <label for="delivery_address">Delivery Address <small>(Pin location on map for accuracy)</small></label>
+                        <input type="text" name="delivery_address" id="delivery_address" value="<?php echo htmlspecialchars($_POST['delivery_address'] ?? ''); ?>" oninput="updateDeliveryFeeDisplay()" />
+                    </div>
+                    <div class="form-row">
+                        <label for="delivery_phone">Delivery Phone</label>
+                        <input type="text" name="delivery_phone" id="delivery_phone" value="<?php echo htmlspecialchars($_POST['delivery_phone'] ?? ''); ?>" />
+                    </div>
+                    <div class="form-row">
+                        <label for="delivery_instructions">Delivery Instructions</label>
+                        <textarea name="delivery_instructions" id="delivery_instructions"><?php echo htmlspecialchars($_POST['delivery_instructions'] ?? ''); ?></textarea>
+                    </div>
+                    <!-- Map Selection for Delivery Area Verification -->
+                    <div id="map-container" style="margin-top: 15px;">
+                        <div id="map" style="height: 400px; border-radius: 8px; border: 1px solid #cbd5e1;"></div>
+                        <input type="hidden" name="latitude" id="latitude">
+                        <input type="hidden" name="longitude" id="longitude">
+                    </div>
+                </div>
+
+                <div class="payment-options">
+                    <h3>Payment Method</h3>
+                    <div class="option-group">
+                        <label class="option-label">
+                            <input type="radio" name="payment_method" value="gcash" <?php echo (isset($_POST['payment_method']) && $_POST['payment_method'] === 'gcash') ? 'checked' : ''; ?> onchange="togglePaymentFields()"> GCash
+                        </label>
+                        <label class="option-label" id="cod-option">
+                            <input type="radio" name="payment_method" value="cod" <?php echo (!isset($_POST['payment_method']) || $_POST['payment_method'] === 'cod') ? 'checked' : ''; ?> onchange="togglePaymentFields()"> Cash on Delivery (COD)
+                        </label>
+                        <label class="option-label" id="pay_at_shop-option">
+                            <input type="radio" name="payment_method" value="pay_at_shop" <?php echo (isset($_POST['payment_method']) && $_POST['payment_method'] === 'pay_at_shop') ? 'checked' : ''; ?> onchange="togglePaymentFields()"> Pay at Shop
+                        </label>
+                    </div>
+
+                    <div id="gcash-payment-details" class="gcash-details" style="<?php echo (isset($_POST['payment_method']) && $_POST['payment_method'] === 'gcash') ? '' : 'display:none;'; ?>">
+                        <div class="admin-message">
+                            <strong>Message from Staff:</strong>
+                            <p style="font-size: 0.9rem;"><?php echo htmlspecialchars($admin_message); ?></p>
+                        </div>
+
+                        <div class="qr-section" style="text-align: center;">
+                            <p><strong>Scan to Pay</strong></p>
+                            <div class="qr-wrapper" onclick="openQRModal()">
+                                <img id="gcash-qr" src="<?php echo BASE_URL; ?>/customer/assets/images/sampleqr.jpg" alt="GCash QR Code">
+                                <p style="font-size: 10px; color: #666;">(Click to zoom)</p>
+                            </div>
+                        </div>
+
+                        <div class="form-row" style="margin-top: 15px;">
+                            <label for="gcash_reference_number">GCash Reference Number:</label>
+                            <input type="text" name="gcash_reference_number" id="gcash_reference_number" placeholder="13-digit number" value="<?php echo htmlspecialchars($_POST['gcash_reference_number'] ?? ''); ?>">
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="button" style="width:100%; margin-top:20px;">Place Order</button>
+            </form>
+        </div>
+    <?php endif; ?>
+</section>
+
+<!-- QR Zoomer Modal -->
+<div id="qrModal" class="modal-zoomer">
+    <span class="close-zoomer" onclick="closeQRModal()">&times;</span>
+    <img class="modal-content-zoomer" id="imgQR">
+</div>
+
+<script>
+function updateDeliveryFeeDisplay() {
+    const fulfillmentType = document.querySelector('input[name="fulfillment_type"]:checked').value;
+    const address = document.getElementById('delivery_address').value.toLowerCase();
+    const subtotal = <?php echo cart_subtotal(); ?>;
+    let fee = 0;
+
+    if (fulfillmentType === 'delivery') {
+        // Mirroring the PHP Logic for instant feedback
+        if (address.includes('10th ave') || address.includes('10th avenue') || address.includes('grace park')) {
+            fee = 0;
+        } else if (address.includes('caloocan')) {
+            fee = (subtotal >= 2000) ? 0 : 50;
+        } else if (address.trim() !== '') {
+            fee = 120; // Default outside main areas
+        }
+    }
+
+    const feeDisplay = document.getElementById('delivery-fee-display');
+    const totalDisplay = document.getElementById('total-to-pay-display');
+    
+    feeDisplay.innerText = fee === 0 ? 'Free' : 'PHP ' + fee.toFixed(2);
+    // Assuming subtotal is already a number, and fee is a number
+    totalDisplay.innerText = 'PHP ' + (subtotal + fee).toLocaleString(undefined, {minimumFractionDigits: 2});
+}
+
+function toggleFulfillmentFields() {
+    const type = document.querySelector('input[name="fulfillment_type"]:checked').value;
+    document.getElementById('pickup-fields').style.display = type === 'pickup' ? 'block' : 'none';
+    document.getElementById('delivery-fields').style.display = type === 'delivery' ? 'block' : 'none';
+    
+    const mapContainer = document.getElementById('map-container');
+    if (mapContainer) mapContainer.style.display = type === 'delivery' ? 'block' : 'none';
+    if (type === 'delivery') setTimeout(initFreeMap, 100);
+
+    // Filter payment methods based on fulfillment type
+    const codOption = document.getElementById('cod-option');
+    const payAtShopOption = document.getElementById('pay_at_shop-option');
+    
+    if (type === 'pickup') {
+        codOption.style.display = 'none';
+        payAtShopOption.style.display = 'flex';
+        if (document.querySelector('input[name="payment_method"][value="cod"]').checked) {
+            document.querySelector('input[name="payment_method"][value="pay_at_shop"]').checked = true;
+        }
+    } else {
+        codOption.style.display = 'flex';
+        payAtShopOption.style.display = 'none';
+        if (document.querySelector('input[name="payment_method"][value="pay_at_shop"]').checked) {
+            document.querySelector('input[name="payment_method"][value="cod"]').checked = true;
+        }
+    }
+    togglePaymentFields();
+    updateDeliveryFeeDisplay();
+}
+
+function togglePaymentFields() {
+    const method = document.querySelector('input[name="payment_method"]:checked').value;
+    const gcashDetails = document.getElementById('gcash-payment-details');
+    const refInput = document.getElementById('gcash_reference_number');
+
+    gcashDetails.style.display = method === 'gcash' ? 'block' : 'none';
+    refInput.required = (method === 'gcash');
+}
+
+let leafletMap, marker;
+function initFreeMap() {
+    if (leafletMap) {
+        leafletMap.invalidateSize();
+        return;
+    }
+    // Center on Caloocan City
+    leafletMap = L.map('map').setView([14.6416, 120.9762], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(leafletMap);
+
+    // Add Search Bar (Geocoder)
+    L.Control.geocoder({
+        defaultMarkGeocode: false,
+        placeholder: "Search for address...",
+        errorMessage: "Address not found."
+    })
+    .on('markgeocode', function(e) {
+        const latlng = e.geocode.center;
+        if (marker) leafletMap.removeLayer(marker);
+        marker = L.marker(latlng).addTo(leafletMap);
+        leafletMap.setView(latlng, 16);
+
+        document.getElementById('latitude').value = latlng.lat;
+        document.getElementById('longitude').value = latlng.lng;
+        document.getElementById('delivery_address').value = e.geocode.name;
+        updateDeliveryFeeDisplay();
+    })
+    .addTo(leafletMap);
+
+    leafletMap.on('click', function(e) {
+        if (marker) leafletMap.removeLayer(marker);
+        marker = L.marker(e.latlng).addTo(leafletMap);
+        document.getElementById('latitude').value = e.latlng.lat;
+        document.getElementById('longitude').value = e.latlng.lng;
+
+        // Reverse Geocoding using Nominatim (OpenStreetMap)
+        // This converts the clicked coordinates into a readable address string.
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.display_name) {
+                    document.getElementById('delivery_address').value = data.display_name;
+                    // Automatically trigger the delivery fee calculation
+                    updateDeliveryFeeDisplay();
+                }
+            })
+            .catch(err => console.error('Geocoding error:', err));
+    });
+}
+
+function openQRModal() {
+    const modal = document.getElementById("qrModal");
+    const modalImg = document.getElementById("imgQR");
+    const srcImg = document.getElementById("gcash-qr");
+    modal.style.display = "block";
+    modalImg.src = srcImg.src;
+}
+
+function closeQRModal() {
+    document.getElementById("qrModal").style.display = "none";
+}
+
+// Initialize fields correctly on page load
+document.addEventListener('DOMContentLoaded', function() {
+    toggleFulfillmentFields();
+});
+</script>
+<?php include __DIR__ . '/includes/footer.php'; ?>

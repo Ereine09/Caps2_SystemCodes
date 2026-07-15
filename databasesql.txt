@@ -1,0 +1,108 @@
+-- 1. Users table (Authentication and RBAC)
+CREATE TABLE users (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(255) NOT NULL,
+    first_name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255) NOT NULL,
+    role ENUM('admin', 'staff') DEFAULT 'staff',
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    reset_token VARCHAR(255) DEFAULT NULL,
+    reset_expiry DATETIME DEFAULT NULL,
+    password_reset_at DATETIME DEFAULT NULL,
+    login_attempts INT DEFAULT 0,
+    lock_until DATETIME DEFAULT NULL,
+    otp_code VARCHAR(6) DEFAULT NULL,
+    otp_expiry DATETIME DEFAULT NULL
+);
+
+-- 2. Customers table (Loyalty profile) 
+-- Note: Pinalitan ko ang reference mula 'clients' patungong 'customers' sa baba
+CREATE TABLE customers (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    phone VARCHAR(20),
+    gender VARCHAR(20) DEFAULT NULL,
+    age INT DEFAULT NULL,
+    address TEXT,
+    loyalty_points DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. Reward catalog
+CREATE TABLE rewards (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    reward_code VARCHAR(100) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    points DECIMAL(10,2) NOT NULL,
+    stock INT NOT NULL DEFAULT 0,
+    description TEXT
+);
+
+-- 4. Loyalty transaction history
+CREATE TABLE loyalty_transactions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    customer_id INT NOT NULL, -- Pinalitan mula client_id para mag-match sa table name
+    user_id INT NOT NULL,
+    product_name VARCHAR(255) NOT NULL,
+    quantity_kg DECIMAL(10,2) NOT NULL,
+    points_earned DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customers(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 5. Reward redemption history
+CREATE TABLE reward_redemptions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    customer_id INT NOT NULL, -- Pinalitan mula client_id
+    user_id INT NOT NULL,
+    reward_code VARCHAR(100) NOT NULL,
+    reward_name VARCHAR(255) NOT NULL,
+    points_used DECIMAL(10,2) NOT NULL,
+    redeemed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_customer_id (customer_id),
+    INDEX idx_user_id (user_id),
+    FOREIGN KEY (customer_id) REFERENCES customers(id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (reward_code) REFERENCES rewards(reward_code)
+);
+
+-- 6. Activity Logs for Audit Trail
+CREATE TABLE activity_logs (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT,
+    action VARCHAR(255),
+    details TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 7. Notifications table
+CREATE TABLE notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT DEFAULT NULL,
+    customer_id INT DEFAULT NULL, -- Pinalitan mula client_id
+    type VARCHAR(50) NOT NULL,
+    channel ENUM('in_app','email','both') NOT NULL DEFAULT 'in_app',
+    title VARCHAR(150) NOT NULL,
+    message TEXT NOT NULL,
+    reference_table VARCHAR(50) DEFAULT NULL,
+    reference_id INT DEFAULT NULL,
+    points_value DECIMAL(10,2) DEFAULT NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    read_at DATETIME DEFAULT NULL,
+    email_to VARCHAR(255) DEFAULT NULL,
+    delivery_status ENUM('pending','sent','failed') NOT NULL DEFAULT 'pending',
+    delivery_error TEXT DEFAULT NULL,
+    sent_at DATETIME DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_notifications_user_read_created (user_id, is_read, created_at),
+    INDEX idx_notifications_customer_read_created (customer_id, is_read, created_at),
+    INDEX idx_notifications_status_channel (delivery_status, channel),
+    INDEX idx_notifications_type_created (type, created_at),
+    INDEX idx_notifications_reference (reference_table, reference_id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (customer_id) REFERENCES customers(id)
+);

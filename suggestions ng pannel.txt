@@ -1,0 +1,43 @@
+delivery fee like mag babayad ka ng 50 along caloocan
+10k for free delivery along caloocan
+points kapag  ay butal .0
+voucher
+kapag worth 100 mag coconvert yung points sa 1point
+kapag 50 worth .50 lang sya
+
+delivery paano malalagay sa system ng specific area and dapat madetect ng 10ave and grace park lang ang sakop ng delivery
+
+
+what if you just remove the Add Points (from Purchase)
+in loyalty_managements/modules/customers/loyalty_points.php
+
+because the customer's current points will actually change, so all that's left is Adjust Points (Manual)
+
+and I'll just add a walk in purchase to the option and ₱0 = 0.00 points (Rate: ₱100 = 1 point) that's what I think
+
+next na ipopromt
+
+
+
+
+
+
+Ito ung mga need Iadd sa features:
+
+Customer Portal for customer registration, login, and account access
+
+Online Ordering for browsing and purchasing available products through the web-based system
+
+Order Fulfillment Option allowing customers to choose between delivery or pickup
+
+Pickup Scheduling where customers can select their preferred pickup time for ordered products
+
+Delivery Option for customers who want their orders delivered to a nearby serviceable area
+
+Delivery Area Validation to check whether the customer’s address is within the store’s covered delivery range
+
+Bulk Order Processing for orders with larger purchase amounts
+
+Free Delivery for Bulk Orders for purchases worth ₱2,000 or more, limited to nearby serviceable areas and surrounding locations, (10th ave to Grace park) 
+
+Loyalty Points System where customers earn 1 point for every ₱100 purchase

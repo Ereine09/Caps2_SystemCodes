@@ -1,0 +1,13 @@
+{
+  "name": "loyalty-managements/ws",
+  "description": "Ratchet WebSocket server for loyalty messaging",
+  "require": {
+    "cboden/ratchet": "^0.4.4"
+  },
+  "autoload": {
+    "psr-4": {
+      "Ws\\": "./"
+    }
+  }
+}
+
