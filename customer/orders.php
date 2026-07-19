@@ -175,13 +175,23 @@ if (isset($_GET['id'])) {
                     <div class="info-card">
                         <h4><i class="fas fa-credit-card"></i> Payment</h4>
                         <div class="info-item"><span class="info-label">Method</span><span class="info-value"><?php echo strtoupper($order['payment_method']); ?></span></div>
-                        <?php if ($order['payment_reference']): ?><div class="info-item"><span class="info-label">Reference</span><span class="info-value" style="font-size: 0.8rem;"><?php echo htmlspecialchars($order['payment_reference']); ?></span></div><?php endif; ?>
+                        <?php if ($order['payment_method'] === 'bank'): ?>
+                            <div class="info-item"><span class="info-label">Bank Name</span><span class="info-value"><?php echo htmlspecialchars($order['bank_name']); ?></span></div>
+                            <div class="info-item"><span class="info-label">Account Name</span><span class="info-value"><?php echo htmlspecialchars($order['bank_account_name']); ?></span>
+                            <div class="info-item"><span class="info-label">Reference #</span><span class="info-value" style="font-size: 0.8rem;"><?php echo htmlspecialchars($order['payment_reference']); ?></span></div>
+                            <?php if ($order['payment_proof_path']): ?>
+                                <div class="info-item"><span class="info-label">Proof</span><span class="info-value"><a href="<?php echo BASE_URL . htmlspecialchars($order['payment_proof_path']); ?>" target="_blank" class="button-link">View Proof</a></span></div>
+                            <?php endif; ?>
+                        <?php elseif ($order['payment_reference']): ?><div class="info-item"><span class="info-label">Reference</span><span class="info-value" style="font-size: 0.8rem;"><?php echo htmlspecialchars($order['payment_reference']); ?></span></div><?php endif; ?>
                     </div>
                     <div class="info-card">
                         <h4><i class="fas fa-file-invoice-dollar"></i> Summary</h4>
                         <div class="order-summary-box">
                             <div class="summary-row"><span>Subtotal</span><span>PHP <?php echo number_format($order['subtotal'], 2); ?></span></div>
                             <div class="summary-row"><span>Delivery Fee</span><span>PHP <?php echo number_format($order['delivery_fee'], 2); ?></span></div>
+                            <?php if ((float)$order['discount_amount'] > 0): ?>
+                                <div class="summary-row" style="color: #10b981; font-weight: 600;"><span>Discount</span><span>-PHP <?php echo number_format($order['discount_amount'], 2); ?></span></div>
+                            <?php endif; ?>
                             <div class="summary-row" style="color: #27ae60;"><span>Loyalty Earned</span><span>+<?php echo number_format($order['loyalty_points_earned'], 2); ?> pts</span></div>
                             <div class="summary-row summary-total"><span>Total Paid</span><span>PHP <?php echo number_format($order['total'], 2); ?></span></div>
                         </div>

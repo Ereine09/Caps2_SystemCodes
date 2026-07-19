@@ -47,15 +47,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_id'])) {
         // Record redemption
         $reward_code = $reward['reward_code']; // Use existing reward_code to satisfy foreign key constraint
         $reward_name = mysqli_real_escape_string($conn, $reward['name']);
-        $card_number = null;
-        $pin_code = null;
-        $expiry_date = null;
-        if (preg_match('/₱50/', $reward['name'])) {
-            $card_number = '7500017573373806';
-            $pin_code = '8746';
-            $expiry_date = '2125-12-30';
+        
+        // --- New Voucher Generation Logic ---
+        $voucher_code = strtoupper('V-' . bin2hex(random_bytes(6))); // e.g., V-A8B2C5D6E7F1
+        $discount_value = 0.00;
+        if (preg_match('/[₱P](\d+(\.\d{1,2})?)/', $reward['name'], $matches)) {
+            $discount_value = (float) $matches[1];
         }
-        mysqli_query($conn, "INSERT INTO reward_redemptions (customer_id, user_id, reward_code, reward_name, points_used, card_number, pin_code, expiry_date) VALUES ({$customer['id']}, NULL, '$reward_code', '$reward_name', {$reward['points']}, " . ($card_number ? "'$card_number'" : "NULL") . ", " . ($pin_code ? "'$pin_code'" : "NULL") . ", " . ($expiry_date ? "'$expiry_date'" : "NULL") . ")");
+
+        $expiry_date = null;
+        if (!empty($reward['validity_days'])) {
+            $expiry_date = date('Y-m-d H:i:s', strtotime('+' . (int)$reward['validity_days'] . ' days'));
+        }
+
+        // Insert into tbl_vouchers to make it usable at checkout
+        $voucher_stmt = mysqli_prepare($conn, "INSERT INTO tbl_vouchers (code, description, discount_type, discount_value, usage_limit, active, expires_at) VALUES (?, ?, 'fixed', ?, 1, 1, ?)");
+        mysqli_stmt_bind_param($voucher_stmt, 'ssds', $voucher_code, $reward_name, $discount_value, $expiry_date);
+        mysqli_stmt_execute($voucher_stmt);
+        $new_voucher_id = mysqli_insert_id($conn);
+        mysqli_stmt_close($voucher_stmt);
+
+        // Record the redemption, linking it to the new voucher code
+        $redemption_stmt = mysqli_prepare($conn, "INSERT INTO reward_redemptions (customer_id, user_id, reward_code, reward_name, points_used, card_number, expiry_date) VALUES (?, NULL, ?, ?, ?, ?, ?)");
+        mysqli_stmt_bind_param($redemption_stmt, 'issdss', $customer['id'], $reward_code, $reward_name, $reward['points'], $voucher_code, $expiry_date);
+        mysqli_stmt_execute($redemption_stmt);
+        // --- End New Logic ---
 
         mysqli_commit($conn);
 
@@ -124,37 +140,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_id'])) {
                     <div>
                         <strong>Remaining amount:</strong> <?php echo htmlspecialchars($price_value); ?>
                     </div>
-                    <?php if (!empty($expiry_date)): ?>
+                    <?php if (!empty($expiry_date)): // Check if expiry_date is not empty ?>
                     <div>
                         <strong>Expires on:</strong> <?php echo date('m/d/Y', strtotime($expiry_date)); ?>
                     </div>
                     <?php endif; ?>
-                    <?php if (!empty($card_number) || !empty($pin_code)): ?>
+                    <?php if (!empty($voucher_code)): // Check if either exists to show the instruction ?>
                     <div style="margin-top: 20px;">
-                        <p>If you have difficulty scanning your barcode, you can also enter the codes manually:</p>
+                        <p>Use the code below during checkout to apply your discount.</p>
                     </div>
                     <?php endif; ?>
-                    <?php if (!empty($card_number)): ?>
+                    <?php if (!empty($voucher_code)): // Check if card_number is not empty ?>
                     <div class="card-number">
-                        <strong>Card n° :</strong>
-                        <?php echo htmlspecialchars($card_number); ?>
-                        <button class="copy-btn" onclick="copyToClipboard('<?php echo htmlspecialchars($card_number); ?>')">Copy</button>
-                    </div>
-                    <?php endif; ?>
-                    <?php
-                    // Placeholder for barcode image if needed
-                    // echo '<div style="text-align: center; margin: 20px 0;"><img src="path/to/barcode_generator.php?code=' . htmlspecialchars($card_number) . '" alt="Barcode" style="max-width: 100%;"></div>';
-                    ?>
-
-                    <?php if (!empty($pin_code)): ?>
-                    <div class="pin-code">
-                        <strong>Pin code:</strong> <?php echo htmlspecialchars($pin_code); ?>
-                        <button class="copy-btn" onclick="copyToClipboard('<?php echo htmlspecialchars($pin_code); ?>')">Copy</button>
+                        <strong>Voucher Code:</strong>
+                        <?php echo htmlspecialchars($voucher_code); ?>
+                        <button class="copy-btn" onclick="copyToClipboard('<?php echo htmlspecialchars($voucher_code); ?>')">Copy</button>
                     </div>
                     <?php endif; ?>
                     <div style="margin-top: 20px;">
                         <strong>How to use rewards?</strong><br>
-                        Thank you for being a loyal member of Decathlon Philippines! Here's a <?php echo htmlspecialchars($price_value); ?> gift card as a reward for your continuous support in our brand. Let's go!<br><br>
+                        Thank you for being a loyal member of Darius Poultry Supply! Here's a <?php echo htmlspecialchars($price_value); ?> gift card as a reward for your continuous support in our shop. Let's go!<br><br>
                         <strong>More information</strong><br>
                         This gift card can be used in all Darius Poultry Supply stores and online.
                     </div>

@@ -1,6 +1,14 @@
 <?php
 require_once __DIR__ . '/db.php';
 
+// Add the Composer autoloader to make vendor libraries available (optional).
+// Some deployments may not run composer install, so fail softly.
+$autoloadPath = ROOT_PATH . '/vendor/autoload.php';
+if (file_exists($autoloadPath)) {
+    require_once $autoloadPath;
+}
+
+
 function ensure_customer_tables(mysqli $conn): void {
     $queries = [
         "CREATE TABLE IF NOT EXISTS tbl_product_inventory (
@@ -49,8 +57,11 @@ function ensure_customer_tables(mysqli $conn): void {
             voucher_discount_type ENUM('fixed','percent') DEFAULT NULL,
             voucher_discount_value DECIMAL(10,2) DEFAULT 0.00,
             total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-            payment_method ENUM('cod','gcash') NOT NULL DEFAULT 'cod',
+            payment_method ENUM('cod','gcash','pay_at_shop','bank') NOT NULL DEFAULT 'cod',
             payment_reference VARCHAR(100) DEFAULT NULL,
+            bank_name VARCHAR(100) DEFAULT NULL,
+            bank_account_name VARCHAR(255) DEFAULT NULL,
+            payment_proof_path VARCHAR(255) DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT NULL,
             FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
@@ -77,6 +88,7 @@ function ensure_customer_tables(mysqli $conn): void {
             status ENUM('pending','in_transit','delivered','failed') NOT NULL DEFAULT 'pending',
             scheduled_at DATETIME DEFAULT NULL,
             delivered_at DATETIME DEFAULT NULL,
+            qr_confirmation_token VARCHAR(255) DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT NULL,
             FOREIGN KEY (order_id) REFERENCES tbl_orders(id) ON DELETE CASCADE
@@ -103,8 +115,27 @@ function ensure_customer_tables(mysqli $conn): void {
 
     // Ensure existing table ENUM values match the PHP status list
     $conn->query("ALTER TABLE tbl_orders MODIFY COLUMN order_status 
-        ENUM('pending','confirmed','processing','ready_for_pickup','out_for_delivery','to_ship','to_receive','reviews','completed','cancelled') 
+        ENUM('pending','confirmed','processing','ready_for_pickup','out_for_delivery','to_ship','to_receive','reviews','completed','cancelled')
         NOT NULL DEFAULT 'pending'");
+
+    // Ensure payment_method enum supports all checkout options
+    $conn->query("ALTER TABLE tbl_orders MODIFY COLUMN payment_method 
+        ENUM('cod','gcash','pay_at_shop','bank') NOT NULL DEFAULT 'cod'");
+
+    // --- FIX: Add missing columns if they don't exist to prevent "Unknown column" errors ---
+    $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER loyalty_points_earned");
+    $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS voucher_code VARCHAR(100) DEFAULT NULL AFTER discount_amount");
+
+    // --- ADD: Columns for Bank Transfer payment ---
+    $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100) DEFAULT NULL AFTER payment_reference");
+    $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS bank_account_name VARCHAR(255) DEFAULT NULL AFTER bank_name");
+    $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS payment_proof_path VARCHAR(255) DEFAULT NULL AFTER bank_account_name");
+
+    // Add qr_confirmation_token to tbl_delivery
+    $conn->query("ALTER TABLE tbl_delivery ADD COLUMN IF NOT EXISTS qr_confirmation_token VARCHAR(255) DEFAULT NULL AFTER delivered_at");
+
+    // The other voucher columns from the original CREATE TABLE are not used in create_customer_order, so they are not strictly needed to fix this error.
+    // You can add them here if other parts of your application need them.
 
     $conn->query(
         "CREATE OR REPLACE VIEW tbl_customer_records AS
@@ -708,17 +739,15 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
 
     $order_number = generate_order_number();
     
-    $payment_method = $details['payment_method'] ?? 'cod';
-    $payment_reference = $details['gcash_reference_number'] ?? null;
+    $payment_method = (string)($details['payment_method'] ?? 'cod');
 
 
     // Start transaction for order creation
     $customer_db->begin_transaction();
     try {
         $stmt = $customer_db->prepare(
-            "INSERT INTO tbl_orders
-             (customer_id, order_number, fulfillment_type, pickup_date, pickup_time, delivery_address, delivery_phone, delivery_instructions, subtotal, delivery_fee, bulk_order, free_delivery, loyalty_points_earned, total, payment_method, payment_reference)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO tbl_orders (customer_id, order_number, fulfillment_type, pickup_date, pickup_time, delivery_address, delivery_phone, delivery_instructions, subtotal, delivery_fee, bulk_order, free_delivery, loyalty_points_earned, discount_amount, voucher_code, total, payment_method, payment_reference, bank_name, bank_account_name, payment_proof_path)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         $delivery_address = $details['delivery_address'] ?? null;
         $delivery_phone = $details['delivery_phone'] ?? null;
@@ -726,25 +755,17 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
         $pickup_date = $details['pickup_date'] ?? null;
         $pickup_time = $details['pickup_time'] ?? null;
 
-        $stmt->bind_param(
-            'isssssssddiiddss',
-            $customer_id,
-            $order_number,
-            $fulfillment_type,
-            $pickup_date,
-            $pickup_time,
-            $delivery_address,
-            $delivery_phone,
-            $delivery_instructions,
-            $subtotal,
-            $delivery_fee,
-            $bulk_order,
-            $free_delivery,
-            $loyalty_points,
-            $total,
-            $payment_method,
-            $payment_reference
-        );
+        // Ensure we have discount fields coming from $details (checkout passes these)
+        $final_total = $subtotal + $delivery_fee - ($details['discount_amount'] ?? 0.00);
+        $discount_to_save = (float)($details['discount_amount'] ?? 0.00);
+        $voucher_code_to_save = $details['voucher_code'] ?? null;
+
+        // Consolidate reference number logic
+        $payment_reference = $details['gcash_reference_number'] ?? null;
+        $bank_name = ($payment_method === 'bank') ? ($details['bank_name'] ?? null) : null;
+        $bank_account_name = ($payment_method === 'bank') ? ($details['bank_account_name'] ?? null) : null;
+        $payment_proof_path = ($payment_method === 'bank') ? ($details['payment_proof_path'] ?? null) : null;
+        $stmt->bind_param('isssssssddiisdsssssss', $customer_id, $order_number, $fulfillment_type, $pickup_date, $pickup_time, $delivery_address, $delivery_phone, $delivery_instructions, $subtotal, $delivery_fee, $bulk_order, $free_delivery, $loyalty_points, $discount_to_save, $voucher_code_to_save, $final_total, $payment_method, $payment_reference, $bank_name, $bank_account_name, $payment_proof_path);
         $stmt->execute();
         $order_id = $customer_db->insert_id;
         $stmt->close();
@@ -760,13 +781,18 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
         $item_stmt->close();
 
         if ($fulfillment_type === 'delivery') {
+            $confirmation_token = bin2hex(random_bytes(32));
             $delivery_stmt = $customer_db->prepare(
-                "INSERT INTO tbl_delivery (order_id, delivery_type, address, phone, instructions, status, created_at) VALUES (?, 'delivery', ?, ?, ?, 'pending', NOW())"
+                "INSERT INTO tbl_delivery (order_id, delivery_type, address, phone, instructions, status, qr_confirmation_token, created_at) VALUES (?, 'delivery', ?, ?, ?, 'pending', ?, NOW())"
             );
-            $delivery_stmt->bind_param('isss', $order_id, $delivery_address, $delivery_phone, $delivery_instructions);
+            $delivery_stmt->bind_param('issss', $order_id, $delivery_address, $delivery_phone, $delivery_instructions, $confirmation_token);
             $delivery_stmt->execute();
+            $delivery_id = $customer_db->insert_id;
             $delivery_stmt->close();
+
+            send_order_ereceipt($customer_id, $order_id, $delivery_id, $confirmation_token);
         } else {
+            // For pickup, we could also generate a token if needed for confirmation at the shop
             $pickup_stmt = $customer_db->prepare(
                 "INSERT INTO tbl_delivery (order_id, delivery_type, address, phone, instructions, status, scheduled_at, created_at) VALUES (?, 'pickup', NULL, NULL, NULL, 'pending', CONCAT(?, ' ', ?), NOW())"
             );
@@ -783,9 +809,106 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
         return $order_id;
     } catch (Exception $e) {
         $customer_db->rollback();
+        // Expose real error for debugging (developer/admin).
+        error_log('[create_customer_order] failed: ' . $e->getMessage());
+
+        // Also expose it in session so checkout.php can display the real reason.
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+        $_SESSION['last_order_error'] = $e->getMessage();
+
         return null;
     }
 }
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+use Endroid\QrCode\QrCode;
+use Endroid\QrCode\Writer\PngWriter;
+
+function send_order_ereceipt(int $customer_id, int $order_id, int $delivery_id, string $token): void {
+    global $customer_db;
+    $customer = get_customer_by_id($customer_id);
+    $order = get_order_by_id($order_id, $customer_id);
+    $order_items = get_order_items($order_id);
+
+    if (!$customer || !$order) {
+        error_log("Could not send e-receipt: customer or order not found for order_id: $order_id");
+        return;
+    }
+
+    // Generate QR Code
+    $qr_data = json_encode(['delivery_id' => $delivery_id, 'token' => $token]);
+    $qrCode = QrCode::create($qr_data);
+    $writer = new PngWriter();
+    $qr_code_uri = $writer->write($qrCode)->getDataUri();
+
+    // Email Body
+    $items_html = '';
+    foreach ($order_items as $item) {
+        $items_html .= "<tr><td style='padding: 8px; border-bottom: 1px solid #ddd;'>" . htmlspecialchars($item['product_name']) . " (x" . (int)$item['quantity'] . ")</td><td style='padding: 8px; border-bottom: 1px solid #ddd; text-align: right;'>PHP " . number_format((float)$item['total_price'], 2) . "</td></tr>";
+    }
+
+    $body = "
+        <div style='font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;'>
+            <h2 style='color: #333;'>Your Order is Confirmed!</h2>
+            <p>Hi " . htmlspecialchars($customer['name']) . ",</p>
+            <p>Thank you for your order. Here is your e-receipt. Please have the QR code below ready for the rider to scan upon delivery.</p>
+            <hr>
+            <h3>Order Summary (Order #" . htmlspecialchars($order['order_number']) . ")</h3>
+            <table style='width: 100%; border-collapse: collapse;'>
+                <thead><tr><th style='text-align: left; padding: 8px; border-bottom: 2px solid #333;'>Item</th><th style='text-align: right; padding: 8px; border-bottom: 2px solid #333;'>Price</th></tr></thead>
+                <tbody>" . $items_html . "</tbody>
+                <tfoot>
+                    <tr><td style='padding: 8px; text-align: right;'>Subtotal:</td><td style='padding: 8px; text-align: right;'>PHP " . number_format((float)$order['subtotal'], 2) . "</td></tr>
+                    <tr><td style='padding: 8px; text-align: right;'>Delivery Fee:</td><td style='padding: 8px; text-align: right;'>PHP " . number_format((float)$order['delivery_fee'], 2) . "</td></tr>
+                    <tr><td style='padding: 8px; text-align: right;'>Discount:</td><td style='padding: 8px; text-align: right;'>- PHP " . number_format((float)$order['discount_amount'], 2) . "</td></tr>
+                    <tr><th style='padding: 8px; text-align: right;'>Total:</th><th style='padding: 8px; text-align: right;'>PHP " . number_format((float)$order['total'], 2) . "</th></tr>
+                </tfoot>
+            </table>
+            <hr>
+            <div style='text-align: center; margin-top: 20px;'>
+                <h3>Delivery Confirmation QR Code</h3>
+                <p>For rider to scan upon delivery.</p>
+                <img src='" . $qr_code_uri . "' alt='QR Code for delivery confirmation' style='width: 200px; height: 200px;'/>
+            </div>
+            <p style='text-align: center; font-size: 0.9em; color: #777; margin-top: 20px;'>Thank you for shopping with us!</p>
+        </div>
+    ";
+
+    // Send Email using PHPMailer
+    $mail = new PHPMailer(true);
+
+    try {
+        //Server settings - replace with your SMTP details
+        $mail->isSMTP();
+        $mail->Host       = 'smtp.gmail.com'; // Set the SMTP server to send through
+        $mail->SMTPAuth   = true;
+        $mail->Username   = 'your_email@gmail.com'; // SMTP username
+        $mail->Password   = 'your_gmail_app_password'; // SMTP password or App Password
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+        $mail->Port       = 465;
+
+        //Recipients
+        $mail->setFrom('no-reply@your-domain.com', htmlspecialchars(SYSTEM_NAME));
+        $mail->addAddress($customer['email'], htmlspecialchars($customer['name']));
+
+        //Attachments
+        // $mail->addStringAttachment(base64_decode(explode(',', $qr_code_uri)[1]), 'qrcode.png', 'base64', 'image/png');
+
+        //Content
+        $mail->isHTML(true);
+        $mail->Subject = 'Your Order Confirmation & E-Receipt from ' . htmlspecialchars(SYSTEM_NAME);
+        $mail->Body    = $body;
+        $mail->AltBody = 'Your order ' . htmlspecialchars($order['order_number']) . ' is confirmed. Total: PHP ' . number_format((float)$order['total'], 2) . '. Please check your email for the full receipt and QR code.';
+
+        $mail->send();
+    } catch (Exception $e) {
+        error_log("Message could not be sent. Mailer Error: {$mail->ErrorInfo}");
+    }
+}
+
 
 function record_order_notification(mysqli $conn, int $customer_id, int $order_id, string $order_number, float $subtotal, string $fulfillment_type, int $bulk_order, int $free_delivery): void {
     $title = 'New Customer Order';

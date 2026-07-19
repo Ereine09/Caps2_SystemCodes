@@ -1,4 +1,8 @@
 <?php
+// Define the absolute path to the project root for reliable includes.
+if (!defined('ROOT_PATH')) {
+    define('ROOT_PATH', realpath(__DIR__ . '/../../'));
+}
 require_once __DIR__ . '/../../app/config/config.php';
 
 // Reuse the existing database connection from config.php

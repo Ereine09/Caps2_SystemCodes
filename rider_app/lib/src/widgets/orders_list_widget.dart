@@ -18,8 +18,8 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
   List<dynamic> _assignments = [];
 
   // Automatically switch between Localhost (for Web/iOS) and 10.0.2.2 (for Android Emulator)
-  final String _baseUrl = kIsWeb 
-      ? 'http://localhost/loyalty_managements' 
+  final String _baseUrl = kIsWeb
+      ? 'http://localhost/loyalty_managements'
       : 'http://10.0.2.2/loyalty_managements';
 
   @override
@@ -37,7 +37,7 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
     try {
       final api = ApiClient(baseUrl: _baseUrl);
       final res = await api.getJson<Map<String, dynamic>>(
-        '/modules/rider/rider_assignments_api.php',
+        '/modules/rider/rider_orders_api.php',
         headers: {
           'Authorization': 'Bearer ${widget.token}',
         },
@@ -102,14 +102,22 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
           final orderNumber = item['order_number'] ?? '';
           final customerName = item['customer_name'] ?? '';
           final address = item['address'] ?? '';
-          final deliveryStatus = item['delivery_status'] ?? '';
+
+          // We want to display the real order status coming from tbl_orders
+          final orderStatusLabel =
+              item['order_status_label'] ?? item['order_status'] ?? '';
+
           final total = item['total'];
 
           return ListTile(
             leading: const Icon(Icons.local_shipping),
-            title: Text(orderNumber.toString().isEmpty ? 'Delivery #$deliveryId' : orderNumber.toString()),
+            title: Text(
+              orderNumber.toString().isEmpty
+                  ? 'Delivery #$deliveryId'
+                  : orderNumber.toString(),
+            ),
             subtitle: Text(
-              '${customerName.toString().isEmpty ? 'Customer' : customerName} • $deliveryStatus\n${address.toString().isEmpty ? '' : address}',
+              '${customerName.toString().isEmpty ? 'Customer' : customerName} • $orderStatusLabel\n${address.toString().isEmpty ? '' : address}',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -117,7 +125,11 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
             isThreeLine: true,
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Tapped delivery_id=$deliveryId (detail screen TODO)')),
+                SnackBar(
+                  content: Text(
+                    'Tapped delivery_id=$deliveryId (detail screen TODO)',
+                  ),
+                ),
               );
             },
           );
@@ -126,3 +138,4 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
     );
   }
 }
+

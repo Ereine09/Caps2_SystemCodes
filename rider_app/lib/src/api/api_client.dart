@@ -7,10 +7,50 @@ class ApiClient {
   ApiClient({required this.baseUrl}) : _dio = Dio() {
     _dio.options = BaseOptions(
       baseUrl: baseUrl,
-      connectTimeout: Duration.zero, // No limit
-      receiveTimeout: Duration.zero, // No limit
+      connectTimeout: const Duration(seconds: 15), // May limit na para hindi mag-hang forever
+      receiveTimeout: const Duration(seconds: 15),
       contentType: Headers.jsonContentType,
       responseType: ResponseType.json,
+    );
+
+    // Nagdagdag tayo ng Interceptor para sa awtomatikong pag-handle ng errors
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onError: (DioException e, handler) {
+          String errorMessage = "Something went wrong";
+
+          // Kung may response galing sa PHP backend mo (tulad ng 400 Bad Request)
+          if (e.response != null) {
+            final data = e.response?.data;
+            if (data is Map && data.containsKey('message')) {
+              // Kukunin natin ang pinasadyang message (e.g. "Username or Email is already taken")
+              errorMessage = data['message'].toString();
+            } else if (data != null) {
+              errorMessage = data.toString();
+            } else {
+              errorMessage = "Server returned status code: ${e.response?.statusCode}";
+            }
+          } else {
+            // Kung walang response (e.g. offline o hindi gumagana ang local server)
+            if (e.type == DioExceptionType.connectionTimeout || 
+                e.type == DioExceptionType.receiveTimeout) {
+              errorMessage = "Connection timeout. Please try again.";
+            } else {
+              errorMessage = "Network error: Unable to connect to the server.";
+            }
+          }
+
+          // Itatapon natin ang malinis na message imbes na ang mahabang DioException block
+          return handler.reject(
+            DioException(
+              requestOptions: e.requestOptions,
+              response: e.response,
+              type: e.type,
+              error: errorMessage, // Dito nakalagay ang malinis na text
+            ),
+          );
+        },
+      ),
     );
   }
 

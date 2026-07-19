@@ -230,6 +230,12 @@
       "languageVersion": "3.2"
     },
     {
+      "name": "mobile_scanner",
+      "rootUri": "file:///C:/Users/Ereine/AppData/Local/Pub/Cache/hosted/pub.dev/mobile_scanner-5.2.3",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
+    },
+    {
       "name": "nested",
       "rootUri": "file:///C:/Users/Ereine/AppData/Local/Pub/Cache/hosted/pub.dev/nested-1.0.0",
       "packageUri": "lib/",

@@ -5,7 +5,7 @@
  * Expected payload (JSON):
  * {
  *   "delivery_id": 123,
- *   "qr_code": "..." (or scanned token)
+ *   "qr_code": "{\"delivery_id\":123,\"token\":\"...\"}" (scanned QR content)
  * }
  *
  * NOTE: Backend storage for QR confirmation is not present in the currently visible code.
@@ -49,19 +49,29 @@ try {
   if (!is_array($input)) $input = [];
 
   $delivery_id = (int)($input['delivery_id'] ?? 0);
-  $qr_code = trim((string)($input['qr_code'] ?? ''));
+  $qr_code_content = trim((string)($input['qr_code'] ?? ''));
 
   if ($delivery_id <= 0) throw new Exception('delivery_id is required');
-  if ($qr_code === '') throw new Exception('qr_code is required');
+  if ($qr_code_content === '') throw new Exception('qr_code is required');
 
-  // TODO: Validate qr_code against a table / expected token per delivery.
-  // For now: mark delivery as delivered.
+  // --- Validate QR Code Token ---
+  $qr_data = json_decode($qr_code_content, true);
+  if (!is_array($qr_data) || !isset($qr_data['delivery_id']) || !isset($qr_data['token'])) {
+      throw new Exception('Invalid QR code format');
+  }
+
+  $qr_delivery_id = (int)$qr_data['delivery_id'];
+  $qr_token = (string)$qr_data['token'];
+
+  if ($delivery_id !== $qr_delivery_id) {
+      throw new Exception('QR code does not match this delivery');
+  }
 
   $order_id = 0;
-  $stmt = $conn->prepare("SELECT order_id FROM tbl_delivery WHERE id = ? LIMIT 1");
+  $stmt = $conn->prepare("SELECT order_id, qr_confirmation_token FROM tbl_delivery WHERE id = ? LIMIT 1");
   $stmt->bind_param('i', $delivery_id);
   $stmt->execute();
-  $res = $stmt->get_result()->fetch_assoc();
+  $res = $stmt->get_result()->fetch_assoc(); // ['order_id' => X, 'qr_confirmation_token' => '...']
   $stmt->close();
 
   if (!$res) throw new Exception('Delivery not found');
@@ -69,6 +79,10 @@ try {
 
   $stmt1 = $conn->prepare("UPDATE tbl_orders SET order_status = 'completed', updated_at = NOW() WHERE id = ?");
   $stmt1->bind_param('i', $order_id);
+  if (!$res['qr_confirmation_token'] || $res['qr_confirmation_token'] !== $qr_token) {
+      throw new Exception('Invalid confirmation token.');
+  }
+
   $stmt1->execute();
   $stmt1->close();
 
@@ -80,6 +94,9 @@ try {
   $stmt2->bind_param('i', $delivery_id);
   $stmt2->execute();
   $stmt2->close();
+
+  // Nullify the token after use to prevent re-scanning
+  $conn->query("UPDATE tbl_delivery SET qr_confirmation_token = NULL WHERE id = " . (int)$delivery_id);
 
   notifications_create($conn, [
     'user_id' => $rider_id,
@@ -109,4 +126,3 @@ catch (Exception $e) {
 
 echo json_encode($response);
 ?>
-

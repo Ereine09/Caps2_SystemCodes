@@ -81,28 +81,15 @@ if ($view_id > 0) {
                     <div>
                         <strong>Expires on:</strong> <?php echo date('m/d/Y', strtotime($redemption['expiry_date'])); ?>
                     </div>
-                    <?php endif; ?>
-                    <?php if (!empty($redemption['card_number']) || !empty($redemption['pin_code'])): // Check if either exists to show the instruction ?>
+                    <?php endif; ?>                    
+                    <?php if (!empty($redemption['card_number'])): // Check if card_number (voucher code) is not empty ?>
                     <div style="margin-top: 20px;">
-                        <p>If you have difficulty scanning your barcode, you can also enter the codes manually:</p>
+                        <p>Use the code below during checkout to apply your discount.</p>
                     </div>
-                    <?php endif; ?>
-                    <?php if (!empty($redemption['card_number'])): // Check if card_number is not empty ?>
                     <div class="card-number">
-                        <strong>Card n° :</strong>
+                        <strong>Voucher Code:</strong>
                         <?php echo htmlspecialchars($redemption['card_number']); ?>
                         <button class="copy-btn" onclick="copyToClipboard('<?php echo htmlspecialchars($redemption['card_number']); ?>')">Copy</button>
-                    </div>
-                    <?php endif; ?>
-                    <?php
-                    // Placeholder for barcode image if needed
-                    // echo '<div style="text-align: center; margin: 20px 0;"><img src="path/to/barcode_generator.php?code=' . htmlspecialchars($redemption['card_number']) . '" alt="Barcode" style="max-width: 100%;"></div>';
-                    ?>
-
-                    <?php if (!empty($redemption['pin_code'])): // Check if pin_code is not empty ?>
-                    <div class="pin-code">
-                        <strong>Pin code:</strong> <?php echo htmlspecialchars($redemption['pin_code']); ?>
-                        <button class="copy-btn" onclick="copyToClipboard('<?php echo htmlspecialchars($redemption['pin_code']); ?>')">Copy</button>
                     </div>
                     <?php endif; ?>
                     <div style="margin-top: 20px;">

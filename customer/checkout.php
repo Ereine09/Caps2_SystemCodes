@@ -7,6 +7,7 @@ if (empty($cart)) {
     header('Location: ' . BASE_URL . '/customer/products.php');
     exit();
 }
+$customer = current_customer();
 
 $errors = [];
 $success_message = '';
@@ -14,6 +15,10 @@ $stock_deducted = false;
 $order_details = null;
 
 $admin_message = "Please scan the QR code below and enter the 13-digit GCash reference number after payment. Your order will be processed once payment is verified.";
+$bank_admin_message = "Please transfer the total amount to the account details below. Upload a screenshot of your transaction receipt and enter the reference number to confirm.";
+
+$voucher_code_input = '';
+$discount_amount = 0.00;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fulfillment_type = $_POST['fulfillment_type'] ?? 'pickup';
@@ -24,7 +29,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $pickup_time = trim($_POST['pickup_time'] ?? '');
     $payment_method = $_POST['payment_method'] ?? 'cod'; 
     $gcash_reference_number = trim($_POST['gcash_reference_number'] ?? '');
+    $bank_name = trim($_POST['bank_name'] ?? '');
+    $bank_reference_number = trim($_POST['bank_reference_number'] ?? '');
+    $bank_account_name = trim($_POST['bank_account_name'] ?? '');
+    $payment_proof_path = '';
     $delivery_fee = 0;
+    $voucher_code_input = trim($_POST['voucher_code'] ?? '');
 
     if ($fulfillment_type === 'delivery') {
         if ($delivery_address === '') {
@@ -68,9 +78,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'Please enter a valid 13-digit GCash reference number.';
         }
     }
-    // No specific validation needed for 'pay_at_shop' as it's an in-person payment
-    // if ($payment_method === 'pay_at_shop') {
-    // }
+
+    if ($payment_method === 'bank') {
+        if ($bank_name === '') $errors[] = 'Bank Name is required for bank transfers.';
+        if ($bank_account_name === '') $errors[] = 'Your Account Name is required for bank transfers.';
+        if ($bank_reference_number === '') $errors[] = 'Bank Reference Number is required.';
+
+        // --- Handle File Upload for Payment Proof ---
+        if (isset($_FILES['payment_proof']) && $_FILES['payment_proof']['error'] === UPLOAD_ERR_OK) {
+            $file = $_FILES['payment_proof'];
+            $upload_dir = __DIR__ . '/../uploads/proofs/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0777, true);
+            }
+
+            $allowed_types = ['image/jpeg', 'image/png', 'image/gif'];
+            if (!in_array($file['type'], $allowed_types)) {
+                $errors[] = 'Invalid file type. Please upload a JPG, PNG, or GIF image.';
+            } elseif ($file['size'] > 5 * 1024 * 1024) { // 5MB limit
+                $errors[] = 'File is too large. Maximum size is 5MB.';
+            } else {
+                $filename = uniqid('proof_', true) . '.' . pathinfo($file['name'], PATHINFO_EXTENSION);
+                $destination = $upload_dir . $filename;
+                if (move_uploaded_file($file['tmp_name'], $destination)) {
+                    $payment_proof_path = '/uploads/proofs/' . $filename; // Store relative path
+                } else {
+                    $errors[] = 'Failed to upload payment proof. Please try again.';
+                }
+            }
+        } else {
+            $errors[] = 'A payment proof screenshot is required for bank transfers.';
+        }
+    }
 
     $items_to_deduct = [];
     foreach ($cart as $item) {
@@ -86,16 +125,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // --- Voucher Validation ---
+    if (!empty($voucher_code_input)) {
+        $voucher_stmt = $conn->prepare(
+            "SELECT v.*, rr.customer_id 
+             FROM tbl_vouchers v 
+             LEFT JOIN reward_redemptions rr ON v.code = rr.card_number
+             WHERE v.code = ? AND v.active = 1 
+             LIMIT 1"
+        );
+        $voucher_stmt->bind_param('s', $voucher_code_input);
+        $voucher_stmt->execute();
+        $voucher_result = $voucher_stmt->get_result();
+        $voucher = $voucher_result->fetch_assoc();
+        $voucher_stmt->close();
+
+        if ($voucher) {
+            // Check if voucher belongs to the current customer
+            if ((int)$voucher['customer_id'] !== (int)$customer['id']) {
+                $errors[] = 'This voucher does not belong to you.';
+            }
+            // Check if voucher is already used
+            if ((int)$voucher['used_count'] >= (int)$voucher['usage_limit'] && (int)$voucher['usage_limit'] > 0) {
+                $errors[] = 'This voucher is already claimed.';
+            }
+            // Check expiry
+            if ($voucher['expires_at'] && strtotime($voucher['expires_at']) < time()) {
+                $errors[] = 'This voucher has expired.';
+            }
+            // Check minimum spend
+            if ($voucher['min_order_amount'] && cart_subtotal() < (float)$voucher['min_order_amount']) {
+                $errors[] = 'A minimum spend of PHP ' . number_format($voucher['min_order_amount'], 2) . ' is required to use this voucher.';
+            }
+
+            if (empty($errors)) { // Only calculate discount if no voucher errors
+                $discount_amount = (float)$voucher['discount_value'];
+            }
+        } else {
+            $errors[] = 'The voucher code entered is invalid or has expired.';
+        }
+    }
+
+
     if (empty($errors)) {
         $details = [
             'delivery_address' => $delivery_address,
             'delivery_phone' => $delivery_phone,
+            'subtotal' => cart_subtotal(), // Add subtotal
             'delivery_instructions' => $delivery_instructions,
             'pickup_date' => $pickup_date,
             'pickup_time' => $pickup_time,
             'payment_method' => $payment_method,
-            'gcash_reference_number' => ($payment_method === 'gcash') ? $gcash_reference_number : null,
-            'delivery_fee' => $delivery_fee
+            'gcash_reference_number' => ($payment_method === 'gcash') ? $gcash_reference_number : $bank_reference_number,
+            'delivery_fee' => $delivery_fee,
+            'voucher_code' => $voucher_code_input, // Pass voucher to order creation
+            'discount_amount' => $discount_amount, // Pass discount amount
+            'bank_name' => $bank_name,
+            'bank_account_name' => $bank_account_name,
+            'payment_proof_path' => $payment_proof_path,
         ];
 
         // Ensure we are using the global connection defined in config.php
@@ -112,7 +199,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($deduction_successful) {
             $stock_deducted = true; 
-            $order_id = create_customer_order((int) current_customer()['id'], $fulfillment_type, $details, $cart);
+            $order_id = create_customer_order((int)$customer['id'], $fulfillment_type, $details, $cart);
             if ($order_id !== null) {
                 $GLOBALS['conn']->commit();
                 clear_customer_cart();
@@ -120,12 +207,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // --- Loyalty Points Logic ---
                 $customer_id = (int) current_customer()['id'];
                 
-                // Fetch previous loyalty points before any updates
+                // Fetch previous loyalty points before any updates (subtotal is used for points)
                 $previous_points_query = mysqli_query($conn, "SELECT loyalty_points FROM customers WHERE id = " . $customer_id);
                 $previous_points_row = mysqli_fetch_assoc($previous_points_query);
                 $previous_points = (float)($previous_points_row['loyalty_points'] ?? 0.00);
 
-                $order_total = cart_subtotal(); // cart_subtotal() gives the total before delivery fee for point calculation
+                $order_total = cart_subtotal() - $discount_amount; // Points are earned on the amount after discount
                 $points_earned = round($order_total / 100, 2); // P100 = 1 point
 
                 if ($points_earned > 0) {
@@ -180,11 +267,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 // --- End Loyalty Points Logic ---
 
-                $order_details = get_order_by_id($order_id, (int) current_customer()['id']);
+                $order_details = get_order_by_id($order_id, (int)$customer['id']);
                 $success_message = 'Your order was successfully placed.';
             } else {
                 $GLOBALS['conn']->rollback();
-                $errors[] = 'Unable to place your order at this time. Please try again later.';
+
+                $real_err = $_SESSION['last_order_error'] ?? null;
+                unset($_SESSION['last_order_error']);
+
+                $errors[] = $real_err ? $real_err : 'Unable to place your order at this time. Please try again later.';
             }
         } else {
             $GLOBALS['conn']->rollback();
@@ -396,8 +487,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </tbody>
                 </table>
                 <div class="summary-footer">
-                    <div class="summary-line"><span>Subtotal</span><span>PHP <?php echo number_format(cart_subtotal(), 2); ?></span></div>
+                    <div class="summary-line"><span>Subtotal</span><span id="subtotal-display">PHP <?php echo number_format(cart_subtotal(), 2); ?></span></div>
                     <div class="summary-line"><span>Delivery Fee</span><span id="delivery-fee-display" style="font-weight: 700; color: #1e293b;">PHP 0.00</span></div>
+                    <div class="summary-line" id="discount-line" style="color: #10b981; font-weight: 600; display: none;">
+                        <span>Discount</span>
+                        <span id="discount-display">-PHP 0.00</span>
+                        <input type="hidden" id="discount-value" value="<?php echo $discount_amount; ?>">
+                    </div>
                     <div class="summary-line" style="color: #10b981; font-weight: 600;"><span>Points to Earn</span><span>+<?php echo number_format(cart_subtotal() / 100, 2); ?> pts</span></div>
                     <div class="summary-line total"><span>Total to Pay</span><span id="total-to-pay-display">PHP <?php echo number_format(cart_subtotal(), 2); ?></span></div>
                 </div>
@@ -406,8 +502,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
 
-            <form method="POST" action="" class="checkout-form" id="checkout-form">
+            <form method="POST" action="" class="checkout-form" id="checkout-form" enctype="multipart/form-data">
                 <h3>Fulfillment Method</h3>
+                
+                <div class="form-row">
+                    <label for="voucher_code">Voucher Code (from My Rewards) <button type="submit" name="apply_voucher" formnovalidate class="button-link" style="margin-left: 10px; font-size: 0.8rem;">Apply</button></label>
+                    <input type="text" name="voucher_code" id="voucher_code" placeholder="Enter voucher code" value="<?php echo htmlspecialchars($voucher_code_input); ?>" onkeyup="this.value = this.value.toUpperCase();">
+                </div>
+
                 <div class="option-group">
                     <label class="option-label">
                         <input type="radio" name="fulfillment_type" value="pickup" <?php echo (!isset($_POST['fulfillment_type']) || $_POST['fulfillment_type'] === 'pickup') ? 'checked' : ''; ?> onchange="toggleFulfillmentFields()"> Pick-up
@@ -461,6 +563,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <label class="option-label" id="pay_at_shop-option">
                             <input type="radio" name="payment_method" value="pay_at_shop" <?php echo (isset($_POST['payment_method']) && $_POST['payment_method'] === 'pay_at_shop') ? 'checked' : ''; ?> onchange="togglePaymentFields()"> Pay at Shop
                         </label>
+                        <label class="option-label" id="bank-option">
+                            <input type="radio" name="payment_method" value="bank" <?php echo (isset($_POST['payment_method']) && $_POST['payment_method'] === 'bank') ? 'checked' : ''; ?> onchange="togglePaymentFields()"> Bank Transfer
+                        </label>
                     </div>
 
                     <div id="gcash-payment-details" class="gcash-details" style="<?php echo (isset($_POST['payment_method']) && $_POST['payment_method'] === 'gcash') ? '' : 'display:none;'; ?>">
@@ -482,6 +587,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <input type="text" name="gcash_reference_number" id="gcash_reference_number" placeholder="13-digit number" value="<?php echo htmlspecialchars($_POST['gcash_reference_number'] ?? ''); ?>">
                         </div>
                     </div>
+
+                    <div id="bank-transfer-details" class="gcash-details" style="<?php echo (isset($_POST['payment_method']) && $_POST['payment_method'] === 'bank') ? '' : 'display:none;'; ?>">
+                        <div class="admin-message">
+                            <strong>Message from Staff:</strong>
+                            <p style="font-size: 0.9rem;"><?php echo htmlspecialchars($bank_admin_message); ?></p>
+                        </div>
+                        <div style="margin-top: 15px; background: #fff; padding: 15px; border-radius: 8px;">
+                            <p><strong>Bank:</strong> BDO Unibank<br><strong>Account Name:</strong> Darius Poultry Supply<br><strong>Account Number:</strong> 001234567890</p>
+                        </div>
+                        <div class="form-row" style="margin-top: 15px;">
+                            <label for="bank_name">Bank Name (e.g., BPI, BDO):</label>
+                            <input type="text" name="bank_name" id="bank_name" placeholder="The bank you transferred from" value="<?php echo htmlspecialchars($_POST['bank_name'] ?? ''); ?>">
+                        </div>
+                        <div class="form-row">
+                            <label for="bank_account_name">Your Account Name:</label>
+                            <input type="text" name="bank_account_name" id="bank_account_name" placeholder="The name on your bank account" value="<?php echo htmlspecialchars($_POST['bank_account_name'] ?? ''); ?>">
+                        </div>
+                        <div class="form-row">
+                            <label for="bank_reference_number">Bank Reference Number:</label>
+                            <input type="text" name="bank_reference_number" id="bank_reference_number" placeholder="From your transaction receipt" value="<?php echo htmlspecialchars($_POST['bank_reference_number'] ?? ''); ?>">
+                        </div>
+                        <div class="form-row">
+                            <label for="payment_proof">Upload Proof of Payment:</label>
+                            <input type="file" name="payment_proof" id="payment_proof" accept="image/png, image/jpeg, image/gif">
+                        </div>
+                    </div>
+
                 </div>
                 <button type="submit" class="button" style="width:100%; margin-top:20px;">Place Order</button>
             </form>
@@ -496,29 +628,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
 <script>
-function updateDeliveryFeeDisplay() {
+function updateTotals() {
     const fulfillmentType = document.querySelector('input[name="fulfillment_type"]:checked').value;
     const address = document.getElementById('delivery_address').value.toLowerCase();
     const subtotal = <?php echo cart_subtotal(); ?>;
     let fee = 0;
+    let discount = parseFloat(document.getElementById('discount-value').value) || 0;
 
     if (fulfillmentType === 'delivery') {
-        // Mirroring the PHP Logic for instant feedback
         if (address.includes('10th ave') || address.includes('10th avenue') || address.includes('grace park')) {
             fee = 0;
         } else if (address.includes('caloocan')) {
             fee = (subtotal >= 2000) ? 0 : 50;
         } else if (address.trim() !== '') {
-            fee = 120; // Default outside main areas
+            fee = 120;
         }
     }
 
+    const totalBeforeDiscount = subtotal + fee;
+    const finalTotal = Math.max(0, totalBeforeDiscount - discount);
+
     const feeDisplay = document.getElementById('delivery-fee-display');
     const totalDisplay = document.getElementById('total-to-pay-display');
-    
+    const discountLine = document.getElementById('discount-line');
+    const discountDisplay = document.getElementById('discount-display');
+
     feeDisplay.innerText = fee === 0 ? 'Free' : 'PHP ' + fee.toFixed(2);
-    // Assuming subtotal is already a number, and fee is a number
-    totalDisplay.innerText = 'PHP ' + (subtotal + fee).toLocaleString(undefined, {minimumFractionDigits: 2});
+    totalDisplay.innerText = 'PHP ' + finalTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
+
+    if (discount > 0) {
+        discountLine.style.display = 'flex';
+        discountDisplay.innerText = '-PHP ' + discount.toFixed(2);
+    } else {
+        discountLine.style.display = 'none';
+    }
+}
+
+function updateDeliveryFeeDisplay() {
+    updateTotals();
 }
 
 function toggleFulfillmentFields() {
@@ -530,7 +677,6 @@ function toggleFulfillmentFields() {
     if (mapContainer) mapContainer.style.display = type === 'delivery' ? 'block' : 'none';
     if (type === 'delivery') setTimeout(initFreeMap, 100);
 
-    // Filter payment methods based on fulfillment type
     const codOption = document.getElementById('cod-option');
     const payAtShopOption = document.getElementById('pay_at_shop-option');
     
@@ -548,16 +694,20 @@ function toggleFulfillmentFields() {
         }
     }
     togglePaymentFields();
-    updateDeliveryFeeDisplay();
+    updateTotals();
 }
 
 function togglePaymentFields() {
     const method = document.querySelector('input[name="payment_method"]:checked').value;
     const gcashDetails = document.getElementById('gcash-payment-details');
+    const bankDetails = document.getElementById('bank-transfer-details');
     const refInput = document.getElementById('gcash_reference_number');
 
     gcashDetails.style.display = method === 'gcash' ? 'block' : 'none';
+    bankDetails.style.display = method === 'bank' ? 'block' : 'none';
+
     refInput.required = (method === 'gcash');
+    document.getElementById('bank_reference_number').required = (method === 'bank');
 }
 
 let leafletMap, marker;
@@ -566,13 +716,11 @@ function initFreeMap() {
         leafletMap.invalidateSize();
         return;
     }
-    // Center on Caloocan City
     leafletMap = L.map('map').setView([14.6416, 120.9762], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(leafletMap);
 
-    // Add Search Bar (Geocoder)
     L.Control.geocoder({
         defaultMarkGeocode: false,
         placeholder: "Search for address...",
@@ -587,7 +735,7 @@ function initFreeMap() {
         document.getElementById('latitude').value = latlng.lat;
         document.getElementById('longitude').value = latlng.lng;
         document.getElementById('delivery_address').value = e.geocode.name;
-        updateDeliveryFeeDisplay();
+        updateTotals();
     })
     .addTo(leafletMap);
 
@@ -597,15 +745,12 @@ function initFreeMap() {
         document.getElementById('latitude').value = e.latlng.lat;
         document.getElementById('longitude').value = e.latlng.lng;
 
-        // Reverse Geocoding using Nominatim (OpenStreetMap)
-        // This converts the clicked coordinates into a readable address string.
         fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
             .then(response => response.json())
             .then(data => {
                 if (data.display_name) {
                     document.getElementById('delivery_address').value = data.display_name;
-                    // Automatically trigger the delivery fee calculation
-                    updateDeliveryFeeDisplay();
+                    updateTotals();
                 }
             })
             .catch(err => console.error('Geocoding error:', err));
@@ -624,9 +769,9 @@ function closeQRModal() {
     document.getElementById("qrModal").style.display = "none";
 }
 
-// Initialize fields correctly on page load
 document.addEventListener('DOMContentLoaded', function() {
     toggleFulfillmentFields();
+    updateTotals(); // Run on page load to apply initial discount if any
 });
 </script>
 <?php include __DIR__ . '/includes/footer.php'; ?>

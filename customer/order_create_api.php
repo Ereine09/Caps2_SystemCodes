@@ -52,6 +52,20 @@ try {
     $fulfillment_type = $input['fulfillment_type'] ?? 'pickup';
     $payment_method = $input['payment_method'] ?? 'cod';
 
+    // Allowed payment methods
+    if (!in_array($payment_method, ['cod', 'gcash', 'pay_at_shop'], true)) {
+        throw new Exception('Invalid payment method.');
+    }
+
+    // pay_at_shop rules
+    if ($payment_method === 'pay_at_shop' && $fulfillment_type !== 'pickup') {
+        throw new Exception('Pay at shop is only available for pickup orders.');
+    }
+    if ($payment_method === 'cod' && $fulfillment_type !== 'delivery') {
+        throw new Exception('Cash on delivery is only available for delivery orders.');
+    }
+
+
     if ($customer_id <= 0) throw new Exception('Invalid customer ID.');
     if (empty($cart)) throw new Exception('Cart cannot be empty.');
 
@@ -118,6 +132,17 @@ try {
             'gcash_reference_number' => ($payment_method === 'gcash') ? trim($input['gcash_reference_number'] ?? '') : null,
             'delivery_fee' => $delivery_fee
         ];
+
+        if ($payment_method === 'gcash') {
+            $ref = trim((string)($input['gcash_reference_number'] ?? ''));
+            if ($ref === '') {
+                throw new Exception('GCash reference number is required for GCash payments.');
+            }
+            if (!preg_match('/^\d{13}$/', $ref)) {
+                throw new Exception('Please enter a valid 13-digit GCash reference number.');
+            }
+        }
+
 
         $order_id = create_customer_order($customer_id, $fulfillment_type, $details, $server_cart);
 

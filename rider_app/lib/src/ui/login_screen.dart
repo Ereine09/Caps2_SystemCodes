@@ -1,10 +1,12 @@
-import 'package:flutter/foundation.dart'; // <-- Added for kIsWeb
+import 'package:dio/dio.dart'; // <-- Tiyaking may import nito sa taas para sa DioException
+import 'package:flutter/foundation.dart'; 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/auth_state.dart';
 import '../widgets/api_error_banner.dart';
 import '../api/api_client.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -60,7 +62,20 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       context.read<AuthState>().setAuth(token: token, username: username, userId: userId);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (e is DioException) {
+        final responseData = e.response?.data;
+        if (responseData != null) {
+          if (responseData is Map && responseData.containsKey('message')) {
+            setState(() => _error = responseData['message'].toString());
+          } else {
+            setState(() => _error = "Server Error: ${responseData.toString()}");
+          }
+        } else {
+          setState(() => _error = "Network Error: ${e.message}");
+        }
+      } else {
+        setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -107,6 +122,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: _loading
                         ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Text('Login'),
+                  ),
+                  const SizedBox(height: 12),
+                  // BUTTON PAPUNTA SA REGISTER SCREEN
+                  TextButton(
+                    onPressed: _loading
+                        ? null
+                        : () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const RegisterScreen(),
+                              ),
+                            );
+                          },
+                    child: const Text("Don't have an account? Register here"),
                   ),
                 ],
               ),
