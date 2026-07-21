@@ -17,6 +17,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $login_error = 'Invalid email or password.';
         } else {
             customer_login($account);
+
+            // Log the customer login activity
+            $customer_id = (int)($account['customer_id'] ?? 0);
+            $log_action = "Customer Login";
+            $log_details = "Customer '{$account['customer_name']}' (ID: {$customer_id}) logged in.";
+            $log_stmt = $conn->prepare("INSERT INTO activity_logs (customer_id, action, details) VALUES (?, ?, ?)");
+            $log_stmt->bind_param('iss', $customer_id, $log_action, $log_details);
+            $log_stmt->execute();
+
             header('Location: ' . BASE_URL . '/customer/dashboard.php');
             exit();
         }

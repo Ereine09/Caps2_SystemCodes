@@ -32,6 +32,8 @@ $filter_groups = [
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $user_id = (int)$payload['user_id'];
+    $message = '';
+    $error = '';
 
     if ($action === 'add' || $action === 'update') {
         $sku = trim($_POST['sku']);
@@ -53,21 +55,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
             if ($action === 'add') {
+                // Log the activity for adding a new product
                 $stmt = $conn->prepare("INSERT INTO tbl_product_inventory (sku, name, description, price, stock, category, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)");
                 $stmt->bind_param("sssdiss", $sku, $name, $description, $price, $stock, $category, $image_url);
                 if ($stmt->execute()) {
-                    $_SESSION['message'] = "Product added successfully!";
-                    $_SESSION['message_type'] = "success";
+                    $message = 'Product added successfully!';
+                    $log_action = "Added New Product";
+                    $log_details = "User added product: $name (SKU: $sku) with initial stock: $stock.";
+                    $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, ?, ?)");
+                    $log_stmt->bind_param('iss', $user_id, $log_action, $log_details);
+                    $log_stmt->execute();
+                    $log_stmt->close();
                 }
             } else {
-                $id = (int)$_POST['product_id'];
-                $stmt = $conn->prepare("UPDATE tbl_product_inventory SET sku=?, name=?, description=?, price=?, stock=?, category=?, image_url=? WHERE id=?");
+                $id = (int)($_POST['product_id'] ?? $_POST['id'] ?? 0);
+
+                // Fetch existing data to compare for the log
+                $old_stmt = $conn->prepare("SELECT * FROM tbl_product_inventory WHERE id = ?");
+                $old_stmt->bind_param('i', $id);
+                $old_stmt->execute();
+                $old_data = $old_stmt->get_result()->fetch_assoc();
+                $old_stmt->close();
+
+                $stmt = $conn->prepare("UPDATE tbl_product_inventory SET sku=?, name=?, description=?, price=?, stock=?, category=?, image_url=?, updated_at=NOW() WHERE id=?");
                 $stmt->bind_param("sssdissi", $sku, $name, $description, $price, $stock, $category, $image_url, $id);
                 if ($stmt->execute()) {
-                    $_SESSION['message'] = "Product updated successfully!";
-                    $_SESSION['message_type'] = "success";
+                    $message = 'Product updated successfully!';
+
+                    // --- Enhanced Activity Logging ---
+                    $log_action = "Updated Product";
+                    $changes = [];
+                    if ($old_data) {
+                        if ($old_data['name'] !== $name) $changes[] = "Name from '{$old_data['name']}' to '$name'";
+                        if ($old_data['sku'] !== $sku) $changes[] = "SKU from '{$old_data['sku']}' to '$sku'";
+                        if ((float)$old_data['price'] != $price) $changes[] = "Price from " . number_format((float)$old_data['price'], 2) . " to " . number_format($price, 2);
+                        if ((int)$old_data['stock'] !== $stock) $changes[] = "Stock from {$old_data['stock']} to $stock";
+                        if ($old_data['category'] !== $category) $changes[] = "Category from '{$old_data['category']}' to '$category'";
+                    }
+
+                    $log_details = "User updated product: " . ($old_data['name'] ?? $name) . ". ";
+                    $log_details .= empty($changes) ? "No changes detected." : "Changes: " . implode(', ', $changes) . ".";
+
+                    $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, ?, ?)");
+                    $log_stmt->bind_param('iss', $user_id, $log_action, $log_details);
+                    $log_stmt->execute();
+                    $log_stmt->close();
                 }
             }
+            $_SESSION['message'] = $message;
+            $_SESSION['message_type'] = "success";
             header("Location: products.php");
             exit();
         } catch (mysqli_sql_exception $e) {
@@ -79,12 +115,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['message_type'] = "error";
         }
     } elseif ($action === 'delete') {
-        $id = (int)$_POST['product_id'];
+        $id = (int)($_POST['product_id'] ?? $_POST['id'] ?? 0);
+
+        // Get product name before deletion for the log
+        $name_stmt = $conn->prepare("SELECT name FROM tbl_product_inventory WHERE id = ?");
+        $name_stmt->bind_param('i', $id);
+        $name_stmt->execute();
+        $name_data = $name_stmt->get_result()->fetch_assoc();
+        $name_stmt->close();
+
         $stmt = $conn->prepare("DELETE FROM tbl_product_inventory WHERE id = ?");
         $stmt->bind_param("i", $id);
-        $stmt->execute();
-        $_SESSION['message'] = "Product deleted successfully.";
-        $_SESSION['message_type'] = "success";
+        if ($stmt->execute()) {
+            $_SESSION['message'] = "Product deleted successfully.";
+            $_SESSION['message_type'] = "success";
+            $log_action = "Deleted Product";
+            $log_details = "User deleted product: " . ($name_data['name'] ?? 'ID: '.$id);
+            $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, ?, ?)");
+            $log_stmt->bind_param('iss', $user_id, $log_action, $log_details);
+            $log_stmt->execute();
+            $log_stmt->close();
+        }
         header("Location: products.php");
         exit();
     }
@@ -438,7 +489,7 @@ $unread_count = get_unread_count_staff($user_id);
 
     <form id="deleteForm" method="POST" style="display:none;">
         <input type="hidden" name="action" value="delete">
-        <input type="hidden" name="product_id" id="deleteId">
+        <input type="hidden" name="id" id="deleteId">
     </form>
 
     <script>

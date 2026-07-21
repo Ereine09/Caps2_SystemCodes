@@ -3,6 +3,15 @@ require_once __DIR__ . '/includes/auth.php';
 
 // If the user confirmed the logout via POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_logout'])) {
+    $customer = current_customer();
+    if ($customer) {
+        $customer_id = (int)($customer['id'] ?? 0);
+        $log_action = "Customer Logout";
+        $log_details = "Customer '{$customer['name']}' (ID: {$customer_id}) logged out.";
+        $log_stmt = $conn->prepare("INSERT INTO activity_logs (customer_id, action, details) VALUES (?, ?, ?)");
+        $log_stmt->bind_param('iss', $customer_id, $log_action, $log_details);
+        $log_stmt->execute();
+    }
     customer_logout();
     header('Location: ' . BASE_URL . '/customer/login.php');
     exit();

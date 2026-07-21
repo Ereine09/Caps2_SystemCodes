@@ -3,7 +3,7 @@ require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
 require_once __DIR__ . '/../../customer/includes/functions.php';
 
-$token = getJWTFromCookie();
+$token = getJWTFromCookie(); // This should use the staff cookie
 $payload = verifyJWT($token);
 
 if (!$payload) {
@@ -68,6 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id > 0 && $sku && $name && $price > 0) {
             // Fetch existing data to calculate stock differences for the log
             $old_stmt = $conn->prepare("SELECT name, stock FROM tbl_product_inventory WHERE id = ?");
+            $old_stmt = $conn->prepare("SELECT * FROM tbl_product_inventory WHERE id = ?");
             $old_stmt->bind_param('i', $id);
             $old_stmt->execute();
             $old_data = $old_stmt->get_result()->fetch_assoc();
@@ -78,9 +79,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stmt->execute()) {
                 $message = 'Product updated successfully!';
                 
-                // Log the activity
-                $log_action = "Updated Product Details/Stock";
-                $log_details = "User updated product: " . ($old_data['name'] ?? 'Unknown') . ". Stock changed from " . ($old_data['stock'] ?? 0) . " to $stock.";
+                // --- Enhanced Activity Logging ---
+                $log_action = "Updated Product";
+                $changes = [];
+                if ($old_data) {
+                    if ($old_data['name'] !== $name) $changes[] = "Name from '{$old_data['name']}' to '$name'";
+                    if ($old_data['sku'] !== $sku) $changes[] = "SKU from '{$old_data['sku']}' to '$sku'";
+                    if ((float)$old_data['price'] !== $price) $changes[] = "Price from " . number_format($old_data['price'], 2) . " to " . number_format($price, 2);
+                    if ((int)$old_data['stock'] !== $stock) $changes[] = "Stock from {$old_data['stock']} to $stock";
+                    if ($old_data['category'] !== $category) $changes[] = "Category from '{$old_data['category']}' to '$category'";
+                }
+
+                $log_details = "User updated product: " . ($old_data['name'] ?? $name) . ". ";
+                $log_details .= empty($changes) ? "No changes detected." : "Changes: " . implode(', ', $changes) . ".";
+
                 $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, ?, ?)");
                 $log_stmt->bind_param('iss', $user_id, $log_action, $log_details);
                 $log_stmt->execute();
@@ -435,7 +447,7 @@ $categories = get_all_categories();
                 <h2 id="modalTitle">Add Product</h2>
                 <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
-            <form method="POST" id="productForm">
+            <form method="POST" id="productForm" action="<?php echo BASE_URL; ?>/modules/admin/products.php">
                 <input type="hidden" name="action" id="formAction" value="add">
                 <input type="hidden" name="id" id="productId" value="">
                 
@@ -488,7 +500,7 @@ $categories = get_all_categories();
     </div>
     
     <!-- Delete Form -->
-    <form method="POST" id="deleteForm" style="display: none;">
+    <form method="POST" id="deleteForm" style="display: none;" action="<?php echo BASE_URL; ?>/modules/admin/products.php">
         <input type="hidden" name="action" value="delete">
         <input type="hidden" name="id" id="deleteId" value="">
     </form>

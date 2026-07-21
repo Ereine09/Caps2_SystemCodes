@@ -1,11 +1,10 @@
-import 'package:flutter/foundation.dart'; // <-- Added for kIsWeb
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-
 import '../api/api_client.dart';
+import 'shipment_card.dart';
 
 class OrdersListWidget extends StatefulWidget {
   final String token;
-
   const OrdersListWidget({super.key, required this.token});
 
   @override
@@ -17,7 +16,6 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
   String? _error;
   List<dynamic> _assignments = [];
 
-  // Automatically switch between Localhost (for Web/iOS) and 10.0.2.2 (for Android Emulator)
   final String _baseUrl = kIsWeb
       ? 'http://localhost/loyalty_managements'
       : 'http://10.0.2.2/loyalty_managements';
@@ -87,49 +85,34 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
     }
 
     if (_assignments.isEmpty) {
-      return const Center(child: Text('No assigned deliveries yet.'));
+      return const Center(
+        child: Text('No assigned deliveries yet.', style: TextStyle(color: Colors.grey)),
+      );
     }
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(12),
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         itemCount: _assignments.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (context, index) {
           final item = _assignments[index] as Map? ?? {};
           final deliveryId = item['delivery_id'];
           final orderNumber = item['order_number'] ?? '';
           final customerName = item['customer_name'] ?? '';
           final address = item['address'] ?? '';
-
-          // We want to display the real order status coming from tbl_orders
-          final orderStatusLabel =
-              item['order_status_label'] ?? item['order_status'] ?? '';
-
+          final orderStatusLabel = item['order_status_label'] ?? item['order_status'] ?? '';
           final total = item['total'];
 
-          return ListTile(
-            leading: const Icon(Icons.local_shipping),
-            title: Text(
-              orderNumber.toString().isEmpty
-                  ? 'Delivery #$deliveryId'
-                  : orderNumber.toString(),
-            ),
-            subtitle: Text(
-              '${customerName.toString().isEmpty ? 'Customer' : customerName} • $orderStatusLabel\n${address.toString().isEmpty ? '' : address}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: Text(total != null ? 'PHP ${total.toString()}' : ''),
-            isThreeLine: true,
+          return ShipmentCard(
+            orderNumber: orderNumber.toString().isEmpty ? 'Delivery #$deliveryId' : orderNumber.toString(),
+            customerName: customerName.toString().isEmpty ? 'Customer' : customerName.toString(),
+            address: address.toString(),
+            statusLabel: orderStatusLabel.toString(),
+            totalAmount: total != null ? 'PHP $total' : '',
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Tapped delivery_id=$deliveryId (detail screen TODO)',
-                  ),
-                ),
+                SnackBar(content: Text('Tapped delivery_id=$deliveryId (detail screen TODO)')),
               );
             },
           );
@@ -138,4 +121,3 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
     );
   }
 }
-

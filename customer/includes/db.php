@@ -1,7 +1,8 @@
 <?php
-// Define the absolute path to the project root for reliable includes.
+// Use the central bootstrap file for path definitions.
 if (!defined('ROOT_PATH')) {
-    define('ROOT_PATH', realpath(__DIR__ . '/../../'));
+    // Define ROOT_PATH here as a fallback if db.php is included directly.
+    define('ROOT_PATH', realpath(__DIR__ . '/../..'));
 }
 require_once __DIR__ . '/../../app/config/config.php';
 

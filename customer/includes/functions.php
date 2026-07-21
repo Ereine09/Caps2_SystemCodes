@@ -1,13 +1,15 @@
 <?php
+// Core autoloader and path definitions are now in bootstrap.php
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+// QR library is optional in some deployments.
+// If the Endroid QR package is not installed, we will skip QR generation to avoid fatal errors.
+use Endroid\QrCode\QrCode;
+use Endroid\QrCode\Writer\PngWriter;
+
+// Now that vendor classes are available, we can include our other files.
 require_once __DIR__ . '/db.php';
-
-// Add the Composer autoloader to make vendor libraries available (optional).
-// Some deployments may not run composer install, so fail softly.
-$autoloadPath = ROOT_PATH . '/vendor/autoload.php';
-if (file_exists($autoloadPath)) {
-    require_once $autoloadPath;
-}
-
 
 function ensure_customer_tables(mysqli $conn): void {
     $queries = [
@@ -46,6 +48,7 @@ function ensure_customer_tables(mysqli $conn): void {
             delivery_phone VARCHAR(50) DEFAULT NULL,
             delivery_instructions TEXT DEFAULT NULL,
             subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            vat_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
             delivery_fee DECIMAL(10,2) NOT NULL DEFAULT 0.00,
             bulk_order TINYINT(1) NOT NULL DEFAULT 0,
             free_delivery TINYINT(1) NOT NULL DEFAULT 0,
@@ -125,6 +128,9 @@ function ensure_customer_tables(mysqli $conn): void {
     // --- FIX: Add missing columns if they don't exist to prevent "Unknown column" errors ---
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER loyalty_points_earned");
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS voucher_code VARCHAR(100) DEFAULT NULL AFTER discount_amount");
+
+    // --- ADD: Column for VAT ---
+    $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS vat_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER subtotal");
 
     // --- ADD: Columns for Bank Transfer payment ---
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100) DEFAULT NULL AFTER payment_reference");
@@ -629,7 +635,7 @@ function cart_item_count(): int {
     return array_sum(array_column($cart, 'quantity'));
 }
 
-function cart_subtotal(): float {
+function cart_subtotal_ex_vat(): float {
     $customer = current_customer();
     if ($customer) {
         $cart = get_customer_cart();
@@ -648,6 +654,14 @@ function cart_subtotal(): float {
     return $subtotal;
 }
 
+// Cart subtotal including 12% VAT.
+function cart_subtotal(): float {
+    $subtotal_ex_vat = cart_subtotal_ex_vat();
+    $vat_rate = 0.12;
+    return round($subtotal_ex_vat * (1 + $vat_rate), 2);
+}
+
+
 function get_customer_products(): array {
     return get_available_products();
 }
@@ -656,19 +670,23 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
     global $customer_db;
     ensure_customer_tables($customer_db);
 
-    $subtotal = 0.00;
+    $subtotal_ex_vat = 0.00;
     $total_items = 0;
     foreach ($cart_items as $item) {
-        $subtotal += ((float)$item['unit_price'] * (int)$item['quantity']);
+        $subtotal_ex_vat += ((float)$item['unit_price'] * (int)$item['quantity']);
         $total_items += (int)$item['quantity'];
     }
 
-    $delivery_fee = calculate_delivery_fee($fulfillment_type, $subtotal, $details['delivery_address'] ?? '');
-    $free_delivery = $delivery_fee <= 0.00 ? 1 : 0;
-    $bulk_order = detect_bulk_order($subtotal, $total_items) ? 1 : 0;
-    $loyalty_points = calculate_loyalty_points($subtotal);
+    $vat_rate = 0.12;
+    $vat_amount = round($subtotal_ex_vat * $vat_rate, 2);
+    $subtotal_inc_vat = $subtotal_ex_vat + $vat_amount;
 
-    $total = $subtotal + $delivery_fee;
+    $delivery_fee = calculate_delivery_fee($fulfillment_type, $subtotal_inc_vat, $details['delivery_address'] ?? '');
+    $free_delivery = $delivery_fee <= 0.00 ? 1 : 0;
+    $bulk_order = detect_bulk_order($subtotal_inc_vat, $total_items) ? 1 : 0;
+    $loyalty_points = calculate_loyalty_points($subtotal_inc_vat);
+
+    $total = $subtotal_inc_vat + $delivery_fee;
     $discount_amount = 0.00;
     $total_after_discount = $total;
     $voucher_id = null;
@@ -700,7 +718,7 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
 
             if ($voucher && $voucher['min_order_amount'] !== null) {
                 $min = (float)$voucher['min_order_amount'];
-                if ($subtotal < $min) {
+                if ($subtotal_inc_vat < $min) {
                     $voucher = null;
                 }
             }
@@ -746,26 +764,26 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
     $customer_db->begin_transaction();
     try {
         $stmt = $customer_db->prepare(
-            "INSERT INTO tbl_orders (customer_id, order_number, fulfillment_type, pickup_date, pickup_time, delivery_address, delivery_phone, delivery_instructions, subtotal, delivery_fee, bulk_order, free_delivery, loyalty_points_earned, discount_amount, voucher_code, total, payment_method, payment_reference, bank_name, bank_account_name, payment_proof_path)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO tbl_orders (customer_id, order_number, fulfillment_type, pickup_date, pickup_time, delivery_address, delivery_phone, delivery_instructions, subtotal, vat_amount, delivery_fee, bulk_order, free_delivery, loyalty_points_earned, discount_amount, voucher_code, total, payment_method, payment_reference, bank_name, bank_account_name, payment_proof_path)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         $delivery_address = $details['delivery_address'] ?? null;
         $delivery_phone = $details['delivery_phone'] ?? null;
         $delivery_instructions = $details['delivery_instructions'] ?? null;
         $pickup_date = $details['pickup_date'] ?? null;
         $pickup_time = $details['pickup_time'] ?? null;
-
+        
         // Ensure we have discount fields coming from $details (checkout passes these)
-        $final_total = $subtotal + $delivery_fee - ($details['discount_amount'] ?? 0.00);
+        $final_total = $subtotal_inc_vat + $delivery_fee - ($details['discount_amount'] ?? 0.00);
         $discount_to_save = (float)($details['discount_amount'] ?? 0.00);
         $voucher_code_to_save = $details['voucher_code'] ?? null;
-
+        
         // Consolidate reference number logic
         $payment_reference = $details['gcash_reference_number'] ?? null;
         $bank_name = ($payment_method === 'bank') ? ($details['bank_name'] ?? null) : null;
         $bank_account_name = ($payment_method === 'bank') ? ($details['bank_account_name'] ?? null) : null;
         $payment_proof_path = ($payment_method === 'bank') ? ($details['payment_proof_path'] ?? null) : null;
-        $stmt->bind_param('isssssssddiisdsssssss', $customer_id, $order_number, $fulfillment_type, $pickup_date, $pickup_time, $delivery_address, $delivery_phone, $delivery_instructions, $subtotal, $delivery_fee, $bulk_order, $free_delivery, $loyalty_points, $discount_to_save, $voucher_code_to_save, $final_total, $payment_method, $payment_reference, $bank_name, $bank_account_name, $payment_proof_path);
+        $stmt->bind_param('isssssssdddiisdsssssss', $customer_id, $order_number, $fulfillment_type, $pickup_date, $pickup_time, $delivery_address, $delivery_phone, $delivery_instructions, $subtotal_ex_vat, $vat_amount, $delivery_fee, $bulk_order, $free_delivery, $loyalty_points, $discount_to_save, $voucher_code_to_save, $final_total, $payment_method, $payment_reference, $bank_name, $bank_account_name, $payment_proof_path);
         $stmt->execute();
         $order_id = $customer_db->insert_id;
         $stmt->close();
@@ -803,7 +821,7 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
 
         $customer_db->query("UPDATE customers SET loyalty_points = loyalty_points + $loyalty_points WHERE id = $customer_id");
 
-        record_order_notification($customer_db, $customer_id, $order_id, $order_number, $subtotal, $fulfillment_type, $bulk_order, $free_delivery);
+        record_order_notification($customer_db, $customer_id, $order_id, $order_number, $subtotal_inc_vat, $fulfillment_type, $bulk_order, $free_delivery);
 
         $customer_db->commit();
         return $order_id;
@@ -822,11 +840,6 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
     }
 }
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
-use Endroid\QrCode\QrCode;
-use Endroid\QrCode\Writer\PngWriter;
-
 function send_order_ereceipt(int $customer_id, int $order_id, int $delivery_id, string $token): void {
     global $customer_db;
     $customer = get_customer_by_id($customer_id);
@@ -838,11 +851,24 @@ function send_order_ereceipt(int $customer_id, int $order_id, int $delivery_id, 
         return;
     }
 
-    // Generate QR Code
+    // Generate QR Code (optional dependency)
+    $qr_code_uri = null;
     $qr_data = json_encode(['delivery_id' => $delivery_id, 'token' => $token]);
-    $qrCode = QrCode::create($qr_data);
-    $writer = new PngWriter();
-    $qr_code_uri = $writer->write($qrCode)->getDataUri();
+
+    if (class_exists('Endroid\\QrCode\\QrCode') && class_exists('Endroid\\QrCode\\Writer\\PngWriter')) {
+        try {
+            $qrCode = QrCode::create($qr_data);
+            $writer = new PngWriter();
+            $qr_code_uri = $writer->write($qrCode)->getDataUri();
+        } catch (Throwable $t) {
+            error_log('[send_order_ereceipt] QR generation failed: ' . $t->getMessage());
+            $qr_code_uri = null;
+        }
+    } else {
+        error_log('[send_order_ereceipt] Endroid\u0027s qr-code library not installed; skipping QR generation.');
+        $qr_code_uri = null;
+    }
+
 
     // Email Body
     $items_html = '';
@@ -867,12 +893,14 @@ function send_order_ereceipt(int $customer_id, int $order_id, int $delivery_id, 
                     <tr><th style='padding: 8px; text-align: right;'>Total:</th><th style='padding: 8px; text-align: right;'>PHP " . number_format((float)$order['total'], 2) . "</th></tr>
                 </tfoot>
             </table>
-            <hr>
-            <div style='text-align: center; margin-top: 20px;'>
-                <h3>Delivery Confirmation QR Code</h3>
-                <p>For rider to scan upon delivery.</p>
-                <img src='" . $qr_code_uri . "' alt='QR Code for delivery confirmation' style='width: 200px; height: 200px;'/>
-            </div>
+            " . ($qr_code_uri ? "
+                <hr>
+                <div style='text-align: center; margin-top: 20px;'>
+                    <h3>Delivery Confirmation QR Code</h3>
+                    <p>For rider to scan upon delivery.</p>
+                    <img src='" . $qr_code_uri . "' alt='QR Code for delivery confirmation' style='width: 200px; height: 200px;'/>
+                </div>
+            " : "<!-- QR Code generation failed or library not installed -->") . "
             <p style='text-align: center; font-size: 0.9em; color: #777; margin-top: 20px;'>Thank you for shopping with us!</p>
         </div>
     ";
@@ -882,16 +910,16 @@ function send_order_ereceipt(int $customer_id, int $order_id, int $delivery_id, 
 
     try {
         //Server settings - replace with your SMTP details
-        $mail->isSMTP();
-        $mail->Host       = 'smtp.gmail.com'; // Set the SMTP server to send through
-        $mail->SMTPAuth   = true;
-        $mail->Username   = 'your_email@gmail.com'; // SMTP username
-        $mail->Password   = 'your_gmail_app_password'; // SMTP password or App Password
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-        $mail->Port       = 465;
+        $mail->isSMTP(); // Use SMTP
+        $mail->Host       = SMTP_HOST; // Your SMTP server
+        $mail->SMTPAuth   = SMTP_AUTH; // Enable authentication
+        $mail->Username   = SMTP_USERNAME; // Your SMTP username
+        $mail->Password   = SMTP_PASSWORD; // Your SMTP password or App Password
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS; // Use SMTPS
+        $mail->Port       = SMTP_PORT; // TCP port
 
         //Recipients
-        $mail->setFrom('no-reply@your-domain.com', htmlspecialchars(SYSTEM_NAME));
+        $mail->setFrom(SMTP_FROM_EMAIL, htmlspecialchars(SMTP_FROM_NAME));
         $mail->addAddress($customer['email'], htmlspecialchars($customer['name']));
 
         //Attachments
@@ -966,6 +994,20 @@ function get_order_by_id(int $order_id, ?int $customer_id = null): ?array {
     $order = $result->fetch_assoc();
     $stmt->close();
     return $order ?: null;
+}
+
+function get_delivery_details_by_order_id(int $order_id): ?array {
+    global $customer_db;
+    $stmt = $customer_db->prepare("SELECT id, qr_confirmation_token FROM tbl_delivery WHERE order_id = ? LIMIT 1");
+    $stmt->bind_param('i', $order_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $delivery = $result->fetch_assoc();
+    $stmt->close();
+    return $delivery ? [
+        'id' => (int)$delivery['id'],
+        'qr_confirmation_token' => $delivery['qr_confirmation_token']
+    ] : null;
 }
 
 function get_order_items(int $order_id): array {

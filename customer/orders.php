@@ -10,6 +10,7 @@ $orders = [];
 if (isset($_GET['id'])) {
     $order_id = (int) $_GET['id'];
     $order = get_order_by_id($order_id, (int) $customer['id']);
+    $delivery_details = $order ? get_delivery_details_by_order_id($order['id']) : null;
     if ($order) {
         $order_items = get_order_items($order['id']);
     }
@@ -138,6 +139,30 @@ if (isset($_GET['id'])) {
                             <div class="step-label"><?php echo $s['label']; ?></div>
                         </div>
                     <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($delivery_details && $delivery_details['qr_confirmation_token'] && in_array($order['order_status'], ['out_for_delivery', 'ready_for_pickup'])): ?>
+                <div class="info-card" style="margin-top: 25px; text-align: center; border-left: 5px solid #10b981;">
+                    <h4 style="justify-content: center;"><i class="fas fa-qrcode"></i> Delivery Confirmation QR</h4>
+                    <p style="font-size: 0.9rem; color: #475569; max-width: 450px; margin: 0 auto 20px;">
+                        Please present this QR code to the rider upon delivery to confirm you have received your order.
+                    </p>
+                    <?php
+                    // Generate QR Code Data URI
+                    $qr_code_uri = null;
+                    $qr_data = json_encode(['delivery_id' => $delivery_details['id'], 'token' => $delivery_details['qr_confirmation_token']]);
+                    if (class_exists('Endroid\\QrCode\\QrCode') && class_exists('Endroid\\QrCode\\Writer\\PngWriter')) {
+                        try {
+                            $qrCode = Endroid\QrCode\QrCode::create($qr_data);
+                            $writer = new Endroid\QrCode\Writer\PngWriter();
+                            $qr_code_uri = $writer->write($qrCode)->getDataUri();
+                        } catch (Throwable $t) {
+                            $qr_code_uri = null;
+                        }
+                    }
+                    ?>
+                    <img src="<?php echo $qr_code_uri; ?>" alt="Delivery Confirmation QR Code" style="width: 220px; height: 220px; border: 5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px;">
                 </div>
             <?php endif; ?>
 

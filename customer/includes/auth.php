@@ -1,11 +1,9 @@
 <?php
+// Use the central bootstrap file to ensure autoloader is always available first.
+require_once __DIR__ . '/../../modules/admin/bootstrap.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
 function customer_is_logged_in(): bool {
     $token = getJWTFromCookie();

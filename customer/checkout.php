@@ -204,6 +204,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $GLOBALS['conn']->commit();
                 clear_customer_cart();
 
+                // --- VOUCHER SINGLE-USE DEACTIVATION LOGIC ---
+                if (!empty($voucher_code_input)) {
+                    $v_code = mysqli_real_escape_string($conn, $voucher_code_input);
+                    
+                    // 1. Deactivates the checkout validity state
+                    mysqli_query($conn, "UPDATE tbl_vouchers SET active = 0 WHERE code = '$v_code'");
+                    
+                    // 2. Updates the history tracking state to 'Used' for my_reward.php blocking
+                    mysqli_query($conn, "UPDATE reward_redemptions SET status = 'Used' WHERE card_number = '$v_code'");
+                }
+                // --- END VOUCHER SINGLE-USE LOGIC ---
+
                 // --- Loyalty Points Logic ---
                 $customer_id = (int) current_customer()['id'];
                 
@@ -487,15 +499,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </tbody>
                 </table>
                 <div class="summary-footer">
-                    <div class="summary-line"><span>Subtotal</span><span id="subtotal-display">PHP <?php echo number_format(cart_subtotal(), 2); ?></span></div>
+                    <?php
+                        $subtotal_net = cart_subtotal_ex_vat();
+                        $vat_amount = $subtotal_net * 0.12;
+                        $subtotal_gross = $subtotal_net + $vat_amount;
+                    ?>
+                    <div class="summary-line"><span>Subtotal (Net)</span><span id="subtotal-net-display">PHP <?php echo number_format($subtotal_net, 2); ?></span></div>
+                    <div class="summary-line"><span>VAT (12%)</span><span id="vat-display">PHP <?php echo number_format($vat_amount, 2); ?></span></div>
                     <div class="summary-line"><span>Delivery Fee</span><span id="delivery-fee-display" style="font-weight: 700; color: #1e293b;">PHP 0.00</span></div>
                     <div class="summary-line" id="discount-line" style="color: #10b981; font-weight: 600; display: none;">
                         <span>Discount</span>
                         <span id="discount-display">-PHP 0.00</span>
                         <input type="hidden" id="discount-value" value="<?php echo $discount_amount; ?>">
                     </div>
-                    <div class="summary-line" style="color: #10b981; font-weight: 600;"><span>Points to Earn</span><span>+<?php echo number_format(cart_subtotal() / 100, 2); ?> pts</span></div>
-                    <div class="summary-line total"><span>Total to Pay</span><span id="total-to-pay-display">PHP <?php echo number_format(cart_subtotal(), 2); ?></span></div>
+                    <div class="summary-line" style="color: #10b981; font-weight: 600;"><span>Points to Earn</span><span>+<?php echo number_format($subtotal_gross / 100, 2); ?> pts</span></div>
+                    <div class="summary-line total"><span>Total to Pay</span><span id="total-to-pay-display">PHP <?php echo number_format($subtotal_gross, 2); ?></span></div>
                 </div>
                 <div style="margin-top: 15px; text-align: center;">
                     <a href="cart.php" style="color: #6366f1; font-size: 0.85rem; text-decoration: none; font-weight: 600;"><i class="fas fa-edit"></i> Edit Items in Cart</a>
@@ -631,7 +649,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 function updateTotals() {
     const fulfillmentType = document.querySelector('input[name="fulfillment_type"]:checked').value;
     const address = document.getElementById('delivery_address').value.toLowerCase();
-    const subtotal = <?php echo cart_subtotal(); ?>;
+    const subtotal_net = <?php echo cart_subtotal_ex_vat(); ?>;
+    const subtotal = <?php echo cart_subtotal(); ?>; // Gross subtotal
     let fee = 0;
     let discount = parseFloat(document.getElementById('discount-value').value) || 0;
 
@@ -650,11 +669,15 @@ function updateTotals() {
 
     const feeDisplay = document.getElementById('delivery-fee-display');
     const totalDisplay = document.getElementById('total-to-pay-display');
+    const subtotalNetDisplay = document.getElementById('subtotal-net-display');
+    const vatDisplay = document.getElementById('vat-display');
     const discountLine = document.getElementById('discount-line');
     const discountDisplay = document.getElementById('discount-display');
 
     feeDisplay.innerText = fee === 0 ? 'Free' : 'PHP ' + fee.toFixed(2);
     totalDisplay.innerText = 'PHP ' + finalTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
+    subtotalNetDisplay.innerText = 'PHP ' + subtotal_net.toFixed(2);
+    vatDisplay.innerText = 'PHP ' + (subtotal_net * 0.12).toFixed(2);
 
     if (discount > 0) {
         discountLine.style.display = 'flex';

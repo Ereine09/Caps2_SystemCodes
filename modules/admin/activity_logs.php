@@ -24,6 +24,13 @@ $role = strtolower(trim($payload['role'] ?? 'staff'));
 // Do NOT rely on any other IDs.
 $user_id = (int)($payload['user_id'] ?? 0);
 
+// --- Schema Update: Add customer_id for customer-side logging ---
+$check_col = mysqli_query($conn, "SHOW COLUMNS FROM activity_logs LIKE 'customer_id'");
+if ($check_col && mysqli_num_rows($check_col) === 0) {
+    mysqli_query($conn, "ALTER TABLE activity_logs ADD COLUMN customer_id INT NULL DEFAULT NULL AFTER user_id");
+    mysqli_query($conn, "ALTER TABLE activity_logs MODIFY COLUMN user_id INT NULL DEFAULT NULL");
+}
+
 // Check if Admin - redirect if not admin
 if (strtolower(trim($role)) !== 'admin') {
     header("Location: dashboard.php?error=access_denied");
@@ -108,9 +115,10 @@ $unread_count = get_unread_count_staff($user_id);
                     if ($role === 'admin') {
                         $log_res = mysqli_query(
                             $conn,
-                            "SELECT al.*, u.username 
+                            "SELECT al.*, u.username, c.name as customer_name
                              FROM activity_logs al 
                              LEFT JOIN users u ON al.user_id = u.id 
+                             LEFT JOIN customers c ON al.customer_id = c.id
                              ORDER BY al.created_at DESC"
                         );
                     } else {
@@ -130,7 +138,13 @@ $unread_count = get_unread_count_staff($user_id);
 
                     if ($log_res && mysqli_num_rows($log_res) > 0) {
                         while ($log = mysqli_fetch_assoc($log_res)) {
-                            $u_display = $log['username'] ?? "System/Deleted User (ID: " . $log['user_id'] . ")";
+                            if (!empty($log['username'])) {
+                                $u_display = $log['username'] . ' (Staff)';
+                            } elseif (!empty($log['customer_name'])) {
+                                $u_display = $log['customer_name'] . ' (Customer)';
+                            } else {
+                                $u_display = "System/Deleted User";
+                            }
                             
                             // COLOR LOGIC PARA SA ACTION COLUMN
                             $action_color = '#3498db'; // Default Blue

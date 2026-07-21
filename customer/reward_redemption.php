@@ -12,6 +12,7 @@ mysqli_query($conn, "ALTER TABLE reward_redemptions DROP FOREIGN KEY IF EXISTS r
 mysqli_query($conn, "ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS card_number VARCHAR(20) NULL");
 mysqli_query($conn, "ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS pin_code VARCHAR(10) NULL");
 mysqli_query($conn, "ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS expiry_date DATE NULL");
+mysqli_query($conn, "ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'Active'");
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_id'])) {
     $reward_id = (int) $_POST['reward_id'];
@@ -55,22 +56,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_id'])) {
             $discount_value = (float) $matches[1];
         }
 
-        $expiry_date = null;
-        if (!empty($reward['validity_days'])) {
-            $expiry_date = date('Y-m-d H:i:s', strtotime('+' . (int)$reward['validity_days'] . ' days'));
-        }
+        // Setup the explicit expiration duration: prioritize specific reward days, fallback to 7 days
+        $days_to_expire = !empty($reward['validity_days']) ? (int)$reward['validity_days'] : 7;
+        $expiry_date = date('Y-m-d H:i:s', strtotime('+' . $days_to_expire . ' days'));
 
-        // Insert into tbl_vouchers to make it usable at checkout
+        // Insert into tbl_vouchers to make it usable at checkout (usage_limit = 1 ensures single-use logic)
         $voucher_stmt = mysqli_prepare($conn, "INSERT INTO tbl_vouchers (code, description, discount_type, discount_value, usage_limit, active, expires_at) VALUES (?, ?, 'fixed', ?, 1, 1, ?)");
         mysqli_stmt_bind_param($voucher_stmt, 'ssds', $voucher_code, $reward_name, $discount_value, $expiry_date);
         mysqli_stmt_execute($voucher_stmt);
         $new_voucher_id = mysqli_insert_id($conn);
         mysqli_stmt_close($voucher_stmt);
 
-        // Record the redemption, linking it to the new voucher code
-        $redemption_stmt = mysqli_prepare($conn, "INSERT INTO reward_redemptions (customer_id, user_id, reward_code, reward_name, points_used, card_number, expiry_date) VALUES (?, NULL, ?, ?, ?, ?, ?)");
-        mysqli_stmt_bind_param($redemption_stmt, 'issdss', $customer['id'], $reward_code, $reward_name, $reward['points'], $voucher_code, $expiry_date);
+        // Record the redemption, explicitly writing the default 'Active' status state 
+        $redemption_stmt = mysqli_prepare($conn, "INSERT INTO reward_redemptions (customer_id, user_id, reward_code, reward_name, points_used, card_number, expiry_date, status) VALUES (?, NULL, ?, ?, ?, ?, ?, 'Active')");
+        mysqli_stmt_bind_param($redemption_stmt, 'issdsss', $customer['id'], $reward_code, $reward_name, $reward['points'], $voucher_code, $expiry_date);
         mysqli_stmt_execute($redemption_stmt);
+        mysqli_stmt_close($redemption_stmt);
         // --- End New Logic ---
 
         mysqli_commit($conn);
@@ -111,11 +112,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_id'])) {
                 margin: 20px 0;
                 letter-spacing: 2px;
             }
-            .pin-code {
-                font-size: 1.2rem;
-                text-align: center;
-                margin: 20px 0;
-            }
             .copy-btn {
                 background: #0082c3;
                 color: white;
@@ -140,17 +136,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_id'])) {
                     <div>
                         <strong>Remaining amount:</strong> <?php echo htmlspecialchars($price_value); ?>
                     </div>
-                    <?php if (!empty($expiry_date)): // Check if expiry_date is not empty ?>
+                    <?php if (!empty($expiry_date)): ?>
                     <div>
                         <strong>Expires on:</strong> <?php echo date('m/d/Y', strtotime($expiry_date)); ?>
                     </div>
                     <?php endif; ?>
-                    <?php if (!empty($voucher_code)): // Check if either exists to show the instruction ?>
+                    <?php if (!empty($voucher_code)): ?>
                     <div style="margin-top: 20px;">
                         <p>Use the code below during checkout to apply your discount.</p>
                     </div>
                     <?php endif; ?>
-                    <?php if (!empty($voucher_code)): // Check if card_number is not empty ?>
+                    <?php if (!empty($voucher_code)): ?>
                     <div class="card-number">
                         <strong>Voucher Code:</strong>
                         <?php echo htmlspecialchars($voucher_code); ?>
@@ -164,7 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_id'])) {
                         This gift card can be used in all Darius Poultry Supply stores and online.
                     </div>
                     <div style="margin-top: 20px; text-align: center;">
-                        <a href="reward_catalog.php" class="copy-btn" style="background: #10b981;">Back to Catalog</a>
+                        <a href="reward_catalog.php" class="copy-btn" style="background: #10b981; text-decoration: none;">Back to Catalog</a>
                     </div>
                 </div>
             </div>

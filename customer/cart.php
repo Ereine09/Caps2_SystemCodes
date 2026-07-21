@@ -22,7 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $cart = get_customer_cart();
-$subtotal = cart_subtotal();
+$subtotal_net = cart_subtotal_ex_vat();
+$subtotal_gross = cart_subtotal();
 ?>
 <?php $page_title = 'My Shopping Cart'; ?>
 <?php include __DIR__ . '/includes/header.php'; ?>
@@ -116,17 +117,22 @@ $subtotal = cart_subtotal();
             </div>
             <div class="cart-footer">
                 <div class="cart-totals">
+                    <?php $vat_amount = $subtotal_net * 0.12; ?>
                     <div class="total-row">
-                        <span style="color: #64748b;">Cart Subtotal</span>
-                        <span style="font-weight: 700;">PHP <?php echo number_format($subtotal, 2); ?></span>
+                        <span style="color: #64748b;">Subtotal (Net)</span>
+                        <span style="font-weight: 700;">PHP <?php echo number_format($subtotal_net, 2); ?></span>
+                    </div>
+                    <div class="total-row">
+                        <span style="color: #64748b;">VAT (12%)</span>
+                        <span style="font-weight: 700;">PHP <?php echo number_format($vat_amount, 2); ?></span>
                     </div>
                     <div class="total-row">
                         <span style="color: #64748b;">Estimated Points</span>
-                        <span style="color: #10b981; font-weight: 700;">+<?php echo number_format($subtotal / 100, 2); ?> pts</span>
+                        <span style="color: #10b981; font-weight: 700;">+<?php echo number_format($subtotal_gross / 100, 2); ?> pts</span>
                     </div>
                     <div class="total-row grand-total">
                         <span>Total</span>
-                        <span>PHP <?php echo number_format($subtotal, 2); ?></span>
+                        <span>PHP <?php echo number_format($subtotal_gross, 2); ?></span>
                     </div>
                     <a href="checkout.php" class="button" style="width: 100%; text-align: center; display: block; padding: 15px;">Proceed to Checkout <i class="fas fa-credit-card"></i></a>
                 </div>

@@ -41,3 +41,11 @@ Bulk Order Processing for orders with larger purchase amounts
 Free Delivery for Bulk Orders for purchases worth ₱2,000 or more, limited to nearby serviceable areas and surrounding locations, (10th ave to Grace park) 
 
 Loyalty Points System where customers earn 1 point for every ₱100 purchase
+
+
+
+
+
+test rider
+testrider1@gmail.com
+password123

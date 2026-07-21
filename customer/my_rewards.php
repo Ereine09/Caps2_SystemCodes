@@ -21,6 +21,14 @@ if ($view_id > 0) {
             $price_value = '₱' . $matches[1];
         }
 
+        // Logic for Expiry (7 days from redemption date) and Usage Status
+        $redeemed_time = strtotime($redemption['redeemed_at']);
+        $current_time = time();
+        $days_difference = ($current_time - $redeemed_time) / (60 * 60 * 24);
+
+        $is_used = (isset($redemption['status']) && strtolower($redemption['status']) === 'used');
+        $is_expired = ($days_difference > 7);
+
         // Display the voucher
         ?>
         <style>
@@ -48,11 +56,6 @@ if ($view_id > 0) {
                 margin: 20px 0;
                 letter-spacing: 2px;
             }
-            .pin-code {
-                font-size: 1.2rem;
-                text-align: center;
-                margin: 20px 0;
-            }
             .copy-btn {
                 background: #0082c3;
                 color: white;
@@ -65,6 +68,25 @@ if ($view_id > 0) {
             .copy-btn:hover {
                 background: #005d8c;
             }
+            .status-badge {
+                display: block;
+                text-align: center;
+                padding: 15px;
+                margin: 20px 0;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 1.2rem;
+            }
+            .status-used {
+                background-color: #fee2e2;
+                color: #dc2626;
+                border: 1px solid #fca5a5;
+            }
+            .status-expired {
+                background-color: #fef3c7;
+                color: #d97706;
+                border: 1px solid #fcd34d;
+            }
         </style>
 
         <div class="customer-panel">
@@ -74,32 +96,51 @@ if ($view_id > 0) {
                     <p>Redeemed on <?php echo date('M d, Y', strtotime($redemption['redeemed_at'])); ?></p>
                 </div>
                 <div class="gift-card-body">
-                    <div>
-                        <strong>Remaining amount:</strong> <?php echo htmlspecialchars($price_value); ?>
-                    </div>
-                    <?php if (!empty($redemption['expiry_date'])): // Check if expiry_date is not empty ?>
-                    <div>
-                        <strong>Expires on:</strong> <?php echo date('m/d/Y', strtotime($redemption['expiry_date'])); ?>
-                    </div>
-                    <?php endif; ?>                    
-                    <?php if (!empty($redemption['card_number'])): // Check if card_number (voucher code) is not empty ?>
-                    <div style="margin-top: 20px;">
-                        <p>Use the code below during checkout to apply your discount.</p>
-                    </div>
-                    <div class="card-number">
-                        <strong>Voucher Code:</strong>
-                        <?php echo htmlspecialchars($redemption['card_number']); ?>
-                        <button class="copy-btn" onclick="copyToClipboard('<?php echo htmlspecialchars($redemption['card_number']); ?>')">Copy</button>
-                    </div>
+                    
+                    <?php if ($is_used): ?>
+                        <!-- Condition 1: Voucher has been used -->
+                        <div class="status-badge status-used">
+                            ⚠️ This voucher has already been used.
+                        </div>
+                        <p style="text-align: center; color: #64748b;">This reward card was successfully applied to a previous order and is no longer valid.</p>
+
+                    <?php elseif ($is_expired): ?>
+                        <!-- Condition 2: Voucher is past 7 days -->
+                        <div class="status-badge status-expired">
+                            ⏳ This voucher has expired.
+                        </div>
+                        <p style="text-align: center; color: #64748b;">Rewards must be used within 7 days of redemption. This voucher expired on <?php echo date('M d, Y', strtotime($redemption['redeemed_at'] . ' + 7 days')); ?>.</p>
+
+                    <?php else: ?>
+                        <!-- Condition 3: Voucher is valid and active -->
+                        <div>
+                            <strong>Remaining amount:</strong> <?php echo htmlspecialchars($price_value); ?>
+                        </div>
+                        <div>
+                            <strong>Expires on:</strong> <?php echo date('M d, Y', strtotime($redemption['redeemed_at'] . ' + 7 days')); ?>
+                        </div>                    
+                        
+                        <?php if (!empty($redemption['card_number'])): ?>
+                        <div style="margin-top: 20px;">
+                            <p>Use the code below during checkout to apply your discount.</p>
+                        </div>
+                        <div class="card-number">
+                            <strong>Voucher Code:</strong>
+                            <?php echo htmlspecialchars($redemption['card_number']); ?>
+                            <button class="copy-btn" onclick="copyToClipboard('<?php echo htmlspecialchars($redemption['card_number']); ?>')">Copy</button>
+                        </div>
+                        <?php endif; ?>
+
+                        <div style="margin-top: 20px;">
+                            <strong>How to use rewards?</strong><br>
+                            Thank you for being a loyal member of Darius Poultry Supplies! Here's a <?php echo htmlspecialchars($price_value); ?> gift card as a reward for your continuous support in our shop. Let's go!<br><br>
+                            <strong>More information</strong><br>
+                            This gift card can be used in all Darius Poultry Supply stores and online.
+                        </div>
                     <?php endif; ?>
-                    <div style="margin-top: 20px;">
-                        <strong>How to use rewards?</strong><br>
-                        Thank you for being a loyal member of Darius Poultry Supplies! Here's a <?php echo htmlspecialchars($price_value); ?> gift card as a reward for your continuous support in our shop. Let's go!<br><br>
-                        <strong>More information</strong><br>
-                        This gift card can be used in all Darius Poultry Supply stores and online.
-                    </div>
-                    <div style="margin-top: 20px; text-align: center;">
-                        <a href="my_rewards.php" class="copy-btn" style="background: #10b981;">Back to My Rewards</a>
+
+                    <div style="margin-top: 30px; text-align: center;">
+                        <a href="my_rewards.php" class="copy-btn" style="background: #10b981; text-decoration: none;">Back to My Rewards</a>
                     </div>
                 </div>
             </div>
@@ -140,7 +181,7 @@ if ($redemptions_query) {
             <i class="fas fa-gift fa-3x" style="color: #cbd5e1; margin-bottom: 20px;"></i>
             <h3>No rewards redeemed yet</h3>
             <p>Start shopping and earning points to redeem rewards!</p>
-            <a href="reward_catalog.php" class="copy-btn" style="background: #0082c3; padding: 12px 25px;">Browse Rewards</a>
+            <a href="reward_catalog.php" class="copy-btn" style="background: #0082c3; padding: 12px 25px; text-decoration: none; display: inline-block; margin-top: 15px;">Browse Rewards</a>
         </div>
     <?php else: ?>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
@@ -149,12 +190,29 @@ if ($redemptions_query) {
                 if (preg_match('/[₱P](\d+)/', $redemption['reward_name'], $matches)) {
                     $price_value = '₱' . $matches[1];
                 }
+                
+                // Fast status checking for the grid dashboard list
+                $redeemed_time = strtotime($redemption['redeemed_at']);
+                $days_diff = (time() - $redeemed_time) / (60 * 60 * 24);
+                $is_used = (isset($redemption['status']) && strtolower($redemption['status']) === 'used');
+                $is_expired = ($days_diff > 7);
             ?>
-                <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); position: relative; opacity: <?php echo ($is_used || $is_expired) ? '0.7' : '1'; ?>;">
                     <h3><?php echo htmlspecialchars($redemption['reward_name']); ?></h3>
                     <p><strong>Points Used:</strong> <?php echo number_format($redemption['points_used'], 2); ?></p>
                     <p><strong>Redeemed:</strong> <?php echo date('M d, Y', strtotime($redemption['redeemed_at'])); ?></p>
-                    <a href="?view=<?php echo $redemption['id']; ?>" style="background: #0082c3; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; display: inline-block; margin-top: 10px;">View Voucher</a>
+                    
+                    <div style="margin-top: 15px;">
+                        <?php if ($is_used): ?>
+                            <span style="color: #dc2626; font-weight: bold;">[Used]</span>
+                        <?php elseif ($is_expired): ?>
+                            <span style="color: #d97706; font-weight: bold;">[Expired]</span>
+                        <?php else: ?>
+                            <span style="color: #16a34a; font-weight: bold;">[Active]</span>
+                        <?php endif; ?>
+                        
+                        <a href="?view=<?php echo $redemption['id']; ?>" style="background: #0082c3; color: white; padding: 6px 14px; border-radius: 6px; text-decoration: none; float: right; font-size: 0.9rem;">View Details</a>
+                    </div>
                 </div>
             <?php endforeach; ?>
         </div>
