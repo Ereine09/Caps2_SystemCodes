@@ -20,14 +20,43 @@ if ($role !== 'admin' && $role !== 'staff') {
     exit();
 }
 
-// Configuration of Filter Groups
+// Configuration of Filter Groups (Base / Static)
 $filter_groups = [
     'Product Category' => ['Dog Food', 'Cat Food', 'Chicken', 'Dog Essentials', 'Cat Essentials'],
     'Lifestage'    => ['Adult (1 - 7)', 'Kitten'],
     'Food Type'    => ['Dry Food', 'Treats', 'Wet Food'],
-    'Health Needs' => ['Indoor Cats'],
+    'Health Needs' => ['Indoor Cats', 'Sensitive Skin', 'Small Breeds'],
     'Brand'        => ['FELIX', 'Fancy Feast', 'Friskies', 'Purina ONE®']
 ];
+
+// Load dynamic custom categories from database and merge into filter_groups
+$custom_health = [];
+$custom_brands = [];
+$custom_lifestages = [];
+$result = $conn->query("SELECT group_name, category_value FROM tbl_custom_categories ORDER BY category_value ASC");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        if ($row['group_name'] === 'Health Needs') {
+            $custom_health[] = $row['category_value'];
+        } elseif ($row['group_name'] === 'Brand') {
+            $custom_brands[] = $row['category_value'];
+        } elseif ($row['group_name'] === 'Lifestage') {
+            $custom_lifestages[] = $row['category_value'];
+        }
+    }
+    $result->close();
+}
+
+// Merge custom categories into filter groups (avoiding duplicates)
+if (!empty($custom_health)) {
+    $filter_groups['Health Needs'] = array_unique(array_merge($filter_groups['Health Needs'], $custom_health));
+}
+if (!empty($custom_brands)) {
+    $filter_groups['Brand'] = array_unique(array_merge($filter_groups['Brand'], $custom_brands));
+}
+if (!empty($custom_lifestages)) {
+    $filter_groups['Lifestage'] = array_unique(array_merge($filter_groups['Lifestage'], $custom_lifestages));
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -42,16 +71,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $price = (float)$_POST['price'];
         $stock = (int)$_POST['stock'];
         
-        // Collect all selected values from dropdowns
+        // Collect all selected values from dropdowns and custom inputs
         $selected_cats = [];
         if (!empty($_POST['product_category_input'])) $selected_cats[] = $_POST['product_category_input'];
         if (!empty($_POST['lifestage_category']))    $selected_cats[] = $_POST['lifestage_category'];
+        if (!empty($_POST['lifestage_custom']))      $selected_cats[] = $_POST['lifestage_custom'];
         if (!empty($_POST['food_type_category']))    $selected_cats[] = $_POST['food_type_category'];
         if (!empty($_POST['health_needs_category'])) $selected_cats[] = $_POST['health_needs_category'];
+        if (!empty($_POST['health_needs_custom']))   $selected_cats[] = $_POST['health_needs_custom'];
         if (!empty($_POST['brand_category']))        $selected_cats[] = $_POST['brand_category'];
+        if (!empty($_POST['brand_custom']))          $selected_cats[] = $_POST['brand_custom'];
 
         $category = !empty($selected_cats) ? implode(', ', array_unique($selected_cats)) : 'General';
         $image_url = trim($_POST['image_url']);
+
+        // Save any custom categories to the database for future dropdown/filter use
+        $custom_lifestage_val = trim($_POST['lifestage_custom'] ?? '');
+        $custom_health_val = trim($_POST['health_needs_custom'] ?? '');
+        $custom_brand_val = trim($_POST['brand_custom'] ?? '');
+        
+        if (!empty($custom_lifestage_val)) {
+            $ins = $conn->prepare("INSERT IGNORE INTO tbl_custom_categories (group_name, category_value) VALUES ('Lifestage', ?)");
+            $ins->bind_param('s', $custom_lifestage_val);
+            $ins->execute();
+            $ins->close();
+        }
+        if (!empty($custom_health_val)) {
+            $ins = $conn->prepare("INSERT IGNORE INTO tbl_custom_categories (group_name, category_value) VALUES ('Health Needs', ?)");
+            $ins->bind_param('s', $custom_health_val);
+            $ins->execute();
+            $ins->close();
+        }
+        if (!empty($custom_brand_val)) {
+            $ins = $conn->prepare("INSERT IGNORE INTO tbl_custom_categories (group_name, category_value) VALUES ('Brand', ?)");
+            $ins->bind_param('s', $custom_brand_val);
+            $ins->execute();
+            $ins->close();
+        }
 
         try {
             if ($action === 'add') {
@@ -270,7 +326,7 @@ $unread_count = get_unread_count_staff($user_id);
     </div>
 
     <!-- Main Content -->
-    <div class="main-content" style="margin-left: 260px;"> <!-- Adjust based on your sidebar width -->
+    <div class="main-content" style="margin-left: 260px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h1>Product Management</h1>
             <div class="search-container">
@@ -325,6 +381,7 @@ $unread_count = get_unread_count_staff($user_id);
                         <option value="">Lifestage</option>
                         <?php foreach($filter_groups['Lifestage'] as $o) echo "<option value='$o'>$o</option>"; ?>
                     </select>
+                    <input type="text" name="lifestage_custom" placeholder="Or type & save custom Lifestage" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
                     <select name="food_type_category" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
                         <option value="">Food Type</option>
                         <?php foreach($filter_groups['Food Type'] as $o) echo "<option value='$o'>$o</option>"; ?>
@@ -333,10 +390,12 @@ $unread_count = get_unread_count_staff($user_id);
                         <option value="">Health Needs</option>
                         <?php foreach($filter_groups['Health Needs'] as $o) echo "<option value='$o'>$o</option>"; ?>
                     </select>
+                    <input type="text" name="health_needs_custom" placeholder="Or type & save custom Health Need" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
                     <select name="brand_category" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
                         <option value="">Brand</option>
                         <?php foreach($filter_groups['Brand'] as $o) echo "<option value='$o'>$o</option>"; ?>
                     </select>
+                    <input type="text" name="brand_custom" placeholder="Or type & save custom Brand" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
 
                     <input type="text" name="image_url" placeholder="Image URL" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
                     <textarea name="description" placeholder="Product Description..." style="grid-column: 1 / -1; padding: 10px; border-radius: 5px; border: 1px solid #ddd;"></textarea>
@@ -436,6 +495,10 @@ $unread_count = get_unread_count_staff($user_id);
                         </select>
                     </div>
                     <div class="form-group">
+                        <label>Custom Lifestage</label>
+                        <input type="text" name="lifestage_custom" id="cat_lifestage_custom" placeholder="Type custom lifestage...">
+                    </div>
+                    <div class="form-group">
                         <label>Food Type</label>
                         <select name="food_type_category" id="cat_foodtype">
                             <option value="">None</option>
@@ -450,11 +513,19 @@ $unread_count = get_unread_count_staff($user_id);
                         </select>
                     </div>
                     <div class="form-group">
+                        <label>Custom Health Need</label>
+                        <input type="text" name="health_needs_custom" id="cat_health_custom" placeholder="Type custom health need...">
+                    </div>
+                    <div class="form-group">
                         <label>Brand</label>
                         <select name="brand_category" id="cat_brand">
                             <option value="">None</option>
                             <?php foreach($filter_groups['Brand'] as $o) echo "<option value='$o'>$o</option>"; ?>
                         </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Custom Brand</label>
+                        <input type="text" name="brand_custom" id="cat_brand_custom" placeholder="Type custom brand...">
                     </div>
                 </div>
 
@@ -517,7 +588,7 @@ $unread_count = get_unread_count_staff($user_id);
                 if(product.category) {
                     const cats = product.category.split(',').map(s => s.trim());
                     
-                    // Helper to auto-select dropdowns
+                    // Helper to auto-select dropdowns, and put unmatched items in custom fields
                     Object.keys(filterGroups).forEach(groupKey => {
                         const selectId = groupKey === 'Product Category' ? 'cat_product' :
                                          groupKey === 'Lifestage' ? 'cat_lifestage' : 
@@ -528,6 +599,26 @@ $unread_count = get_unread_count_staff($user_id);
                         const selectElement = selectId ? document.getElementById(selectId) : null;
                         const match = cats.find(c => filterGroups[groupKey].includes(c));
                         if(match && selectElement) selectElement.value = match;
+                        
+                        // If no match found in dropdown, put it in the corresponding custom field
+                        if (!match && groupKey === 'Lifestage') {
+                            const customVal = cats.find(c => !filterGroups[groupKey].includes(c));
+                            if (customVal) {
+                                document.getElementById('cat_lifestage_custom').value = customVal;
+                            }
+                        }
+                        if (!match && groupKey === 'Health Needs') {
+                            const customVal = cats.find(c => !filterGroups[groupKey].includes(c));
+                            if (customVal) {
+                                document.getElementById('cat_health_custom').value = customVal;
+                            }
+                        }
+                        if (!match && groupKey === 'Brand') {
+                            const customVal = cats.find(c => !filterGroups[groupKey].includes(c));
+                            if (customVal) {
+                                document.getElementById('cat_brand_custom').value = customVal;
+                            }
+                        }
                     });
                 }
             }

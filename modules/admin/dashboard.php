@@ -173,7 +173,7 @@ $unread_count = get_unread_count_staff($user_id);
                 </div>
             </a>
 
-            <a href="analytics.php" style="text-decoration: none; color: inherit;">
+            <a href="test_smtp.php" style="text-decoration: none; color: inherit;">
                 <div class="card" style="background: white; padding: 25px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: transform 0.2s;">
                     <i class="fas fa-envelope-circle-check" style="font-size: 2.5rem; color: #27ae60; margin-bottom: 15px;"></i>
                     <h4 style="margin: 0;">SMTP Test</h4>

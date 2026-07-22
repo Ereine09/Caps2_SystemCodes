@@ -12,6 +12,7 @@
         "flutter",
         "flutter_secure_storage",
         "http",
+        "intl",
         "mobile_scanner",
         "provider",
         "qr_code_scanner",
@@ -136,6 +137,14 @@
         "meta",
         "sky_engine",
         "vector_math"
+      ]
+    },
+    {
+      "name": "intl",
+      "version": "0.17.0",
+      "dependencies": [
+        "clock",
+        "path"
       ]
     },
     {

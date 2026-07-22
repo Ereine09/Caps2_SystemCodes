@@ -70,6 +70,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'], $_POST['o
                     'email_to' => $customer_email,
                 ]);
             }
+
+            // --- NEW FEATURE: QR CODE & CONFIRMATION EMAIL ---
+            // If the new status is 'confirmed', generate QR and send email.
+            if ($new_order_status === 'confirmed' && $old_order_status !== 'confirmed') {
+                send_payment_confirmation_email($order_id, $prev['email'], $prev['name']);
+            }
         }
 
         header('Location: orders.php');
@@ -229,9 +235,12 @@ $unread_count = get_unread_count_staff($user_id);
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($orders as $order): ?>
+                        <?php 
+                        $row_number = 1;
+                        foreach ($orders as $order): 
+                        ?>
                             <tr>
-                                <td><?php echo htmlspecialchars($order['id']); ?></td>
+                                <td><?php echo $row_number++; ?></td>
                                 <td><?php echo htmlspecialchars($order['order_number']); ?></td>
                                 <td><?php echo htmlspecialchars($order['customer_name'] ?: 'Unknown'); ?> <br><small><?php echo htmlspecialchars($order['customer_email'] ?: ''); ?></small></td>
                                 <td><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $order['fulfillment_type']))); ?></td>

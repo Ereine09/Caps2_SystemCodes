@@ -6,6 +6,7 @@ environment:
   sdk: '>=3.3.0 <4.0.0'
 
 dependencies:
+  intl: ^0.17.0
   flutter:
     sdk: flutter
   mobile_scanner: ^5.1.0

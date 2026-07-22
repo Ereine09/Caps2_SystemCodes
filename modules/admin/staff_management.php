@@ -70,7 +70,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['add_user_submit'])) {
             //add new user, then log the action in activity_logs
             if ($stmt->execute()) {
                 $details = "Added new " . ucfirst($new_role) . " account: $new_username";
-                $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, 'Manage_Staff', ?)");
+                $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, 'Manage Staff', ?)");
                 $log_stmt->bind_param("is", $user_id, $details);
                 $log_stmt->execute();
 
@@ -96,7 +96,7 @@ if(isset($_GET['del_staff'])){
     
     // I-log ang action sa activity_logs using the current admin user ID
     $details = "Deleted staff account: $staff_name";
-    $stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, 'manage_staff', ?)");
+    $stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, 'Manage Staff', ?)");
     $stmt->bind_param("is", $user_id, $details);
     $stmt->execute();
     

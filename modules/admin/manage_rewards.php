@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stmt->execute()) {
                 $success_message = "New reward item added successfully.";
                 $details = "Added reward: $name ($code)";
-                $log = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, 'MANAGE_REWARDS', ?)");
+                $log = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, 'Manage Rewards', ?)");
                 $log->bind_param("is", $user_id, $details);
                 $log->execute();
             } else {
@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $details = "Updated stock for " . $reward['name'] . " to $new_stock";
             
             // Log point for audit trail
-            $log = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, 'MANAGE_REWARDS', ?)");
+            $log = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, 'Manage Rewards', ?)");
             $log->bind_param("is", $user_id, $details);
             $log->execute();
         }

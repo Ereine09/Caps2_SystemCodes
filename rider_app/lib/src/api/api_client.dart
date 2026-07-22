@@ -61,4 +61,44 @@ class ApiClient {
   Future<Response<T>> getJson<T>(String path, {Map<String, dynamic>? headers}) {
     return _dio.get<T>(path, options: Options(headers: headers));
   }
+
+  /// Fetches a list of assigned deliveries for a rider.
+  Future<List<dynamic>> getDeliveries({int riderId = 1}) async {
+    // In a real app, riderId would come from auth state.
+    final response = await getJson('/rider_api.php?action=get_deliveries&rider_id=$riderId');
+    if (response.data['success'] == true) {
+      return response.data['data'];
+    } else {
+      throw Exception('Failed to load deliveries: ${response.data['message']}');
+    }
+  }
+
+  /// Fetches the full details for a single order.
+  Future<Map<String, dynamic>> getDeliveryDetails(int orderId) async {
+    final response = await getJson('/rider_api.php?action=get_delivery_details&order_id=$orderId');
+    if (response.data['success'] == true) {
+      return response.data['data'];
+    } else {
+      throw Exception('Failed to load delivery details: ${response.data['message']}');
+    }
+  }
+
+  /// Verifies the delivery confirmation QR code with the backend.
+  Future<Map<String, dynamic>> verifyDeliveryQR(String qrToken, int riderId) async {
+    final response = await postJson(
+      '/rider_api.php?action=verify_delivery_qr',
+      body: {
+        'qr_token': qrToken,
+        'rider_id': riderId,
+      },
+    );
+
+    // Dio interceptor handles non-200 status codes, so we check the business logic success flag.
+    if (response.data['success'] == true) {
+      return response.data;
+    } else {
+      // Throw an exception with the specific error message from the backend.
+      throw Exception(response.data['message'] ?? 'QR code verification failed.');
+    }
+  }
 }

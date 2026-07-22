@@ -19,7 +19,7 @@ if (!$payload) {
 
 $username = $payload['username'];
 $user_id = $payload['user_id'];
-$role = strtolower(trim($payload['role'] ?? 'staff')); 
+$role = strtolower(trim($payload['role'] ?? 'admin')); 
 // Activity log viewer must use the JWT user_id for filtering.
 // Do NOT rely on any other IDs.
 $user_id = (int)($payload['user_id'] ?? 0);
@@ -139,7 +139,7 @@ $unread_count = get_unread_count_staff($user_id);
                     if ($log_res && mysqli_num_rows($log_res) > 0) {
                         while ($log = mysqli_fetch_assoc($log_res)) {
                             if (!empty($log['username'])) {
-                                $u_display = $log['username'] . ' (Staff)';
+                                $u_display = $log['username'] . ' (Admin)';
                             } elseif (!empty($log['customer_name'])) {
                                 $u_display = $log['customer_name'] . ' (Customer)';
                             } else {

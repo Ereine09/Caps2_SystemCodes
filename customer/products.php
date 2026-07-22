@@ -12,9 +12,36 @@ $filter_groups = [
     'Product Category' => ['Dog Food', 'Cat Food', 'Chicken', 'Dog Essentials', 'Cat Essentials'],
     'Lifestage' => ['Adult (1 - 7)', 'Kitten'],
     'Food Type' => ['Dry Food', 'Treats', 'Wet Food'],
-    'Health Needs' => ['Indoor Cats'],
+    'Health Needs' => ['Indoor Cats', 'Sensitive Skin', 'Small Breeds'],
     'Brand' => ['FELIX', 'Fancy Feast', 'Friskies', 'Purina ONE®']
 ];
+
+// Load dynamic custom categories from database and merge into filter_groups
+$custom_health = [];
+$custom_brands = [];
+$custom_lifestages = [];
+$result = $conn->query("SELECT group_name, category_value FROM tbl_custom_categories ORDER BY category_value ASC");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        if ($row['group_name'] === 'Health Needs') {
+            $custom_health[] = $row['category_value'];
+        } elseif ($row['group_name'] === 'Brand') {
+            $custom_brands[] = $row['category_value'];
+        } elseif ($row['group_name'] === 'Lifestage') {
+            $custom_lifestages[] = $row['category_value'];
+        }
+    }
+    $result->close();
+}
+if (!empty($custom_health)) {
+    $filter_groups['Health Needs'] = array_unique(array_merge($filter_groups['Health Needs'], $custom_health));
+}
+if (!empty($custom_brands)) {
+    $filter_groups['Brand'] = array_unique(array_merge($filter_groups['Brand'], $custom_brands));
+}
+if (!empty($custom_lifestages)) {
+    $filter_groups['Lifestage'] = array_unique(array_merge($filter_groups['Lifestage'], $custom_lifestages));
+}
 
 // AJAX & POST Handler
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['product_id'])) {

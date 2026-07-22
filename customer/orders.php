@@ -213,6 +213,7 @@ if (isset($_GET['id'])) {
                         <h4><i class="fas fa-file-invoice-dollar"></i> Summary</h4>
                         <div class="order-summary-box">
                             <div class="summary-row"><span>Subtotal</span><span>PHP <?php echo number_format($order['subtotal'], 2); ?></span></div>
+                            <div class="summary-row"><span>VAT (12%)</span><span>PHP <?php echo number_format($order['vat_amount'], 2); ?></span></div>
                             <div class="summary-row"><span>Delivery Fee</span><span>PHP <?php echo number_format($order['delivery_fee'], 2); ?></span></div>
                             <?php if ((float)$order['discount_amount'] > 0): ?>
                                 <div class="summary-row" style="color: #10b981; font-weight: 600;"><span>Discount</span><span>-PHP <?php echo number_format($order['discount_amount'], 2); ?></span></div>

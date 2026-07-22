@@ -937,6 +937,90 @@ function send_order_ereceipt(int $customer_id, int $order_id, int $delivery_id, 
     }
 }
 
+/**
+ * Generates a QR code for a confirmed order and sends a payment confirmation email.
+ *
+ * @param int    $order_id The ID of the order.
+ * @param string $customer_email The customer's email address.
+ * @param string $customer_name The customer's name.
+ * @return bool True on success, false on failure.
+ */
+function send_payment_confirmation_email(int $order_id, string $customer_email, string $customer_name): bool {
+    global $customer_db;
+
+    try {
+        $order = get_order_by_id($order_id);
+        if (!$order) {
+            throw new Exception("Order not found for ID: $order_id");
+        }
+
+        // 1. Generate a unique token for the QR code
+        $token = 'CONFIRMED-' . bin2hex(random_bytes(16)) . '-' . $order_id;
+
+        // 2. Generate the QR code image
+        $qr_code_uri = null;
+        if (class_exists('Endroid\\QrCode\\QrCode') && class_exists('Endroid\\QrCode\\Writer\\PngWriter')) {
+            $qrCode = QrCode::create($token);
+            $writer = new PngWriter();
+            $qr_code_uri = $writer->write($qrCode)->getDataUri();
+        } else {
+            error_log('[send_payment_confirmation_email] QR Code library not found.');
+            // We can continue without a QR code, but we should log it.
+        }
+
+        // 3. Save the QR code to a file (if generated)
+        $qr_code_path = null;
+        if ($qr_code_uri) {
+            $qr_image_data = base64_decode(preg_replace('#^data:image/\w+;base64,#i', '', $qr_code_uri));
+            $qr_filename = 'qr_order_' . $order['order_number'] . '.png';
+            // IMPORTANT: Ensure this directory exists and is writable by your web server!
+            $qr_directory = __DIR__ . '/../../uploads/qrcodes/';
+            if (!is_dir($qr_directory)) {
+                mkdir($qr_directory, 0755, true);
+            }
+            $qr_code_path = $qr_directory . $qr_filename;
+            file_put_contents($qr_code_path, $qr_image_data);
+
+            // 4. Update the database with the QR code path and the unique token
+            $stmt = $customer_db->prepare("UPDATE tbl_orders SET qr_code_path = ?, payment_confirmation_token = ? WHERE id = ?");
+            $relative_path = 'uploads/qrcodes/' . $qr_filename;
+            $stmt->bind_param('ssi', $relative_path, $token, $order_id);
+            $stmt->execute();
+            $stmt->close();
+        }
+        // 5. Send the confirmation email using PHPMailer
+        $mail = new PHPMailer(true);
+        $mail->isSMTP();
+        $mail->Host       = SMTP_HOST;
+        $mail->SMTPAuth   = SMTP_AUTH;
+        $mail->Username   = SMTP_USERNAME;
+        $mail->Password   = SMTP_PASSWORD;
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+        $mail->Port       = SMTP_PORT;
+
+        $mail->setFrom(SMTP_FROM_EMAIL, htmlspecialchars(SMTP_FROM_NAME));
+        $mail->addAddress($customer_email, htmlspecialchars($customer_name));
+
+        $mail->isHTML(true);
+        $mail->Subject = 'Your Order #' . htmlspecialchars($order['order_number']) . ' is Confirmed!';
+        $mail->Body    = "
+            <div style='font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;'>
+                <h2 style='color: #27ae60;'>Payment Confirmed!</h2>
+                <p>Hi " . htmlspecialchars($customer_name) . ",</p>
+                <p>We are happy to let you know that the payment for your order <strong>#" . htmlspecialchars($order['order_number']) . "</strong> has been confirmed.</p>
+                " . ($qr_code_path ? "<p>You can present the QR code below when you pickup your order or receive your delivery.</p>
+                <div style='text-align: center; margin: 20px 0;'><img src='" . $qr_code_uri . "' alt='Order QR Code'></div>" : "") . "
+                <p>Thank you for your purchase!</p>
+            </div>";
+        $mail->AltBody = 'Your payment for order #' . htmlspecialchars($order['order_number']) . ' has been confirmed. Thank you for your purchase!';
+
+        $mail->send();
+        return true;
+    } catch (Exception $e) {
+        error_log("Failed to send payment confirmation for order $order_id: " . $e->getMessage());
+        return false;
+    }
+}
 
 function record_order_notification(mysqli $conn, int $customer_id, int $order_id, string $order_number, float $subtotal, string $fulfillment_type, int $bulk_order, int $free_delivery): void {
     $title = 'New Customer Order';

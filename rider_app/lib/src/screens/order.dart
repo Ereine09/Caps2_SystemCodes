@@ -1,0 +1,103 @@
+import 'dart:convert';
+
+class Order {
+  final int id;
+  final String orderNumber;
+  final String orderStatus;
+  final String fulfillmentType;
+  final double total;
+  final String deliveryAddress;
+  final String? deliveryPhone;
+  final String paymentMethod;
+  final String customerName;
+  final String? customerPhone;
+  final String? customerEmail;
+  final List<OrderItem> items;
+
+  Order({
+    required this.id,
+    required this.orderNumber,
+    required this.orderStatus,
+    required this.fulfillmentType,
+    required this.total,
+    required this.deliveryAddress,
+    this.deliveryPhone,
+    required this.paymentMethod,
+    required this.customerName,
+    this.customerPhone,
+    this.customerEmail,
+    this.items = const [],
+  });
+
+  factory Order.fromJson(Map<String, dynamic> json) {
+    List<OrderItem> orderItems = [];
+    if (json['items'] != null && json['items'] is List) {
+      orderItems = (json['items'] as List)
+          .map((itemJson) => OrderItem.fromJson(itemJson))
+          .toList();
+    }
+
+    return Order(
+      id: int.tryParse(json['id'].toString()) ?? 0,
+      orderNumber: json['order_number'] ?? 'N/A',
+      orderStatus: json['order_status'] ?? 'unknown',
+      fulfillmentType: json['fulfillment_type'] ?? 'delivery',
+      total: double.tryParse(json['total'].toString()) ?? 0.0,
+      deliveryAddress: json['delivery_address'] ?? 'No address provided',
+      deliveryPhone: json['delivery_phone'],
+      paymentMethod: json['payment_method'] ?? 'cod',
+      customerName: json['customer_name'] ?? 'Unknown Customer',
+      customerPhone: json['customer_phone'],
+      customerEmail: json['customer_email'],
+      items: orderItems,
+    );
+  }
+}
+
+class OrderItem {
+  final int id;
+  final int orderId;
+  final int productId;
+  final String productName;
+  final int quantity;
+  final double unitPrice;
+  final double totalPrice;
+
+  OrderItem({
+    required this.id,
+    required this.orderId,
+    required this.productId,
+    required this.productName,
+    required this.quantity,
+    required this.unitPrice,
+    required this.totalPrice,
+  });
+
+  factory OrderItem.fromJson(Map<String, dynamic> json) {
+    return OrderItem(
+      id: int.tryParse(json['id'].toString()) ?? 0,
+      orderId: int.tryParse(json['order_id'].toString()) ?? 0,
+      productId: int.tryParse(json['product_id'].toString()) ?? 0,
+      productName: json['product_name'] ?? 'Unknown Product',
+      quantity: int.tryParse(json['quantity'].toString()) ?? 0,
+      unitPrice: double.tryParse(json['unit_price'].toString()) ?? 0.0,
+      totalPrice: double.tryParse(json['total_price'].toString()) ?? 0.0,
+    );
+  }
+}
+
+/// Helper function to safely decode JSON that might be a string.
+Map<String, dynamic> safeJsonDecode(String source) {
+  try {
+    // First, try to decode directly.
+    final decoded = json.decode(source);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+    // If it decodes to something else (like a string from double encoding), wrap it.
+    return {'message': decoded.toString()};
+  } catch (e) {
+    // If decoding fails, return the raw string as the message.
+    return {'message': source};
+  }
+}

@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_alert'])) {
             // Log the simulation for audit purposes
             $user_id = (int)$payload['user_id'];
             $details = "Sent simulated security alert to: $target_email";
-            $log = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, 'SECURITY_SIM', ?)");
+            $log = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, 'Security Simulation', ?)");
             $log->bind_param("is", $user_id, $details);
             $log->execute();
         } else {
