@@ -1,0 +1,48 @@
+Can you show me which files and database the admin system and customer portal's loyalty points are connected to?
+
+  [Admin]                              [Customer]
+     |                                      |
+modules/customers/loyalty_points.php    customer/checkout.php
+modules/customers/reward_redemption.php customer/reward_redemption.php
+modules/admin/analytics.php             customer/order_create_api.php
+     |                                      |
+     +------------------+-------------------+
+                        |
+           app/helpers/notification_helper.php
+            (sync_customer_loyalty_points)
+                        |
+              ┌─────────┴──────────┐
+              │    capstone_db      │
+              │                    │
+              │  customers         │
+              │  loyalty_transactions
+              │  reward_redemptions│
+              │  rewards           │
+              │  tbl_vouchers      │
+              │  notifications     │
+              │  activity_logs     │
+              └────────────────────┘
+
+
+
+So since you've already seen their databases, can you connect them all or just make my customer loyalty points database connected to the admin's points?
+
+Are they really connected? Why is it that when I add points in the admin system, like for example I add 5 points and the customer currently has 53 points, what happens is it gets overwritten and their balance points become just 5. When I add points in the admin system, it needs to be fixed because when it's working, it should just add the points, like 5 + 53 = 58 points should be the updated points.
+
+
+
+can you explain me this area at loyalty_managements/modules/customers/loyalty_points.php Maybe I just input this wrong or I'm confused, can this part be fixed so it's not confusing?
+Manage Customer Points
+
+Elaisa Reine Belandres (Current: 53.00 pts)
+Adjust Points (Manual)
+Points Value (+/- e.g., -5 or 10)
+
+System Correction
+Process Points
+*Note: Use negative sign (e.g., -5) to deduct points.
+
+
+sige basta yung points na ilalagay ko mag aadd lang ha hindi yung mag ooveright
+
+loyalty_managements/customer/orders.php why yung sa dito bakit pag nag pupurchase ako sa customer hindi na nag add ng points? dapat kada check out ko don nag add ng points e

@@ -29,7 +29,7 @@ if (!function_exists('notifications_sync_customer_loyalty_points')) {
         );
         $total_redeemed = (float) ((mysqli_fetch_assoc($redeemed_query)['total_redeemed'] ?? 0.00));
 
-        // Usable points should always be computed as earned - redeemed (never overwritten by only latest values)
+        // Points = earned - redeemed (single source of truth = transaction tables)
         $new_total_points = (float) ($total_earned - $total_redeemed);
         if ($new_total_points < 0) {
             $new_total_points = 0.00;

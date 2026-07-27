@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../modules/admin/bootstrap.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
+require_once __DIR__ . '/../../app/helpers/notification_helper.php';
 
 function customer_is_logged_in(): bool {
     $token = getJWTFromCookie();

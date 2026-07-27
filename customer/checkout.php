@@ -201,7 +201,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stock_deducted = true; 
             $order_id = create_customer_order((int)$customer['id'], $fulfillment_type, $details, $cart);
             if ($order_id !== null) {
-                $GLOBALS['conn']->commit();
+$GLOBALS['conn']->commit();
+                
+                // --- Loyalty Points Logic (MUST be BEFORE clear_customer_cart) ---
+                $customer_id = (int) current_customer()['id'];
+                
+                // Capture subtotal BEFORE cart is cleared
+                $order_cart_subtotal = cart_subtotal();
+                
+                // Fetch previous loyalty points before any updates
+                $previous_points_query = mysqli_query($conn, "SELECT loyalty_points FROM customers WHERE id = " . $customer_id);
+                $previous_points_row = mysqli_fetch_assoc($previous_points_query);
+                $previous_points = (float)($previous_points_row['loyalty_points'] ?? 0.00);
+
+                $order_total = $order_cart_subtotal - $discount_amount; // Points are earned on the amount after discount
+                $points_earned = round($order_total / 100, 2); // P100 = 1 point
+                // --- End capture ---
+
                 clear_customer_cart();
 
                 // --- VOUCHER SINGLE-USE DEACTIVATION LOGIC ---
@@ -214,18 +230,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // 2. Updates the history tracking state to 'Used' for my_reward.php blocking
                     mysqli_query($conn, "UPDATE reward_redemptions SET status = 'Used' WHERE card_number = '$v_code'");
                 }
-                // --- END VOUCHER SINGLE-USE LOGIC ---
-
-                // --- Loyalty Points Logic ---
-                $customer_id = (int) current_customer()['id'];
-                
-                // Fetch previous loyalty points before any updates (subtotal is used for points)
-                $previous_points_query = mysqli_query($conn, "SELECT loyalty_points FROM customers WHERE id = " . $customer_id);
-                $previous_points_row = mysqli_fetch_assoc($previous_points_query);
-                $previous_points = (float)($previous_points_row['loyalty_points'] ?? 0.00);
-
-                $order_total = cart_subtotal() - $discount_amount; // Points are earned on the amount after discount
-                $points_earned = round($order_total / 100, 2); // P100 = 1 point
 
                 if ($points_earned > 0) {
                     // Get customer name and email for notifications

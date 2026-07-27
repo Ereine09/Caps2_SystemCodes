@@ -22,14 +22,11 @@ $username = $payload['username'];
 $user_id = (int) ($payload['user_id'] ?? 0);
 $role = strtolower(trim($payload['role'] ?? 'staff'));
 
-// CONSIDER: notifications_ensure_schema($conn); should be run once during setup/migration, not on every page load.
-
 if (isset($_POST['mark_notifications_read'])) {
     notifications_mark_all_read($conn, $user_id);
     header("Location: " . BASE_URL . "/modules/customers/loyalty_points.php");
     exit();
 }
-// CONSIDER: notifications_seed_expiring_points($conn); should be run by a cron job, not on every page load.
 $notification_count = notifications_get_unread_count($conn, $user_id);
 $recent_notifications = notifications_get_recent($conn, $user_id, 6);
 
@@ -48,7 +45,7 @@ mysqli_query(
     "CREATE TABLE IF NOT EXISTS loyalty_transactions (
         id INT AUTO_INCREMENT PRIMARY KEY,
         customer_id INT NOT NULL,
-        user_id INT NULL, -- Changed to NULL to allow customer-initiated transactions
+        user_id INT NULL,
         product_name VARCHAR(255) NOT NULL,
         quantity_kg DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         points_earned DECIMAL(10,2) NOT NULL,
@@ -56,13 +53,11 @@ mysqli_query(
     )"
 );
 
-// Ensure user_id is nullable if the table already exists
 $check_null = mysqli_query($conn, "SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'loyalty_transactions' AND COLUMN_NAME = 'user_id'");
 if ($check_null && mysqli_fetch_assoc($check_null)['IS_NULLABLE'] === 'NO') {
     mysqli_query($conn, "ALTER TABLE loyalty_transactions MODIFY COLUMN user_id INT NULL");
 }
 
-// Add order_id column to loyalty_transactions if it doesn't exist
 $check_order_id_col = mysqli_query($conn, "SHOW COLUMNS FROM loyalty_transactions LIKE 'order_id'");
 if (mysqli_num_rows($check_order_id_col) == 0) {
     mysqli_query($conn, "ALTER TABLE loyalty_transactions ADD COLUMN order_id INT DEFAULT NULL AFTER points_earned");
@@ -70,89 +65,65 @@ if (mysqli_num_rows($check_order_id_col) == 0) {
 
 $success_message = '';
 $error_message = '';
-// Fix: Check both POST and GET to ensure selection isn't lost on error or initial load from customer list
-$selected_customer = (int) ($_POST['customer_id'] ?? $_GET['customer_id'] ?? 0); // Keep selected customer on error
+$selected_customer = (int) ($_POST['customer_id'] ?? $_GET['customer_id'] ?? 0);
 
-// --- START NG ADJUSTMENT LOGIC ---
+// --- START POINT ADJUSTMENT LOGIC ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_points'])) {
     $adj_customer_id = (int)$_POST['customer_id'];
-
-    // Always treat admin point updates as MANUAL point adjustments.
-    // This page is used to add/deduct points directly, not via money->points conversion.
-    $adjustment_type = 'manual';
-
-    $points_to_process = 0.00;
-    $transaction_description = '';
+    $points_value = (float)($_POST['points_value'] ?? 0);
+    $manual_reason = trim($_POST['manual_reason'] ?? 'Manual Adjustment');
     $transaction_source_value = 0.00; // No kg/amount for direct point adjustment
-
 
     if ($adj_customer_id <= 0) {
         $error_message = 'Please select a customer.';
+    } elseif ($points_value == 0) {
+        $error_message = 'Please enter a non-zero points value.';
     } else {
-        if ($adjustment_type === 'purchase') {
-            $amount_spent = (float)($_POST['amount_spent'] ?? 0);
-            $purchase_description = trim($_POST['purchase_description'] ?? 'Walk-in Purchase');
+        // Use the signed value directly: positive = add, negative = deduct
+        $points_to_process = $points_value;
 
-            if ($amount_spent <= 0) {
-                $error_message = 'Please enter a valid purchase amount for points.';
-            } else {
-$points_to_process = round($amount_spent / 100, 2); // ₱100 = 1 point
-                $transaction_description = "Purchase: " . $purchase_description;
-                $transaction_source_value = $amount_spent; // Store amount spent in quantity_kg for audit
-            }
-        } elseif ($adjustment_type === 'manual') {
-            $points_value = (float)($_POST['points_value'] ?? 0);
-            $manual_reason = trim($_POST['manual_reason'] ?? 'Manual Adjustment');
-
-            if ($points_value == 0.00) {
-                $error_message = 'Please enter a non-zero points value for manual adjustment.';
-            } else {
-                // Allow adding or deducting points. Stored as an earned transaction.
-                // Balance is synced as: SUM(points_earned) - SUM(points_used)
-                $points_to_process = $points_value;
-                $transaction_description = "Manual: " . $manual_reason;
-                $transaction_source_value = 0.00; // No kg/amount for direct point adjustment
-            }
+        if ($points_value > 0) {
+            $transaction_description = "Addition: " . $manual_reason;
         } else {
-            $error_message = 'Invalid adjustment type selected.';
+            $transaction_description = "Deduction: " . $manual_reason;
         }
 
-        if (empty($error_message)) {
-            $trans_stmt = $conn->prepare("INSERT INTO loyalty_transactions (customer_id, user_id, product_name, quantity_kg, points_earned) VALUES (?, ?, ?, ?, ?)");
-            $trans_stmt->bind_param("iisdd", $adj_customer_id, $user_id, $transaction_description, $transaction_source_value, $points_to_process);
+        $trans_stmt = $conn->prepare("INSERT INTO loyalty_transactions (customer_id, user_id, product_name, quantity_kg, points_earned) VALUES (?, ?, ?, ?, ?)");
+        $trans_stmt->bind_param("iisdd", $adj_customer_id, $user_id, $transaction_description, $transaction_source_value, $points_to_process);
 
-            if ($trans_stmt->execute()) {
-                $new_total = notifications_sync_customer_loyalty_points($conn, $adj_customer_id);
+        if ($trans_stmt->execute()) {
+            $new_total = notifications_sync_customer_loyalty_points($conn, $adj_customer_id);
 
-                $name_res = mysqli_query($conn, "SELECT name, email FROM customers WHERE id = $adj_customer_id");
-                $client_row = mysqli_fetch_assoc($name_res);
-                $c_name = $client_row['name'] ?? 'Unknown';
-                $c_email = $client_row['email'] ?? '';
+            $name_res = mysqli_query($conn, "SELECT name, email FROM customers WHERE id = $adj_customer_id");
+            $client_row = mysqli_fetch_assoc($name_res);
+            $c_name = $client_row['name'] ?? 'Unknown';
+            $c_email = $client_row['email'] ?? '';
 
-                // Notify the customer
-                notifications_create($conn, [
-                    'user_id' => $user_id,
-                    'customer_id' => $adj_customer_id,
-                    'type' => 'point_adjustment',
-                    'channel' => 'both', // Sends both email and in-app
-                    'title' => 'Points Balance Updated',
-                    'message' => "Hello $c_name, your loyalty points have been updated by " . number_format($points_to_process, 2) . " points. Reason: $transaction_description. Your new balance is " . number_format($new_total, 2) . " points.",
-                    'email_to' => $c_email,
-                    'points_value' => $points_to_process
-                ]);
+            // Determine type label for logging
+            $adjustment_type = ($points_value > 0) ? 'Addition' : 'Deduction';
 
-                $log_details = "Processed points for $c_name (Type: $adjustment_type, Value: $points_to_process). Reason: $transaction_description";
-                $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, 'POINT_ADJUSTMENT', ?)");
-                $log_stmt->bind_param("is", $user_id, $log_details);
-                $log_stmt->execute();
+            // Notify the customer
+            notifications_create($conn, [
+                'user_id' => $user_id,
+                'customer_id' => $adj_customer_id,
+                'type' => 'point_adjustment',
+                'channel' => 'both',
+                'title' => 'Points Balance Updated',
+                'message' => "Hello $c_name, your loyalty points have been updated by " . number_format($points_to_process, 2) . " points. Reason: $transaction_description. Your new balance is " . number_format($new_total, 2) . " points.",
+                'email_to' => $c_email,
+                'points_value' => $points_to_process
+            ]);
 
-                // Store message in session and redirect to prevent double-posting on refresh
-                $_SESSION['success_message'] = "Successfully processed points for " . htmlspecialchars($c_name) . ".";
-                header("Location: loyalty_points.php");
-                exit();
-            } else {
-                $error_message = "Failed to create transaction record: " . $conn->error;
-            }
+            $log_details = "Processed points for $c_name (Type: $adjustment_type, Value: $points_to_process). Reason: $transaction_description";
+            $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, 'POINT_ADJUSTMENT', ?)");
+            $log_stmt->bind_param("is", $user_id, $log_details);
+            $log_stmt->execute();
+
+            $_SESSION['success_message'] = "Successfully processed " . number_format($points_to_process, 2) . " points for " . htmlspecialchars($c_name) . ". New balance: " . number_format($new_total, 2) . " pts.";
+            header("Location: loyalty_points.php");
+            exit();
+        } else {
+            $error_message = "Failed to create transaction record: " . $conn->error;
         }
     }
 }
@@ -393,33 +364,16 @@ if ($transactions_result) {
                     <?php endforeach; ?>
                 </select>
 
-                <div style="grid-column: 1 / -1; display: flex; gap: 15px; margin-top: 5px; margin-bottom: 10px;">
-                    <label style="display: flex; align-items: center; gap: 5px; font-weight: 600; color: #555;">
-                        <input type="radio" name="adjustment_type" value="manual" checked onchange="toggleAdjustmentType()"> Adjust Points (Manual)
-                    </label>
-                </div>
-
-
-                <!-- Purchase Fields -->
-                <div id="purchase-fields" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); grid-column: 1 / -1; gap: 12px;">
-                    <input type="text" name="purchase_description" id="purchase_description" placeholder="Purchase Description (e.g. Mixed Feeds)" value="Walk-in Purchase" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
-                    <input id="amount_spent" type="number" step="0.01" min="1" name="amount_spent" placeholder="Amount Spent (PHP)" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
-                    <div style="display: flex; align-items: center; color: #4a3e94; font-weight: 600; grid-column: span 2;">
-                        <span id="points-preview">₱0.00 = 0.00 points (Rate: ₱100 = 1 point)</span>
-                    </div>
-                </div>
-
                 <!-- Manual Adjustment Fields -->
-                <div id="manual-fields" style="display: none; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); grid-column: 1 / -1; gap: 12px;">
-                    <input type="number" step="0.01" name="points_value" id="points_value" placeholder="Points Value (+/- e.g., -5 or 10)" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
-                    <select name="manual_reason" id="manual_reason" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
-                        <option value="System Correction">System Correction</option>
-                        <option value="Refund">Refund</option>
-                        <option value="Special Bonus">Special Bonus</option>
-                        <option value="Error Correction">Error Correction</option>
-                        <option value="Other">Other</option>
-                    </select>
-                </div>
+                <input type="number" step="0.01" name="points_value" id="points_value" placeholder="Points Value (e.g., 10 to add, -5 to deduct)" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+
+                <select name="manual_reason" id="manual_reason" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                    <option value="System Correction">System Correction</option>
+                    <option value="Refund">Refund</option>
+                    <option value="Special Bonus">Special Bonus</option>
+                    <option value="Error Correction">Error Correction</option>
+                    <option value="Other">Other</option>
+                </select>
 
                 <div style="grid-column: 1 / -1;">
                     <button type="submit" name="process_points" style="background: #4a3e94; color: white; border: none; padding: 12px 25px; border-radius: 5px; cursor: pointer; font-weight: 700;">
@@ -427,7 +381,7 @@ if ($transactions_result) {
                     </button>
                 </div>
             </form>
-            <p style="font-size: 0.85rem; color: #777; margin-top: 10px;">*Note: Use negative sign (e.g., -5) to deduct points.</p>
+            <p style="font-size: 0.85rem; color: #777; margin-top: 10px;">*Note: Enter a positive number (e.g., 10) to <strong>add</strong> points. Enter a negative number (e.g., -5) to <strong>deduct</strong> points.</p>
         </div>
 
         <div class="table-box" style="margin-bottom: 25px;">
@@ -505,50 +459,6 @@ if ($transactions_result) {
     </div>
 
     <script>
-        const amountInput = document.getElementById('amount_spent'); // For purchase
-        const pointsPreview = document.getElementById('points-preview'); // For purchase
-        const purchaseFields = document.getElementById('purchase-fields');
-        const manualFields = document.getElementById('manual-fields');
-        const pointsValueInput = document.getElementById('points_value'); // For manual adjustment
-        const purchaseDescriptionInput = document.getElementById('purchase_description'); // For purchase
-        const manualReasonSelect = document.getElementById('manual_reason'); // For manual adjustment
-
-        function updatePointsPreview() {
-            if (amountInput) {
-                const val = parseFloat(amountInput.value || '0');
-                const pts = (val / 100).toFixed(2);
-                pointsPreview.textContent = `₱${val.toLocaleString()} = ${pts} points (Rate: ₱100 = 1 point)`;
-            }
-        }
-
-        function toggleAdjustmentType() {
-            const type = document.querySelector('input[name="adjustment_type"]:checked').value;
-            if (type === 'purchase') {
-                purchaseFields.style.display = 'grid';
-                manualFields.style.display = 'none';
-                amountInput.required = true;
-                purchaseDescriptionInput.required = true;
-                pointsValueInput.required = false;
-                manualReasonSelect.required = false;
-                updatePointsPreview(); // Update preview when switching
-            } else {
-                purchaseFields.style.display = 'none';
-                manualFields.style.display = 'grid';
-                amountInput.required = false;
-                purchaseDescriptionInput.required = false;
-                pointsValueInput.required = true;
-                manualReasonSelect.required = true;
-            }
-        }
-
-        if (amountInput) amountInput.addEventListener('input', updatePointsPreview);
-
-        // Initial call to set correct fields based on default checked radio or previous POST
-        document.addEventListener('DOMContentLoaded', () => {
-            toggleAdjustmentType();
-            updatePointsPreview(); // Ensure preview is updated on load
-        });
-
         function toggleNotifications() {
             const panel = document.getElementById('notification-panel');
             panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
@@ -566,3 +476,4 @@ if ($transactions_result) {
     </script>
 </body>
 </html>
+

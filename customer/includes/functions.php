@@ -819,8 +819,6 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
             $pickup_stmt->close();
         }
 
-        $customer_db->query("UPDATE customers SET loyalty_points = loyalty_points + $loyalty_points WHERE id = $customer_id");
-
         record_order_notification($customer_db, $customer_id, $order_id, $order_number, $subtotal_inc_vat, $fulfillment_type, $bulk_order, $free_delivery);
 
         $customer_db->commit();
