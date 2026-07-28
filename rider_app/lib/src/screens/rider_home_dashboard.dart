@@ -35,7 +35,7 @@ class RiderHomeDashboard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           height: 45,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
+                            color: Colors.white.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(25),
                           ),
                           child: const Row(
@@ -54,7 +54,7 @@ class RiderHomeDashboard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
+                          color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Text('Ping: 42ms', style: TextStyle(color: Colors.white, fontSize: 11)),
@@ -71,7 +71,7 @@ class RiderHomeDashboard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 5),
                         )
@@ -185,7 +185,7 @@ class RiderHomeDashboard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: bgColor.withOpacity(0.08),
+              color: bgColor.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(icon, color: bgColor, size: 24),

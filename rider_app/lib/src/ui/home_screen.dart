@@ -53,7 +53,7 @@ class HomeScreen extends StatelessWidget {
                 ),
                 Text(
                   'Active Duty',
-                  style: TextStyle(color: AppColors.primary.withOpacity(0.8), fontWeight: FontWeight.w600),
+                  style: TextStyle(color: AppColors.primary.withValues(alpha: 0.8), fontWeight: FontWeight.w600),
                 ),
               ],
             ),

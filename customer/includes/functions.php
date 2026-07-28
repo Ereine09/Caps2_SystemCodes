@@ -143,6 +143,24 @@ function ensure_customer_tables(mysqli $conn): void {
     // The other voucher columns from the original CREATE TABLE are not used in create_customer_order, so they are not strictly needed to fix this error.
     // You can add them here if other parts of your application need them.
 
+    // --- FIX: Ensure loyalty_transactions.user_id is NULLable (needed for customer-initiated checkouts) ---
+    $lt_table = mysqli_query($conn, "SHOW TABLES LIKE 'loyalty_transactions'");
+    if ($lt_table && mysqli_num_rows($lt_table) > 0) {
+        // Make user_id nullable
+        $col_null = mysqli_query($conn, "SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'loyalty_transactions' AND COLUMN_NAME = 'user_id' AND TABLE_SCHEMA = DATABASE()");
+        if ($col_null) {
+            $row = mysqli_fetch_assoc($col_null);
+            if ($row && $row['IS_NULLABLE'] === 'NO') {
+                $conn->query("ALTER TABLE loyalty_transactions MODIFY COLUMN user_id INT NULL");
+            }
+        }
+        // Add order_id column if missing
+        $check_order_id = mysqli_query($conn, "SHOW COLUMNS FROM loyalty_transactions LIKE 'order_id'");
+        if ($check_order_id && mysqli_num_rows($check_order_id) == 0) {
+            $conn->query("ALTER TABLE loyalty_transactions ADD COLUMN order_id INT DEFAULT NULL AFTER points_earned");
+        }
+    }
+
     $conn->query(
         "CREATE OR REPLACE VIEW tbl_customer_records AS
          SELECT id, name, email, phone, gender, age, address, loyalty_points, created_at
@@ -475,8 +493,8 @@ function calculate_delivery_fee(string $fulfillment_type, float $subtotal, strin
     return 120.00;
 }
 
-function calculate_loyalty_points(float $amount): int {
-    return (int) floor($amount / 100);
+function calculate_loyalty_points(float $amount): float {
+    return round($amount / 100, 2);
 }
 
 function detect_bulk_order(float $subtotal, int $total_items): bool {
@@ -682,9 +700,6 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
     $subtotal_inc_vat = $subtotal_ex_vat + $vat_amount;
 
     $delivery_fee = calculate_delivery_fee($fulfillment_type, $subtotal_inc_vat, $details['delivery_address'] ?? '');
-    $free_delivery = $delivery_fee <= 0.00 ? 1 : 0;
-    $bulk_order = detect_bulk_order($subtotal_inc_vat, $total_items) ? 1 : 0;
-    $loyalty_points = calculate_loyalty_points($subtotal_inc_vat);
 
     $total = $subtotal_inc_vat + $delivery_fee;
     $discount_amount = 0.00;
@@ -754,6 +769,11 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
             }
         }
     }
+
+    // --- Final Calculations after Discount ---
+    $free_delivery = $delivery_fee <= 0.00 ? 1 : 0;
+    $bulk_order = detect_bulk_order($subtotal_inc_vat, $total_items) ? 1 : 0;
+    $loyalty_points = calculate_loyalty_points($subtotal_ex_vat - $discount_amount); // Points based on ex-VAT amount AFTER discount
 
     $order_number = generate_order_number();
     

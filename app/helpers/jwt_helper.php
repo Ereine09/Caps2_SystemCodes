@@ -1,14 +1,12 @@
 <?php
 // CONSIDER: Use Composer's autoloader instead of manual requires for third-party libraries.
-// require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
 
 // Manual requires (if not using Composer autoloader)
 require_once __DIR__ . '/../../vendor/firebase/php-jwt/src/JWT.php';
-require_once __DIR__ . '/../../vendor/firebase/php-jwt/src/Key.php';
-
+require_once __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/../config/config.php';
 
-// Use statements for JWT classes
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 

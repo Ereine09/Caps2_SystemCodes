@@ -3,6 +3,8 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
+require_once __DIR__ . '/../../app/helpers/db_schema_helper.php'; // New helper for schema management
+
 
 $response = [
     'success' => false,
@@ -10,52 +12,9 @@ $response = [
     'data' => null
 ];
 
-/**
- * Creates rider-specific tables if they don't exist.
- */
-function ensureRiderSchema(mysqli $conn): void
-{
-    // Table to store rider-specific information
-    $conn->query("
-        CREATE TABLE IF NOT EXISTS `riders` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `user_id` INT NOT NULL,
-            `vehicle_type` VARCHAR(50) COMMENT 'e.g., Motorcycle, Bicycle',
-            `plate_number` VARCHAR(20) NULL,
-            `is_on_duty` TINYINT(1) DEFAULT 0,
-            `last_seen` TIMESTAMP NULL,
-            UNIQUE KEY (`user_id`),
-            FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
-        )
-    ");
-
-    // Table to log the history of each delivery status change
-    $conn->query("
-        CREATE TABLE IF NOT EXISTS `delivery_tracking` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `order_id` INT NOT NULL,
-            `rider_id` INT NOT NULL,
-            `status` VARCHAR(50) NOT NULL COMMENT 'e.g., accepted, picked_up, delivered, failed',
-            `notes` TEXT NULL,
-            `proof_image_url` VARCHAR(255) NULL,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (`order_id`) REFERENCES `tbl_orders`(`id`) ON DELETE CASCADE,
-            FOREIGN KEY (`rider_id`) REFERENCES `riders`(`id`) ON DELETE CASCADE
-        )
-    ");
-
-    // Add rider_id to orders table to assign deliveries
-    $check_col = $conn->query("SHOW COLUMNS FROM `tbl_orders` LIKE 'rider_id'");
-    if ($check_col && $check_col->num_rows === 0) {
-        $conn->query("ALTER TABLE `tbl_orders` ADD COLUMN `rider_id` INT NULL DEFAULT NULL AFTER `customer_id`");
-        $conn->query("ALTER TABLE `tbl_orders` ADD CONSTRAINT `fk_order_rider` FOREIGN KEY (`rider_id`) REFERENCES `riders`(`id`) ON DELETE SET NULL");
-    }
-
-}
-
-try {
-    // Ensure database schema is ready for rider features
-    ensureRiderSchema($conn);
+// try {
+//     // Ensure database schema is ready for rider features
+//     ensureRiderSchema($conn);
 
     // --- Rider Authentication (Future Enhancement) ---
     // For now, we'll proceed without strict JWT checks for this new module.
@@ -65,7 +24,7 @@ try {
     // if (!$payload || $payload['role'] !== 'rider') {
     //     throw new Exception('Unauthorized Rider');
     // }
-    // $rider_user_id = (int)$payload['user_id'];
+//     $rider_user_id = (int)$payload['user_id'];
 
     $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
@@ -79,12 +38,15 @@ try {
                 SELECT 
                     o.id, o.order_number, o.order_status, o.fulfillment_type, o.total,
                     o.delivery_address, o.delivery_phone, o.payment_method,
-                    c.name as customer_name, c.phone as customer_phone
+                    c.name as customer_name, c.phone as customer_phone,
+                    GROUP_CONCAT(CONCAT(oi.product_name, ' x', oi.quantity) SEPARATOR ', ') AS items_summary
                 FROM tbl_orders o
                 JOIN customers c ON o.customer_id = c.id
+                LEFT JOIN tbl_order_items oi ON o.id = oi.order_id
                 WHERE o.fulfillment_type = 'delivery' 
                 AND o.order_status NOT IN ('completed', 'cancelled', 'pending')
                 -- AND o.rider_id = ? -- Uncomment when rider assignment is implemented
+                GROUP BY o.id, o.order_number, o.order_status, o.fulfillment_type, o.total, o.delivery_address, o.delivery_phone, o.payment_method, c.name, c.phone
                 ORDER BY o.created_at DESC
             ";
             
@@ -295,12 +257,12 @@ try {
         default:
             throw new Exception('Invalid API action');
     }
-
-} catch (Exception $e) {
-    $response['success'] = false;
-    $response['message'] = $e->getMessage();
-    http_response_code(400);
-}
+//
+// } catch (Exception $e) {
+//     $response['success'] = false;
+//     $response['message'] = $e->getMessage();
+//     http_response_code(400);
+// }
 
 echo json_encode($response);
 ?>

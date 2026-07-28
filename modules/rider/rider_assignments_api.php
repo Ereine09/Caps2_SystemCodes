@@ -20,12 +20,16 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
+require_once __DIR__ . '/../../app/helpers/db_schema_helper.php'; // New helper for schema management
 
 $response = [
   'success' => false,
   'message' => '',
   'data' => null
 ];
+
+// Ensure rider schema is up-to-date
+ensureRiderSchema($conn);
 
 try {
   // Mobile clients send the token via Authorization Header.
@@ -82,6 +86,7 @@ try {
      FROM tbl_delivery d
      JOIN tbl_orders o ON d.order_id = o.id
      LEFT JOIN customers c ON o.customer_id = c.id
+     -- Only show deliveries that are pending or in transit and are either unassigned or assigned to this rider
      WHERE d.status IN ('pending','in_transit')
      ORDER BY d.created_at DESC
      LIMIT 50"

@@ -150,14 +150,21 @@ try {
             throw new Exception('Order creation failed.');
         }
 
-        // 3. Award Loyalty Points (simplified from checkout.php)
+// 3. Award Loyalty Points (simplified from checkout.php) - based on raw product prices from DB (no VAT stripping needed since DB prices are already the final retail prices)
         $points_earned = round($subtotal / 100, 2);
         if ($points_earned > 0) {
-            $transaction_stmt = $conn->prepare("INSERT INTO loyalty_transactions (customer_id, product_name, points_earned, order_id) VALUES (?, ?, ?, ?)");
+            $transaction_stmt = $conn->prepare("INSERT INTO loyalty_transactions (customer_id, user_id, product_name, quantity_kg, points_earned, order_id) VALUES (?, NULL, ?, 0.00, ?, ?)");
             $product_name_for_transaction = 'Online Purchase (Order #' . $order_id . ')';
-            $transaction_stmt->bind_param("isdi", $customer_id, $product_name_for_transaction, $points_earned, $order_id);
-            $transaction_stmt->execute();
-            notifications_sync_customer_loyalty_points($conn, $customer_id);
+            if ($transaction_stmt) {
+                $transaction_stmt->bind_param("isdi", $customer_id, $product_name_for_transaction, $points_earned, $order_id);
+                if (!$transaction_stmt->execute()) {
+                    error_log('[order_create_api] Failed to insert loyalty transaction: ' . $transaction_stmt->error);
+                }
+                $transaction_stmt->close();
+                notifications_sync_customer_loyalty_points($conn, $customer_id);
+            } else {
+                error_log('[order_create_api] Failed to prepare loyalty transaction statement: ' . $conn->error);
+            }
         }
 
         $conn->commit();

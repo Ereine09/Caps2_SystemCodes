@@ -20,12 +20,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../app/config/config.php';
+require_once __DIR__ . '/../../app/helpers/db_schema_helper.php'; // Ensure schema helper is included
 
 $response = [
     'success' => false,
     'message' => '',
     'data' => null
 ];
+
+// Ensure rider-related tables exist before we try to insert into them
+ensureRiderSchema($conn);
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -63,8 +67,17 @@ try {
     $stmt->bind_param('ssss', $username, $email, $hashed_password, $role);
     
     if ($stmt->execute()) {
+        $new_user_id = $conn->insert_id;
+
+        // --- FIX: Create a corresponding entry in the `riders` table ---
+        $rider_stmt = $conn->prepare("INSERT INTO riders (user_id, is_on_duty) VALUES (?, 0)");
+        $rider_stmt->bind_param('i', $new_user_id);
+        $rider_stmt->execute();
+        $rider_stmt->close();
+        // --- End Fix ---
+
         $response['success'] = true;
-        $response['message'] = 'Account registered successfully as a Rider!';
+        $response['message'] = 'Account registered successfully as a Rider! You can now login.';
     } else {
         throw new Exception('Database error during registration');
     }

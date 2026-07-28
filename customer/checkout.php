@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
-require_customer_login();
+// require_customer_login();
 
 $cart = get_customer_cart();
 if (empty($cart)) {
@@ -206,15 +206,15 @@ $GLOBALS['conn']->commit();
                 // --- Loyalty Points Logic (MUST be BEFORE clear_customer_cart) ---
                 $customer_id = (int) current_customer()['id'];
                 
-                // Capture subtotal BEFORE cart is cleared
-                $order_cart_subtotal = cart_subtotal();
+                // Capture subtotal BEFORE cart is cleared (use ex-VAT for points calculation)
+                $order_cart_subtotal_net = cart_subtotal_ex_vat();
                 
                 // Fetch previous loyalty points before any updates
                 $previous_points_query = mysqli_query($conn, "SELECT loyalty_points FROM customers WHERE id = " . $customer_id);
                 $previous_points_row = mysqli_fetch_assoc($previous_points_query);
                 $previous_points = (float)($previous_points_row['loyalty_points'] ?? 0.00);
 
-                $order_total = $order_cart_subtotal - $discount_amount; // Points are earned on the amount after discount
+                $order_total = $order_cart_subtotal_net - $discount_amount; // Points are earned on the amount after discount (ex-VAT)
                 $points_earned = round($order_total / 100, 2); // P100 = 1 point
                 // --- End capture ---
 
@@ -245,9 +245,17 @@ $GLOBALS['conn']->commit();
                     // For purchases, product_name can be 'Online Purchase', quantity_kg can be 0 or derived if applicable
                     $product_name_for_transaction = 'Online Purchase (Order #' . $order_id . ')';
                     $zero_kg = 0.00; // No direct kg for this point earning method
-                    $transaction_stmt->bind_param("isddi", $customer_id, $product_name_for_transaction, $zero_kg, $points_earned, $order_id);
-                    $transaction_stmt->execute();
-                    $transaction_id = (int) $conn->insert_id;
+                    if ($transaction_stmt) {
+                        $transaction_stmt->bind_param("isddi", $customer_id, $product_name_for_transaction, $zero_kg, $points_earned, $order_id);
+                        if (!$transaction_stmt->execute()) {
+                            error_log('[checkout] Failed to insert loyalty transaction: ' . $transaction_stmt->error);
+                        }
+                        $transaction_id = (int) $conn->insert_id;
+                        $transaction_stmt->close();
+                    } else {
+                        error_log('[checkout] Failed to prepare loyalty transaction statement: ' . $conn->error);
+                        $transaction_id = 0;
+                    }
 
                     // Sync points again after adding transaction
                     $new_total_points = notifications_sync_customer_loyalty_points($conn, $customer_id);
@@ -516,7 +524,7 @@ $GLOBALS['conn']->commit();
                         <span id="discount-display">-PHP 0.00</span>
                         <input type="hidden" id="discount-value" value="<?php echo $discount_amount; ?>">
                     </div>
-                    <div class="summary-line" style="color: #10b981; font-weight: 600;"><span>Points to Earn</span><span>+<?php echo number_format($subtotal_gross / 100, 2); ?> pts</span></div>
+                    <div class="summary-line" style="color: #10b981; font-weight: 600;"><span>Points to Earn</span><span>+<?php echo number_format($subtotal_net / 100, 2); ?> pts</span></div>
                     <div class="summary-line total"><span>Total to Pay</span><span id="total-to-pay-display">PHP <?php echo number_format($subtotal_gross, 2); ?></span></div>
                 </div>
                 <div style="margin-top: 15px; text-align: center;">

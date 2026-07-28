@@ -17,6 +17,7 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/../../app/config/config.php';
 // Isama rito ang iyong jwt_helper kung protektado ng login ang app mo
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php'; 
+require_once __DIR__ . '/../../app/helpers/db_schema_helper.php'; // New helper for schema management
 
 $response = ['success' => false, 'message' => ''];
 
@@ -25,7 +26,10 @@ try {
         throw new Exception('POST required');
     }
 
-    // Optional: I-verify ang JWT Token kung gusto mong protektado ang endpoint
+    // Ensure rider schema is up-to-date
+    ensureRiderSchema($conn);
+
+    // // Optional: I-verify ang JWT Token kung gusto mong protektado ang endpoint
     // $headers = getallheaders();
     // $authHeader = $headers['Authorization'] ?? '';
     // if (!$authHeader) throw new Exception('Unauthorized access');

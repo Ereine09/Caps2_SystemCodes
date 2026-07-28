@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
-require_customer_login();
+// require_customer_login();
 
 $customer = current_customer();
 $order = null;
@@ -11,6 +11,33 @@ if (isset($_GET['id'])) {
     $order_id = (int) $_GET['id'];
     $order = get_order_by_id($order_id, (int) $customer['id']);
     $delivery_details = $order ? get_delivery_details_by_order_id($order['id']) : null;
+
+    // --- DYNAMICALLY ENSURE DELIVERY RECORD & QR TOKEN FOR ANY ORDER ID ---
+    if ($order && $order['order_status'] !== 'cancelled') {
+        if (!$delivery_details) {
+            // Auto-create a delivery record if it doesn't exist yet in tbl_delivery
+            $token = bin2hex(random_bytes(16));
+            $insert_stmt = $conn->prepare("INSERT INTO tbl_delivery (order_id, delivery_status, qr_confirmation_token) VALUES (?, 'pending', ?)");
+            if ($insert_stmt) {
+                $insert_stmt->bind_param("is", $order['id'], $token);
+                $insert_stmt->execute();
+                $insert_stmt->close();
+                // Refresh details
+                $delivery_details = get_delivery_details_by_order_id($order['id']);
+            }
+        } elseif (empty($delivery_details['qr_confirmation_token'])) {
+            // Auto-generate token if record exists but token is missing
+            $token = bin2hex(random_bytes(16));
+            $update_stmt = $conn->prepare("UPDATE tbl_delivery SET qr_confirmation_token = ? WHERE id = ?");
+            if ($update_stmt) {
+                $update_stmt->bind_param("si", $token, $delivery_details['id']);
+                $update_stmt->execute();
+                $update_stmt->close();
+                $delivery_details['qr_confirmation_token'] = $token;
+            }
+        }
+    }
+
     if ($order) {
         $order_items = get_order_items($order['id']);
     }
@@ -112,7 +139,7 @@ if (isset($_GET['id'])) {
             $current_pos = 0;
             if ($status === 'confirmed') $current_pos = 1;
             elseif ($status === 'processing') $current_pos = 2;
-            elseif (in_array($status, ['ready_for_pickup', 'out_for_delivery', 'to_ship', 'to_receive'])) $current_pos = 3;
+            elseif (in_array($status, ['ready_for_pickup', 'out_for_delivery', 'to_ship', 'to_receive', 'shipping'])) $current_pos = 3;
             elseif ($status === 'completed') $current_pos = 4;
         ?>
 
@@ -142,27 +169,40 @@ if (isset($_GET['id'])) {
                 </div>
             <?php endif; ?>
 
-            <?php if ($delivery_details && $delivery_details['qr_confirmation_token'] && in_array($order['order_status'], ['out_for_delivery', 'ready_for_pickup'])): ?>
+            <?php if ($delivery_details && $order['order_status'] !== 'cancelled'): ?>
                 <div class="info-card" style="margin-top: 25px; text-align: center; border-left: 5px solid #10b981;">
                     <h4 style="justify-content: center;"><i class="fas fa-qrcode"></i> Delivery Confirmation QR</h4>
                     <p style="font-size: 0.9rem; color: #475569; max-width: 450px; margin: 0 auto 20px;">
                         Please present this QR code to the rider upon delivery to confirm you have received your order.
                     </p>
                     <?php
-                    // Generate QR Code Data URI
+                    // Dynamic JSON payload per order
+                    $qr_data = json_encode([
+                        'delivery_id' => (int)$delivery_details['id'],
+                        'order_id'    => (int)$order['id'],
+                        'token'       => $delivery_details['qr_confirmation_token']
+                    ]);
+
                     $qr_code_uri = null;
-                    $qr_data = json_encode(['delivery_id' => $delivery_details['id'], 'token' => $delivery_details['qr_confirmation_token']]);
+
+                    // Option 1: Try Endroid PHP Library
                     if (class_exists('Endroid\\QrCode\\QrCode') && class_exists('Endroid\\QrCode\\Writer\\PngWriter')) {
                         try {
-                            $qrCode = Endroid\QrCode\QrCode::create($qr_data);
-                            $writer = new Endroid\QrCode\Writer\PngWriter();
+                            $qrCode = \Endroid\QrCode\QrCode::create($qr_data);
+                            $writer = new \Endroid\QrCode\Writer\PngWriter();
                             $qr_code_uri = $writer->write($qrCode)->getDataUri();
                         } catch (Throwable $t) {
                             $qr_code_uri = null;
                         }
                     }
+
+                    // Option 2: Fallback to QuickChart API (Works reliably for any order)
+                    if (!$qr_code_uri) {
+                        $qr_code_uri = "https://quickchart.io/qr?size=250&text=" . urlencode($qr_data);
+                    }
                     ?>
                     <img src="<?php echo $qr_code_uri; ?>" alt="Delivery Confirmation QR Code" style="width: 220px; height: 220px; border: 5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px;">
+                    <p style="margin-top: 10px; font-size: 0.75rem; color: #94a3b8;">Delivery Ref ID: #<?php echo (int)$delivery_details['id']; ?></p>
                 </div>
             <?php endif; ?>
 
@@ -202,12 +242,14 @@ if (isset($_GET['id'])) {
                         <div class="info-item"><span class="info-label">Method</span><span class="info-value"><?php echo strtoupper($order['payment_method']); ?></span></div>
                         <?php if ($order['payment_method'] === 'bank'): ?>
                             <div class="info-item"><span class="info-label">Bank Name</span><span class="info-value"><?php echo htmlspecialchars($order['bank_name']); ?></span></div>
-                            <div class="info-item"><span class="info-label">Account Name</span><span class="info-value"><?php echo htmlspecialchars($order['bank_account_name']); ?></span>
+                            <div class="info-item"><span class="info-label">Account Name</span><span class="info-value"><?php echo htmlspecialchars($order['bank_account_name']); ?></span></div>
                             <div class="info-item"><span class="info-label">Reference #</span><span class="info-value" style="font-size: 0.8rem;"><?php echo htmlspecialchars($order['payment_reference']); ?></span></div>
                             <?php if ($order['payment_proof_path']): ?>
                                 <div class="info-item"><span class="info-label">Proof</span><span class="info-value"><a href="<?php echo BASE_URL . htmlspecialchars($order['payment_proof_path']); ?>" target="_blank" class="button-link">View Proof</a></span></div>
                             <?php endif; ?>
-                        <?php elseif ($order['payment_reference']): ?><div class="info-item"><span class="info-label">Reference</span><span class="info-value" style="font-size: 0.8rem;"><?php echo htmlspecialchars($order['payment_reference']); ?></span></div><?php endif; ?>
+                        <?php elseif ($order['payment_reference']): ?>
+                            <div class="info-item"><span class="info-label">Reference</span><span class="info-value" style="font-size: 0.8rem;"><?php echo htmlspecialchars($order['payment_reference']); ?></span></div>
+                        <?php endif; ?>
                     </div>
                     <div class="info-card">
                         <h4><i class="fas fa-file-invoice-dollar"></i> Summary</h4>

@@ -10,8 +10,8 @@ class ApiErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.12),
-        border: Border.all(color: Colors.red.withOpacity(0.5)),
+        color: Colors.red.withValues(alpha: 0.12),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(

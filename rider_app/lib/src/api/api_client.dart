@@ -73,6 +73,28 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> updateRiderOrder({
+    required int orderId,
+    required String action,
+    String? token,
+  }) async {
+    final headers = token != null ? {'Authorization': 'Bearer $token'} : null;
+    final response = await postJson(
+      '/modules/rider/update_rider_order.php',
+      body: {
+        'order_id': orderId,
+        'action': action,
+      },
+      headers: headers,
+    );
+
+    if (response.data['success'] == true) {
+      return response.data;
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to update rider order');
+    }
+  }
+
   /// Fetches the full details for a single order.
   Future<Map<String, dynamic>> getDeliveryDetails(int orderId) async {
     final response = await getJson('/rider_api.php?action=get_delivery_details&order_id=$orderId');
