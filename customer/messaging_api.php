@@ -7,8 +7,8 @@
 header('Content-Type: application/json');
 
 session_start();
-require_once '../includes/db.php';
-require_once '../app/helpers/messaging_helper.php';
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/../app/helpers/messaging_helper.php';
 
 $response = [
     'success' => false,

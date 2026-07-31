@@ -2,6 +2,19 @@
 require_once __DIR__ . '/includes/auth.php';
 // require_customer_login();
 
+// Handle quantity updates from checkout page form
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_checkout_quantity'])) {
+    $customer = current_customer();
+    $product_id = (int)$_POST['product_id'];
+    $variant_id = isset($_POST['variant_id']) && $_POST['variant_id'] ? (int)$_POST['variant_id'] : null;
+    $quantity = (int)$_POST['quantity'];
+
+    if ($customer && update_customer_cart_item((int)$customer['id'], $product_id, $quantity, $variant_id)) {
+        header('Location: checkout.php');
+        exit();
+    }
+}
+
 $cart = get_customer_cart();
 if (empty($cart)) {
     header('Location: ' . BASE_URL . '/customer/products.php');
@@ -24,6 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fulfillment_type = $_POST['fulfillment_type'] ?? 'pickup';
     $delivery_address = trim($_POST['delivery_address'] ?? '');
     $delivery_phone = trim($_POST['delivery_phone'] ?? '');
+    $order_notes = trim($_POST['order_notes'] ?? '');
     $delivery_instructions = trim($_POST['delivery_instructions'] ?? '');
     $pickup_date = trim($_POST['pickup_date'] ?? '');
     $pickup_time = trim($_POST['pickup_time'] ?? '');
@@ -172,6 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'delivery_address' => $delivery_address,
             'delivery_phone' => $delivery_phone,
             'subtotal' => cart_subtotal(), // Add subtotal
+            'order_notes' => $order_notes,
             'delivery_instructions' => $delivery_instructions,
             'pickup_date' => $pickup_date,
             'pickup_time' => $pickup_time,
@@ -275,6 +290,13 @@ $GLOBALS['conn']->commit();
                     ]);
 
                     foreach (notifications_crossed_thresholds($previous_points, $new_total_points) as $threshold) {
+                        // --- FIX: Update customer's loyalty points balance ---
+                        $update_points_stmt = $conn->prepare("UPDATE customers SET loyalty_points = ? WHERE id = ?");
+                        if ($update_points_stmt) {
+                            $update_points_stmt->bind_param("di", $new_total_points, $customer_id);
+                            $update_points_stmt->execute();
+                            $update_points_stmt->close();
+                        }
                         notifications_create($conn, [
                             'user_id' => NULL, // Customer-initiated action, no staff user_id
                             'customer_id' => $customer_id,
@@ -386,6 +408,37 @@ $GLOBALS['conn']->commit();
     .summary-line { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95rem; color: #475569; }
     .summary-line.total { border-top: 2px solid #e2e8f0; margin-top: 15px; padding-top: 15px; font-weight: 800; color: #1e293b; font-size: 1.2rem; }
     .summary-item-img { width: 45px; height: 45px; object-fit: contain; border-radius: 6px; background: #fff; border: 1px solid #eee; }
+
+    /* applying style css */
+    .btn-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 0.8s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* Subtle pulse glow effect during loading */
+    .button-loading {
+        opacity: 0.8;
+        cursor: not-allowed !important;
+        animation: pulse-glow 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-glow {
+        0% { opacity: 0.8; }
+        50% { opacity: 0.5; }
+        100% { opacity: 0.8; }
+    }
 
     /* GCash Section Styling */
     .payment-options {
@@ -504,8 +557,15 @@ $GLOBALS['conn']->commit();
                                         <span style="font-weight:600;"><?php echo htmlspecialchars($item['name']); ?></span>
                                     </div>
                                 </td>
-                                <td style="text-align:center;">x<?php echo $item['quantity']; ?></td>
-                                <td style="text-align:right; font-weight:700;">PHP <?php echo number_format($item['unit_price'] * $item['quantity'], 2); ?></td>
+                                <td>
+                                    <form method="POST" style="display:flex; align-items:center; gap:5px;">
+                                        <input type="hidden" name="product_id" value="<?php echo $item['id']; ?>">
+                                        <input type="hidden" name="variant_id" value="<?php echo $item['variant_id']; ?>">
+                                        <input type="number" name="quantity" value="<?php echo $item['quantity']; ?>" min="1" class="qty-input" style="width: 60px;">
+                                        <button type="submit" name="update_checkout_quantity" class="button" style="padding: 8px 12px; font-size: 0.75rem;"><i class="fas fa-sync"></i></button>
+                                    </form>
+                                </td>
+                                <td style="text-align:right; font-weight:700;" class="item-subtotal">PHP <?php echo number_format($item['unit_price'] * $item['quantity'], 2); ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -513,19 +573,45 @@ $GLOBALS['conn']->commit();
                 <div class="summary-footer">
                     <?php
                         $subtotal_net = cart_subtotal_ex_vat();
-                        $vat_amount = $subtotal_net * 0.12;
-                        $subtotal_gross = $subtotal_net + $vat_amount;
+                        $vat_amount = round($subtotal_net * 0.12, 2);
+                        $subtotal_gross = $subtotal_net + $vat_amount; // This is the base for calculations
                     ?>
-                    <div class="summary-line"><span>Subtotal (Net)</span><span id="subtotal-net-display">PHP <?php echo number_format($subtotal_net, 2); ?></span></div>
-                    <div class="summary-line"><span>VAT (12%)</span><span id="vat-display">PHP <?php echo number_format($vat_amount, 2); ?></span></div>
-                    <div class="summary-line"><span>Delivery Fee</span><span id="delivery-fee-display" style="font-weight: 700; color: #1e293b;">PHP 0.00</span></div>
+                    <div class="summary-line">
+                        <span>Subtotal (Net)</span>
+                        <span id="subtotal-net-display" data-value="<?php echo $subtotal_net; ?>">
+                            PHP <?php echo number_format($subtotal_net, 2); ?>
+                        </span>
+                    </div>
+                    <div class="summary-line">
+                        <span>VAT (12%)</span>
+                        <span id="vat-display">PHP <?php echo number_format($vat_amount, 2); ?></span>
+                    </div>
+
+                    <!-- ADDED: Subtotal Gross (Net + VAT) -->
+                    <div class="summary-line" style="font-weight: 600; color: #334155;">
+                        <span>Subtotal</span>
+                        <span id="subtotal-gross-display">PHP <?php echo number_format($subtotal_gross, 2); ?></span>
+                    </div>
+
+                    <div class="summary-line">
+                        <span>Delivery Fee</span>
+                        <span id="delivery-fee-display" style="font-weight: 700; color: #1e293b;">PHP 0.00</span>
+                    </div>
                     <div class="summary-line" id="discount-line" style="color: #10b981; font-weight: 600; display: none;">
                         <span>Discount</span>
                         <span id="discount-display">-PHP 0.00</span>
                         <input type="hidden" id="discount-value" value="<?php echo $discount_amount; ?>">
                     </div>
-                    <div class="summary-line" style="color: #10b981; font-weight: 600;"><span>Points to Earn</span><span>+<?php echo number_format($subtotal_net / 100, 2); ?> pts</span></div>
-                    <div class="summary-line total"><span>Total to Pay</span><span id="total-to-pay-display">PHP <?php echo number_format($subtotal_gross, 2); ?></span></div>
+                    <div class="summary-line" style="color: #10b981; font-weight: 600;">
+                        <span>Points to Earn</span>
+                        <span id="points-to-earn-display">
+                            +<?php echo number_format($subtotal_net / 100, 2); ?> pts
+                        </span>
+                    </div>
+                    <div class="summary-line total">
+                        <span>Total to Pay</span>
+                        <span id="total-to-pay-display">PHP <?php echo number_format($subtotal_gross, 2); ?></span>
+                    </div>
                 </div>
                 <div style="margin-top: 15px; text-align: center;">
                     <a href="cart.php" style="color: #6366f1; font-size: 0.85rem; text-decoration: none; font-weight: 600;"><i class="fas fa-edit"></i> Edit Items in Cart</a>
@@ -534,10 +620,12 @@ $GLOBALS['conn']->commit();
 
             <form method="POST" action="" class="checkout-form" id="checkout-form" enctype="multipart/form-data">
                 <h3>Fulfillment Method</h3>
-                
+
                 <div class="form-row">
-                    <label for="voucher_code">Voucher Code (from My Rewards) <button type="submit" name="apply_voucher" formnovalidate class="button-link" style="margin-left: 10px; font-size: 0.8rem;">Apply</button></label>
-                    <input type="text" name="voucher_code" id="voucher_code" placeholder="Enter voucher code" value="<?php echo htmlspecialchars($voucher_code_input); ?>" onkeyup="this.value = this.value.toUpperCase();">
+                    <label for="voucher_code">Voucher Code (from My Rewards)</label>
+                    <div style="display: flex; gap: 10px;"><input type="text" name="voucher_code" id="voucher_code_input" placeholder="Enter voucher code" value="<?php echo htmlspecialchars($voucher_code_input); ?>" onkeyup="this.value = this.value.toUpperCase();">
+                    <button type="button" id="apply_voucher_btn" class="button button-secondary" style="white-space: nowrap;">Apply</button></div>
+                    <div id="voucher-message" style="margin-top: 8px; font-size: 0.85rem; font-weight: 600;"></div>
                 </div>
 
                 <div class="option-group">
@@ -579,6 +667,10 @@ $GLOBALS['conn']->commit();
                         <input type="hidden" name="latitude" id="latitude">
                         <input type="hidden" name="longitude" id="longitude">
                     </div>
+                </div>
+                <div class="form-row" style="margin-top: 20px;">
+                    <label for="order_notes">Order Notes (Optional)</label>
+                    <textarea name="order_notes" id="order_notes" placeholder="e.g., 'Please pack in a box.' or 'My friend will pick it up.'"><?php echo htmlspecialchars($_POST['order_notes'] ?? ''); ?></textarea>
                 </div>
 
                 <div class="payment-options">
@@ -644,6 +736,7 @@ $GLOBALS['conn']->commit();
                         </div>
                     </div>
 
+                    <input type="hidden" name="discount_amount" id="discount_amount_hidden" value="0">
                 </div>
                 <button type="submit" class="button" style="width:100%; margin-top:20px;">Place Order</button>
             </form>
@@ -658,13 +751,15 @@ $GLOBALS['conn']->commit();
 </div>
 
 <script>
-function updateTotals() {
+function updateTotals(discount = 0) {
     const fulfillmentType = document.querySelector('input[name="fulfillment_type"]:checked').value;
     const address = document.getElementById('delivery_address').value.toLowerCase();
-    const subtotal_net = <?php echo cart_subtotal_ex_vat(); ?>;
-    const subtotal = <?php echo cart_subtotal(); ?>; // Gross subtotal
+    const subtotalNetEl = document.getElementById('subtotal-net-display');
+    const subtotal_net = parseFloat(subtotalNetEl.dataset.value) || 0;
+    const subtotal_gross = subtotal_net * 1.12;
+
     let fee = 0;
-    let discount = parseFloat(document.getElementById('discount-value').value) || 0;
+    document.getElementById('discount_amount_hidden').value = discount;
 
     if (fulfillmentType === 'delivery') {
         if (address.includes('10th ave') || address.includes('10th avenue') || address.includes('grace park')) {
@@ -676,20 +771,23 @@ function updateTotals() {
         }
     }
 
-    const totalBeforeDiscount = subtotal + fee;
+    const totalBeforeDiscount = subtotal_gross + fee;
     const finalTotal = Math.max(0, totalBeforeDiscount - discount);
 
     const feeDisplay = document.getElementById('delivery-fee-display');
     const totalDisplay = document.getElementById('total-to-pay-display');
-    const subtotalNetDisplay = document.getElementById('subtotal-net-display');
     const vatDisplay = document.getElementById('vat-display');
     const discountLine = document.getElementById('discount-line');
     const discountDisplay = document.getElementById('discount-display');
+    const pointsDisplay = document.getElementById('points-to-earn-display');
 
     feeDisplay.innerText = fee === 0 ? 'Free' : 'PHP ' + fee.toFixed(2);
     totalDisplay.innerText = 'PHP ' + finalTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
-    subtotalNetDisplay.innerText = 'PHP ' + subtotal_net.toFixed(2);
     vatDisplay.innerText = 'PHP ' + (subtotal_net * 0.12).toFixed(2);
+
+    // Update points earned based on discounted net subtotal
+    const pointsEarned = Math.max(0, (subtotal_net - discount) / 100);
+    pointsDisplay.innerText = `+${pointsEarned.toFixed(2)} pts`;
 
     if (discount > 0) {
         discountLine.style.display = 'flex';
@@ -700,7 +798,7 @@ function updateTotals() {
 }
 
 function updateDeliveryFeeDisplay() {
-    updateTotals();
+    updateTotals(parseFloat(document.getElementById('discount_amount_hidden').value) || 0);
 }
 
 function toggleFulfillmentFields() {
@@ -729,7 +827,7 @@ function toggleFulfillmentFields() {
         }
     }
     togglePaymentFields();
-    updateTotals();
+    updateTotals(parseFloat(document.getElementById('discount_amount_hidden').value) || 0);
 }
 
 function togglePaymentFields() {
@@ -805,8 +903,220 @@ function closeQRModal() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    toggleFulfillmentFields();
-    updateTotals(); // Run on page load to apply initial discount if any
+    const voucherInput = document.getElementById('voucher_code_input');
+    const applyBtn = document.getElementById('apply_voucher_btn');
+    const voucherMessage = document.getElementById('voucher-message');
+
+    async function validateVoucher() {
+        const code = voucherInput ? voucherInput.value.trim() : '';
+
+        if (!code) {
+            if (voucherMessage) {
+                voucherMessage.textContent = 'Please enter a voucher code.';
+                voucherMessage.style.color = '#dc2626';
+            }
+            return;
+        }
+
+        if (applyBtn) {
+            applyBtn.disabled = true;
+            applyBtn.textContent = 'Applying...';
+        }
+
+        try {
+            const response = await fetch('validate_voucher_api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ voucher_code: code })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                if (voucherMessage) {
+                    voucherMessage.textContent = data.message;
+                    voucherMessage.style.color = '#16a34a';
+                }
+                const hiddenDiscount = document.getElementById('discount_amount_hidden');
+                if (hiddenDiscount) hiddenDiscount.value = data.discount_amount;
+                
+                // Recalculate summary & totals dynamically
+                updateTotals(parseFloat(data.discount_amount));
+            } else {
+                if (voucherMessage) {
+                    voucherMessage.textContent = data.message || 'An unknown error occurred.';
+                    voucherMessage.style.color = '#dc2626';
+                }
+                const hiddenDiscount = document.getElementById('discount_amount_hidden');
+                if (hiddenDiscount) hiddenDiscount.value = 0;
+                
+                // Reset totals if voucher is invalid
+                updateTotals(0);
+            }
+        } catch (error) {
+            if (voucherMessage) {
+                voucherMessage.textContent = 'Could not connect to the server. Check path/file.';
+                voucherMessage.style.color = '#dc2626';
+            }
+            console.error('Voucher API Error:', error);
+        } finally {
+            if (applyBtn) {
+                applyBtn.disabled = false;
+                applyBtn.textContent = 'Apply';
+            }
+        }
+    }
+
+    if (applyBtn) {
+        applyBtn.addEventListener('click', validateVoucher);
+    }
+
+    if (voucherInput) {
+        voucherInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                validateVoucher();
+            }
+        });
+    }
 });
+
 </script>
 <?php include __DIR__ . '/includes/footer.php'; ?>
+
+<script>
+function updateTotals(discount = 0) {
+    const fulfillmentInput = document.querySelector('input[name="fulfillment_type"]:checked');
+    const fulfillmentType = fulfillmentInput ? fulfillmentInput.value : 'pickup';
+    const addressEl = document.getElementById('delivery_address');
+    const address = addressEl ? addressEl.value.toLowerCase() : '';
+    
+    const subtotalNetEl = document.getElementById('subtotal-net-display');
+    const subtotal_net = parseFloat(subtotalNetEl ? subtotalNetEl.dataset.value : 0);
+    const subtotal_gross = subtotal_net * 1.12;
+    
+    let fee = 0;
+    const hiddenDiscount = document.getElementById('discount_amount_hidden');
+    if (hiddenDiscount) hiddenDiscount.value = discount;
+
+    if (fulfillmentType === 'delivery') {
+        if (address.includes('10th ave') || address.includes('10th avenue') || address.includes('grace park')) {
+            fee = 0;
+        } else if (address.includes('caloocan')) {
+            fee = (subtotal_gross >= 2000) ? 0 : 50;
+        } else if (address.trim() === '') {
+            fee = 120;
+        }
+    }
+
+    const totalBeforeDiscount = subtotal_gross + fee;
+    const finalTotal = Math.max(0, totalBeforeDiscount - discount);
+
+    const feeDisplay = document.getElementById('delivery-fee-display');
+    const totalDisplay = document.getElementById('total-to-pay-display');
+    const vatDisplay = document.getElementById('vat-display');
+    const discountLine = document.getElementById('discount-line');
+    const discountDisplay = document.getElementById('discount-display');
+    const pointsDisplay = document.getElementById('points-to-earn-display');
+
+    if (feeDisplay) feeDisplay.innerText = fee === 0 ? 'Free' : 'PHP ' + fee.toFixed(2);
+    if (totalDisplay) totalDisplay.innerText = 'PHP ' + finalTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
+    if (vatDisplay) vatDisplay.innerText = 'PHP ' + (subtotal_net * 0.12).toFixed(2);
+    
+    // Points earned calculation based on discounted subtotal
+    const pointsEarned = Math.max(0, (subtotal_net - discount) / 100);
+    if (pointsDisplay) pointsDisplay.innerText = `+${pointsEarned.toFixed(2)} pts`;
+
+    if (discountLine && discountDisplay) {
+        if (discount > 0) {
+            discountLine.style.display = 'flex';
+            discountDisplay.innerText = '-PHP ' + discount.toFixed(2);
+        } else {
+            discountLine.style.display = 'none';
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const voucherInput = document.getElementById('voucher_code_input');
+    const applyBtn = document.getElementById('apply_voucher_btn');
+    const voucherMessage = document.getElementById('voucher-message');
+
+    async function validateVoucher() {
+        const code = voucherInput ? voucherInput.value.trim() : '';
+        if (!code) {
+            if (voucherMessage) {
+                voucherMessage.textContent = 'Please enter a voucher code.';
+                voucherMessage.style.color = '#dc2626';
+            }
+            return;
+        }
+
+        if (applyBtn) {
+            applyBtn.disabled = true;
+            applyBtn.textContent = 'Applying...';
+        }
+
+        try {
+            const response = await fetch('api/validate_voucher_api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ voucher_code: code })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.success) {
+                if (voucherMessage) {
+                    voucherMessage.textContent = data.message;
+                    voucherMessage.style.color = '#16a34a';
+                }
+                const hiddenDiscount = document.getElementById('discount_amount_hidden');
+                if (hiddenDiscount) hiddenDiscount.value = data.discount_amount;
+                updateTotals(parseFloat(data.discount_amount));
+            } else {
+                if (voucherMessage) {
+                    voucherMessage.textContent = data.message || 'An unknown error occurred.';
+                    voucherMessage.style.color = '#dc2626';
+                }
+                const hiddenDiscount = document.getElementById('discount_amount_hidden');
+                if (hiddenDiscount) hiddenDiscount.value = 0;
+                updateTotals(0);
+            }
+        } catch (error) {
+            if (voucherMessage) {
+                voucherMessage.textContent = 'Could not connect to the server. Check path/file.';
+                voucherMessage.style.color = '#dc2626';
+            }
+            console.error('Voucher API Error:', error);
+        } finally {
+            if (applyBtn) {
+                applyBtn.disabled = false;
+                applyBtn.textContent = 'Apply';
+            }
+        }
+    }
+
+    if (applyBtn) {
+        applyBtn.addEventListener('click', validateVoucher);
+    }
+
+    if (voucherInput) {
+        voucherInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                validateVoucher();
+            }
+        });
+
+        // Auto validate on load if field is not empty
+        if (voucherInput.value.trim() !== '') {
+            validateVoucher();
+        }
+    }
+});
+</script>

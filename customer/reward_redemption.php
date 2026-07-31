@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
-require_customer_login();
+require_customer_login(); // Ensure customer is logged in
 
 $customer = current_customer();
 
@@ -68,8 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_id'])) {
         mysqli_stmt_close($voucher_stmt);
 
         // Record the redemption, explicitly writing the default 'Active' status state 
-        $redemption_stmt = mysqli_prepare($conn, "INSERT INTO reward_redemptions (customer_id, user_id, reward_code, reward_name, points_used, card_number, expiry_date, status) VALUES (?, NULL, ?, ?, ?, ?, ?, 'Active')");
-        mysqli_stmt_bind_param($redemption_stmt, 'issdsss', $customer['id'], $reward_code, $reward_name, $reward['points'], $voucher_code, $expiry_date);
+        $redemption_stmt = mysqli_prepare($conn, "INSERT INTO reward_redemptions (customer_id, user_id, reward_code, reward_name, points_used, card_number, expiry_date, status) VALUES (?, NULL, ?, ?, ?, ?, ?, 'Active')"); // The 'NULL' and ''Active' are literals, not bound parameters.
+        mysqli_stmt_bind_param($redemption_stmt, 'isdsss', $customer['id'], $reward_code, $reward_name, $reward['points'], $voucher_code, $expiry_date);
         mysqli_stmt_execute($redemption_stmt);
         mysqli_stmt_close($redemption_stmt);
         // --- End New Logic ---
@@ -148,9 +148,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_id'])) {
                     <?php endif; ?>
                     <?php if (!empty($voucher_code)): ?>
                     <div class="card-number">
-                        <strong>Voucher Code:</strong>
+                        <strong>Voucher Code:</strong> 
                         <?php echo htmlspecialchars($voucher_code); ?>
-                        <button class="copy-btn" onclick="copyToClipboard('<?php echo htmlspecialchars($voucher_code); ?>')">Copy</button>
+                        <button class="copy-btn" onclick="copyToClipboard(this, '<?php echo htmlspecialchars($voucher_code); ?>')">Copy</button>
+                    </div>
+                    <div style="margin-top: 10px; text-align: center; font-size: 0.85rem; color: #666;">
+                        <i class="fas fa-info-circle"></i> This voucher is valid for <?php echo htmlspecialchars($reward['validity_days']); ?> days from redemption.
+                        It can be used in-store or online.
                     </div>
                     <?php endif; ?>
                     <div style="margin-top: 20px;">
@@ -167,9 +171,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_id'])) {
         </div>
 
         <script>
-            function copyToClipboard(text) {
+            function copyToClipboard(buttonElement, text) {
                 navigator.clipboard.writeText(text).then(function() {
-                    alert('Copied to clipboard!');
+                    const originalText = buttonElement.innerText;
+                    buttonElement.innerText = 'Copied!';
+                    setTimeout(function() {
+                        buttonElement.innerText = originalText;
+                    }, 1500); // Revert after 1.5 seconds
                 });
             }
         </script>

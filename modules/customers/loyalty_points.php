@@ -191,7 +191,7 @@ if ($transactions_result) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Loyalty Points - INFOSEC <?php echo ucfirst($role); ?></title>
+    <title>Loyalty Points - DPS Admin</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>/assets/css/admin_style.css">
     <style>
@@ -251,7 +251,8 @@ if ($transactions_result) {
                 <?php if ($unread_count > 0): ?>
                     <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo (int)$unread_count; ?></span>
                 <?php endif; ?>
-            </a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
+            </a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'loyalty_points.php') ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'reward_redemption.php') ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>
             <?php if ($role === 'admin'): ?>
@@ -356,21 +357,27 @@ if ($transactions_result) {
             <form method="POST" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
                 <input type="hidden" name="process_points" value="1">
                 <select name="customer_id" id="adj_customer_id" required style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
-                    <option value="">Select Customer</option>
+                    <option value="">Select Customer (Current Points)</option>
                     <?php foreach ($customers as $customer): ?>
                         <option value="<?php echo $customer['id']; ?>" <?php echo $selected_customer == $customer['id'] ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($customer['name']); ?> (Current: <?php echo number_format($customer['loyalty_points'], 2); ?> pts)
+                            <?php echo htmlspecialchars($customer['name']); ?> (Balance: <?php echo number_format($customer['loyalty_points'], 2); ?> pts)
                         </option>
                     <?php endforeach; ?>
                 </select>
 
                 <!-- Manual Adjustment Fields -->
-                <input type="number" step="0.01" name="points_value" id="points_value" placeholder="Points Value (e.g., 10 to add, -5 to deduct)" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                <input type="number" step="0.01" name="points_value" id="points_value" placeholder="Points Value (e.g., 10 to add, -5 to deduct)" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;" required>
 
                 <select name="manual_reason" id="manual_reason" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
-                    <option value="System Correction">System Correction</option>
-                    <option value="Refund">Refund</option>
+                    <!-- Walk-in & In-Store Specific Reasons -->
+                    <option value="Walk-in Purchase Points">Walk-in Purchase Points</option>
+                    <option value="In-Store Redemption">In-Store Redemption (Deduct)</option>
+                    <option value="On-Site Promo Bonus">On-Site Promo Bonus</option>
+                    
+                    <!-- Standard System Reasons -->
                     <option value="Special Bonus">Special Bonus</option>
+                    <option value="Refund">Refund</option>
+                    <option value="System Correction">System Correction</option>
                     <option value="Error Correction">Error Correction</option>
                     <option value="Other">Other</option>
                 </select>
@@ -380,8 +387,7 @@ if ($transactions_result) {
                         Process Points
                     </button>
                 </div>
-            </form>
-            <p style="font-size: 0.85rem; color: #777; margin-top: 10px;">*Note: Enter a positive number (e.g., 10) to <strong>add</strong> points. Enter a negative number (e.g., -5) to <strong>deduct</strong> points.</p>
+            </form>            <p style="font-size: 0.85rem; color: #777; margin-top: 10px;">*Note: Enter a positive number (e.g., 10) to <strong>add</strong> points. Enter a negative number (e.g., -5) to <strong>deduct</strong> points. The customer's total balance will be recalculated.</p>
         </div>
 
         <div class="table-box" style="margin-bottom: 25px;">
@@ -476,4 +482,3 @@ if ($transactions_result) {
     </script>
 </body>
 </html>
-

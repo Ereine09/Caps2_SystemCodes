@@ -9,14 +9,35 @@ $message = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['update_quantity'])) {
         $product_id = (int)$_POST['product_id'];
+        $variant_id = isset($_POST['variant_id']) && $_POST['variant_id'] ? (int)$_POST['variant_id'] : null;
         $quantity = (int)$_POST['quantity'];
-        update_customer_cart_item((int)$customer['id'], $product_id, $quantity);
-        header('Location: cart.php'); // Redirect to prevent form resubmission and refresh page
-        exit();
+        $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
+
+        if (update_customer_cart_item((int)$customer['id'], $product_id, $quantity, $variant_id)) {
+            if ($is_ajax) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Cart updated.',
+                    'subtotal_net' => cart_subtotal_ex_vat(),
+                    'subtotal_gross' => cart_subtotal()
+                ]);
+                exit();
+            }
+            header('Location: cart.php');
+            exit();
+        } else {
+            if ($is_ajax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Failed to update cart.']);
+                exit();
+            }
+        }
     } elseif (isset($_POST['remove_item'])) {
         $product_id = (int)$_POST['product_id'];
-        remove_customer_cart_item((int)$customer['id'], $product_id);
-        header('Location: cart.php'); // Redirect to prevent form resubmission and refresh page
+        $variant_id = isset($_POST['variant_id']) && $_POST['variant_id'] ? (int)$_POST['variant_id'] : null;
+        remove_customer_cart_item((int)$customer['id'], $product_id, $variant_id);
+        header('Location: cart.php');
         exit();
     }
 }
@@ -97,6 +118,7 @@ $subtotal_gross = cart_subtotal();
                                 <td>
                                     <form method="POST" style="display:flex; align-items:center; gap:5px;">
                                         <input type="hidden" name="product_id" value="<?php echo $item['id']; ?>">
+                                        <input type="hidden" name="variant_id" value="<?php echo $item['variant_id']; ?>">
                                         <input type="number" name="quantity" value="<?php echo $item['quantity']; ?>" min="1" class="qty-input">
                                         <button type="submit" name="update_quantity" class="button" style="padding: 8px 12px; font-size: 0.75rem;"><i class="fas fa-sync"></i></button>
                                     </form>
@@ -107,6 +129,7 @@ $subtotal_gross = cart_subtotal();
                                 <td style="text-align:center;">
                                     <form method="POST" onsubmit="return confirm('Remove this item?');">
                                         <input type="hidden" name="product_id" value="<?php echo $item['id']; ?>">
+                                        <input type="hidden" name="variant_id" value="<?php echo $item['variant_id']; ?>">
                                         <button type="submit" name="remove_item" class="btn-remove"><i class="fas fa-trash"></i></button>
                                     </form>
                                 </td>

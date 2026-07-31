@@ -25,6 +25,15 @@ function ensure_customer_tables(mysqli $conn): void {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS tbl_product_variants (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            product_id INT NOT NULL,
+            size VARCHAR(100) NOT NULL,
+            price DECIMAL(10, 2) NOT NULL,
+            stock INT NOT NULL DEFAULT 0,
+            FOREIGN KEY (product_id) REFERENCES tbl_product_inventory(id) ON DELETE CASCADE,
+            UNIQUE KEY uniq_product_size (product_id, size)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         "CREATE TABLE IF NOT EXISTS tbl_cart (
             id INT AUTO_INCREMENT PRIMARY KEY,
             customer_id INT NOT NULL,
@@ -32,9 +41,11 @@ function ensure_customer_tables(mysqli $conn): void {
             quantity INT NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT NULL,
-            UNIQUE KEY uniq_customer_product (customer_id, product_id),
+            variant_id INT NULL,
+            UNIQUE KEY uniq_customer_product_variant (customer_id, product_id, variant_id),
             FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
-            FOREIGN KEY (product_id) REFERENCES tbl_product_inventory(id) ON DELETE CASCADE
+            FOREIGN KEY (product_id) REFERENCES tbl_product_inventory(id) ON DELETE CASCADE,
+            FOREIGN KEY (variant_id) REFERENCES tbl_product_variants(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         "CREATE TABLE IF NOT EXISTS tbl_orders (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -45,6 +56,7 @@ function ensure_customer_tables(mysqli $conn): void {
             pickup_date DATE DEFAULT NULL,
             pickup_time VARCHAR(50) DEFAULT NULL,
             delivery_address TEXT DEFAULT NULL,
+            order_notes TEXT DEFAULT NULL,
             delivery_phone VARCHAR(50) DEFAULT NULL,
             delivery_instructions TEXT DEFAULT NULL,
             subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -74,12 +86,27 @@ function ensure_customer_tables(mysqli $conn): void {
             order_id INT NOT NULL,
             product_id INT NOT NULL,
             product_name VARCHAR(255) NOT NULL,
+            variant_size VARCHAR(100) DEFAULT NULL,
             quantity INT NOT NULL DEFAULT 1,
             unit_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
             total_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (order_id) REFERENCES tbl_orders(id) ON DELETE CASCADE,
-            FOREIGN KEY (product_id) REFERENCES tbl_product_inventory(id) ON DELETE CASCADE
+            FOREIGN KEY (product_id) REFERENCES tbl_product_inventory(id) ON DELETE CASCADE,
+            INDEX (variant_size)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS tbl_product_reviews (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            order_id INT NOT NULL,
+            product_id INT NOT NULL,
+            customer_id INT NOT NULL,
+            rating INT NOT NULL,
+            review_text TEXT,
+            is_approved TINYINT(1) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (order_id) REFERENCES tbl_orders(id) ON DELETE CASCADE,
+            FOREIGN KEY (product_id) REFERENCES tbl_product_inventory(id) ON DELETE CASCADE,
+            FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         "CREATE TABLE IF NOT EXISTS tbl_delivery (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -135,6 +162,11 @@ function ensure_customer_tables(mysqli $conn): void {
     // --- ADD: Columns for Bank Transfer payment ---
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100) DEFAULT NULL AFTER payment_reference");
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS bank_account_name VARCHAR(255) DEFAULT NULL AFTER bank_name");
+
+    $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS order_notes TEXT DEFAULT NULL AFTER delivery_address");
+    // --- ADD: variant_id to cart and variant_size to order_items ---
+    $conn->query("ALTER TABLE tbl_cart ADD COLUMN IF NOT EXISTS variant_id INT NULL AFTER quantity, ADD FOREIGN KEY (variant_id) REFERENCES tbl_product_variants(id) ON DELETE CASCADE");
+    $conn->query("ALTER TABLE tbl_order_items ADD COLUMN IF NOT EXISTS variant_size VARCHAR(100) DEFAULT NULL AFTER product_name");
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS payment_proof_path VARCHAR(255) DEFAULT NULL AFTER bank_account_name");
 
     // Add qr_confirmation_token to tbl_delivery
@@ -260,6 +292,23 @@ function get_available_products(): array {
         $result->close();
     }
     return $products;
+}
+
+function get_product_variants(int $product_id): array {
+    global $customer_db;
+    $variants = [];
+    $stmt = $customer_db->prepare("SELECT * FROM tbl_product_variants WHERE product_id = ? ORDER BY price ASC");
+    $stmt->bind_param('i', $product_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $variants[] = $row;
+        }
+        $result->close();
+    }
+    $stmt->close();
+    return $variants;
 }
 
 /**
@@ -511,21 +560,31 @@ function get_customer_cart(): array {
         global $customer_db;
         ensure_customer_tables($customer_db);
 
-        $stmt = $customer_db->prepare(
-            "SELECT c.product_id, p.name, p.price AS unit_price, c.quantity, p.image_url
-             FROM tbl_cart c
-             JOIN tbl_product_inventory p ON c.product_id = p.id
-             WHERE c.customer_id = ?"
-        );
+        $stmt = $customer_db->prepare("
+            SELECT 
+                c.product_id, 
+                c.variant_id,
+                p.name, 
+                COALESCE(v.price, p.price) AS unit_price, 
+                v.size,
+                c.quantity, 
+                p.image_url
+            FROM tbl_cart c
+            JOIN tbl_product_inventory p ON c.product_id = p.id
+            LEFT JOIN tbl_product_variants v ON c.variant_id = v.id
+            WHERE c.customer_id = ?
+        ");
         $stmt->bind_param('i', $customer['id']);
         $stmt->execute();
         $result = $stmt->get_result();
 
         $cart = [];
         while ($row = $result->fetch_assoc()) {
-            $cart[(int)$row['product_id']] = [
+            $cart_key = $row['product_id'] . '-' . ($row['variant_id'] ?? '0');
+            $cart[$cart_key] = [
                 'id' => (int)$row['product_id'],
-                'name' => $row['name'],
+                'variant_id' => (int)($row['variant_id'] ?? 0),
+                'name' => $row['name'] . (!empty($row['size']) ? ' (' . $row['size'] . ')' : ''),
                 'unit_price' => (float)$row['unit_price'],
                 'quantity' => (int)$row['quantity'],
                 'image_url' => $row['image_url'],
@@ -539,12 +598,12 @@ function get_customer_cart(): array {
     return $_SESSION['customer_cart'] ?? [];
 }
 
-function add_customer_cart_item(int $customer_id, int $product_id, int $quantity): bool {
+function add_customer_cart_item(int $customer_id, int $product_id, int $quantity, ?int $variant_id = null): bool {
     global $customer_db;
     ensure_customer_tables($customer_db);
 
-    $existing = $customer_db->prepare("SELECT quantity FROM tbl_cart WHERE customer_id = ? AND product_id = ? LIMIT 1");
-    $existing->bind_param('ii', $customer_id, $product_id);
+    $existing = $customer_db->prepare("SELECT quantity FROM tbl_cart WHERE customer_id = ? AND product_id = ? AND variant_id <=> ? LIMIT 1");
+    $existing->bind_param('iii', $customer_id, $product_id, $variant_id);
     $existing->execute();
     $result = $existing->get_result();
     $row = $result->fetch_assoc();
@@ -552,11 +611,11 @@ function add_customer_cart_item(int $customer_id, int $product_id, int $quantity
 
     if ($row) {
         $newQuantity = max(1, (int)$row['quantity'] + $quantity);
-        $stmt = $customer_db->prepare("UPDATE tbl_cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE customer_id = ? AND product_id = ?");
-        $stmt->bind_param('iii', $newQuantity, $customer_id, $product_id);
+        $stmt = $customer_db->prepare("UPDATE tbl_cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE customer_id = ? AND product_id = ? AND variant_id <=> ?");
+        $stmt->bind_param('iiii', $newQuantity, $customer_id, $product_id, $variant_id);
     } else {
-        $stmt = $customer_db->prepare("INSERT INTO tbl_cart (customer_id, product_id, quantity) VALUES (?, ?, ?)");
-        $stmt->bind_param('iii', $customer_id, $product_id, $quantity);
+        $stmt = $customer_db->prepare("INSERT INTO tbl_cart (customer_id, product_id, quantity, variant_id) VALUES (?, ?, ?, ?)");
+        $stmt->bind_param('iiii', $customer_id, $product_id, $quantity, $variant_id);
     }
 
     $result = $stmt->execute();
@@ -564,27 +623,27 @@ function add_customer_cart_item(int $customer_id, int $product_id, int $quantity
     return $result;
 }
 
-function update_customer_cart_item(int $customer_id, int $product_id, int $quantity): bool {
+function update_customer_cart_item(int $customer_id, int $product_id, int $quantity, ?int $variant_id = null): bool {
     global $customer_db;
     ensure_customer_tables($customer_db);
 
     if ($quantity <= 0) {
-        return remove_customer_cart_item($customer_id, $product_id);
+        return remove_customer_cart_item($customer_id, $product_id, $variant_id);
     }
 
-    $stmt = $customer_db->prepare("UPDATE tbl_cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE customer_id = ? AND product_id = ?");
-    $stmt->bind_param('iii', $quantity, $customer_id, $product_id);
+    $stmt = $customer_db->prepare("UPDATE tbl_cart SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE customer_id = ? AND product_id = ? AND variant_id <=> ?");
+    $stmt->bind_param('iiii', $quantity, $customer_id, $product_id, $variant_id);
     $result = $stmt->execute();
     $stmt->close();
     return $result;
 }
 
-function remove_customer_cart_item(int $customer_id, int $product_id): bool {
+function remove_customer_cart_item(int $customer_id, int $product_id, ?int $variant_id = null): bool {
     global $customer_db;
     ensure_customer_tables($customer_db);
 
-    $stmt = $customer_db->prepare("DELETE FROM tbl_cart WHERE customer_id = ? AND product_id = ?");
-    $stmt->bind_param('ii', $customer_id, $product_id);
+    $stmt = $customer_db->prepare("DELETE FROM tbl_cart WHERE customer_id = ? AND product_id = ? AND variant_id <=> ?");
+    $stmt->bind_param('iii', $customer_id, $product_id, $variant_id);
     $result = $stmt->execute();
     $stmt->close();
     return $result;
@@ -776,6 +835,7 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
     $loyalty_points = calculate_loyalty_points($subtotal_ex_vat - $discount_amount); // Points based on ex-VAT amount AFTER discount
 
     $order_number = generate_order_number();
+    error_log("DEBUG: Order #{$order_number} - Calculated Loyalty Points: {$loyalty_points} from (Subtotal ex-VAT: {$subtotal_ex_vat} - Discount: {$discount_amount})");
     
     $payment_method = (string)($details['payment_method'] ?? 'cod');
 
@@ -784,10 +844,11 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
     $customer_db->begin_transaction();
     try {
         $stmt = $customer_db->prepare(
-            "INSERT INTO tbl_orders (customer_id, order_number, fulfillment_type, pickup_date, pickup_time, delivery_address, delivery_phone, delivery_instructions, subtotal, vat_amount, delivery_fee, bulk_order, free_delivery, loyalty_points_earned, discount_amount, voucher_code, total, payment_method, payment_reference, bank_name, bank_account_name, payment_proof_path)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO tbl_orders (customer_id, order_number, fulfillment_type, pickup_date, pickup_time, delivery_address, order_notes, delivery_phone, delivery_instructions, subtotal, vat_amount, delivery_fee, bulk_order, free_delivery, loyalty_points_earned, discount_amount, voucher_code, total, payment_method, payment_reference, bank_name, bank_account_name, payment_proof_path)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         $delivery_address = $details['delivery_address'] ?? null;
+        $order_notes = $details['order_notes'] ?? null;
         $delivery_phone = $details['delivery_phone'] ?? null;
         $delivery_instructions = $details['delivery_instructions'] ?? null;
         $pickup_date = $details['pickup_date'] ?? null;
@@ -799,45 +860,52 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
         $voucher_code_to_save = $details['voucher_code'] ?? null;
         
         // Consolidate reference number logic
-        $payment_reference = $details['gcash_reference_number'] ?? null;
+        $payment_reference = $details['gcash_reference_number'] ?? $details['bank_reference_number'] ?? null;
         $bank_name = ($payment_method === 'bank') ? ($details['bank_name'] ?? null) : null;
         $bank_account_name = ($payment_method === 'bank') ? ($details['bank_account_name'] ?? null) : null;
         $payment_proof_path = ($payment_method === 'bank') ? ($details['payment_proof_path'] ?? null) : null;
-        $stmt->bind_param('isssssssdddiisdsssssss', $customer_id, $order_number, $fulfillment_type, $pickup_date, $pickup_time, $delivery_address, $delivery_phone, $delivery_instructions, $subtotal_ex_vat, $vat_amount, $delivery_fee, $bulk_order, $free_delivery, $loyalty_points, $discount_to_save, $voucher_code_to_save, $final_total, $payment_method, $payment_reference, $bank_name, $bank_account_name, $payment_proof_path);
+        $stmt->bind_param('isssssssdddiisdssssssss', $customer_id, $order_number, $fulfillment_type, $pickup_date, $pickup_time, $delivery_address, $order_notes, $delivery_phone, $delivery_instructions, $subtotal_ex_vat, $vat_amount, $delivery_fee, $bulk_order, $free_delivery, $loyalty_points, $discount_to_save, $voucher_code_to_save, $final_total, $payment_method, $payment_reference, $bank_name, $bank_account_name, $payment_proof_path);
         $stmt->execute();
         $order_id = $customer_db->insert_id;
         $stmt->close();
 
         $item_stmt = $customer_db->prepare(
-            "INSERT INTO tbl_order_items (order_id, product_id, product_name, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?, ?)"
+            "INSERT INTO tbl_order_items (order_id, product_id, product_name, variant_size, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?, ?, ?)"
         );
         foreach ($cart_items as $item) {
             $line_total = ((float)$item['unit_price'] * (int)$item['quantity']);
-            $item_stmt->bind_param('iisidd', $order_id, $item['id'], $item['name'], $item['quantity'], $item['unit_price'], $line_total);
+            $variant_size = $item['size'] ?? null;
+            $product_name = $item['name'];
+            $item_stmt->bind_param('iissidd', $order_id, $item['id'], $product_name, $variant_size, $item['quantity'], $item['unit_price'], $line_total);
             $item_stmt->execute();
         }
         $item_stmt->close();
 
-        if ($fulfillment_type === 'delivery') {
-            $confirmation_token = bin2hex(random_bytes(32));
-            $delivery_stmt = $customer_db->prepare(
-                "INSERT INTO tbl_delivery (order_id, delivery_type, address, phone, instructions, status, qr_confirmation_token, created_at) VALUES (?, 'delivery', ?, ?, ?, 'pending', ?, NOW())"
-            );
-            $delivery_stmt->bind_param('issss', $order_id, $delivery_address, $delivery_phone, $delivery_instructions, $confirmation_token);
-            $delivery_stmt->execute();
-            $delivery_id = $customer_db->insert_id;
-            $delivery_stmt->close();
+        // --- E-Receipt & Delivery Record Creation ---
+        // Generate a unique token for QR confirmation, regardless of fulfillment type.
+        $confirmation_token = bin2hex(random_bytes(16)); // Shortened for QR density
 
-            send_order_ereceipt($customer_id, $order_id, $delivery_id, $confirmation_token);
-        } else {
-            // For pickup, we could also generate a token if needed for confirmation at the shop
-            $pickup_stmt = $customer_db->prepare(
-                "INSERT INTO tbl_delivery (order_id, delivery_type, address, phone, instructions, status, scheduled_at, created_at) VALUES (?, 'pickup', NULL, NULL, NULL, 'pending', CONCAT(?, ' ', ?), NOW())"
+        if ($fulfillment_type === 'pickup') {
+            $scheduled_at_sql = "CONCAT(?, ' ', ?)";
+            $delivery_stmt = $customer_db->prepare(
+                "INSERT INTO tbl_delivery (order_id, delivery_type, address, phone, instructions, status, qr_confirmation_token, scheduled_at, created_at) 
+                 VALUES (?, ?, ?, ?, ?, 'pending', ?, $scheduled_at_sql, NOW())"
             );
-            $pickup_stmt->bind_param('iss', $order_id, $pickup_date, $pickup_time);
-            $pickup_stmt->execute();
-            $pickup_stmt->close();
+            $delivery_stmt->bind_param('isssssss', $order_id, $fulfillment_type, $delivery_address, $delivery_phone, $delivery_instructions, $confirmation_token, $pickup_date, $pickup_time);
+        } else {
+            $delivery_stmt = $customer_db->prepare(
+                "INSERT INTO tbl_delivery (order_id, delivery_type, address, phone, instructions, status, qr_confirmation_token, created_at) 
+                 VALUES (?, ?, ?, ?, ?, 'pending', ?, NOW())"
+            );
+            $delivery_stmt->bind_param('isssss', $order_id, $fulfillment_type, $delivery_address, $delivery_phone, $delivery_instructions, $confirmation_token);
         }
+        $delivery_stmt->execute();
+        $delivery_id = $customer_db->insert_id;
+        $delivery_stmt->close();
+
+        // Send the e-receipt email for ALL order types.
+        send_order_ereceipt($customer_id, $order_id, $delivery_id, $confirmation_token);
+        
 
         record_order_notification($customer_db, $customer_id, $order_id, $order_number, $subtotal_inc_vat, $fulfillment_type, $bulk_order, $free_delivery);
 
@@ -1128,6 +1196,124 @@ function get_order_items(int $order_id): array {
     }
     $stmt->close();
     return $items;
+}
+
+/**
+ * Check if a customer has already reviewed a specific product from a specific order.
+ *
+ * @param integer $customer_id
+ * @param integer $product_id
+ * @param integer $order_id
+ * @return boolean
+ */
+function has_customer_reviewed_product(int $customer_id, int $product_id, int $order_id): bool {
+    global $customer_db;
+    $stmt = $customer_db->prepare("SELECT id FROM tbl_product_reviews WHERE customer_id = ? AND product_id = ? AND order_id = ? LIMIT 1");
+    $stmt->bind_param('iii', $customer_id, $product_id, $order_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $stmt->close();
+    return $result->num_rows > 0;
+}
+
+/**
+ * Submit a new product review.
+ *
+ * @param array $data
+ * @return boolean
+ */
+function submit_product_review(array $data): bool {
+    global $customer_db;
+    $stmt = $customer_db->prepare("INSERT INTO tbl_product_reviews (order_id, product_id, customer_id, rating, review_text) VALUES (?, ?, ?, ?, ?)");
+    $stmt->bind_param(
+        'iiiis',
+        $data['order_id'],
+        $data['product_id'],
+        $data['customer_id'],
+        $data['rating'],
+        $data['review_text']
+    );
+    $success = $stmt->execute();
+    $stmt->close();
+    return $success;
+}
+
+/**
+ * Get all reviews for a product, optionally only approved ones.
+ *
+ * @param integer $product_id
+ * @param boolean $approved_only
+ * @return array
+ */
+function get_product_reviews(int $product_id, bool $approved_only = true): array {
+    global $customer_db;
+    $reviews = [];
+    $sql = "SELECT r.*, c.name as customer_name 
+            FROM tbl_product_reviews r 
+            JOIN customers c ON r.customer_id = c.id 
+            WHERE r.product_id = ?";
+    if ($approved_only) {
+        $sql .= " AND r.is_approved = 1";
+    }
+    $sql .= " ORDER BY r.created_at DESC";
+
+    $stmt = $customer_db->prepare($sql);
+    $stmt->bind_param('i', $product_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $reviews[] = $row;
+    }
+    $stmt->close();
+    return $reviews;
+}
+
+/**
+ * Get all reviews for the admin panel.
+ *
+ * @return array
+ */
+function get_all_reviews(): array {
+    global $customer_db;
+    $reviews = [];
+    $sql = "SELECT r.*, p.name as product_name, c.name as customer_name 
+            FROM tbl_product_reviews r 
+            JOIN tbl_product_inventory p ON r.product_id = p.id
+            JOIN customers c ON r.customer_id = c.id 
+            ORDER BY r.created_at DESC";
+    $result = $customer_db->query($sql);
+    while ($row = $result->fetch_assoc()) {
+        $reviews[] = $row;
+    }
+    return $reviews;
+}
+
+function approve_review(int $review_id): bool {
+    global $customer_db;
+    $stmt = $customer_db->prepare("UPDATE tbl_product_reviews SET is_approved = 1 WHERE id = ?");
+    $stmt->bind_param('i', $review_id);
+    $success = $stmt->execute();
+    $stmt->close();
+    return $success;
+}
+
+function delete_review(int $review_id): bool {
+    global $customer_db;
+    $stmt = $customer_db->prepare("DELETE FROM tbl_product_reviews WHERE id = ?");
+    $stmt->bind_param('i', $review_id);
+    $success = $stmt->execute();
+    $stmt->close();
+    return $success;
+}
+
+function get_product_average_rating(int $product_id): array {
+    global $customer_db;
+    $stmt = $customer_db->prepare("SELECT AVG(rating) as avg_rating, COUNT(id) as review_count FROM tbl_product_reviews WHERE product_id = ? AND is_approved = 1");
+    $stmt->bind_param('i', $product_id);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return ['avg' => (float)($result['avg_rating'] ?? 0), 'count' => (int)($result['review_count'] ?? 0)];
 }
 
 function get_all_orders_summary(): array {

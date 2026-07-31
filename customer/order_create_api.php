@@ -161,7 +161,19 @@ try {
                     error_log('[order_create_api] Failed to insert loyalty transaction: ' . $transaction_stmt->error);
                 }
                 $transaction_stmt->close();
-                notifications_sync_customer_loyalty_points($conn, $customer_id);
+
+                // Sync points and update customer's total loyalty points
+                $new_total_points = notifications_sync_customer_loyalty_points($conn, $customer_id);
+                $update_points_stmt = $conn->prepare("UPDATE customers SET loyalty_points = ? WHERE id = ?");
+                if ($update_points_stmt) {
+                    $update_points_stmt->bind_param("di", $new_total_points, $customer_id);
+                    if (!$update_points_stmt->execute()) {
+                        error_log('[order_create_api] Failed to update customer loyalty points: ' . $update_points_stmt->error);
+                    }
+                    $update_points_stmt->close();
+                } else {
+                    error_log('[order_create_api] Failed to prepare update customer loyalty points statement: ' . $conn->error);
+                }
             } else {
                 error_log('[order_create_api] Failed to prepare loyalty transaction statement: ' . $conn->error);
             }

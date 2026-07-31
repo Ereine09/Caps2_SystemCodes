@@ -104,6 +104,7 @@ $timeline = $timeline_stmt->get_result();
                     <i class="fas fa-boxes"></i> Manage Rewards
                 </a>
             </li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
             <li>
                 <a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" 
                    class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>">

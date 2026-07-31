@@ -5,6 +5,17 @@ require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
 require_once __DIR__ . '/../../customer/includes/functions.php';
 require_once __DIR__ . '/../../app/helpers/messaging_helper.php';
 
+// Ensure variants table exists
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS tbl_product_variants (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    size VARCHAR(100) NOT NULL,
+    price DECIMAL(10, 2) NOT NULL,
+    stock INT NOT NULL DEFAULT 0,
+    FOREIGN KEY (product_id) REFERENCES tbl_product_inventory(id) ON DELETE CASCADE,
+    UNIQUE KEY uniq_product_size (product_id, size)
+)");
+
 $token = getJWTFromCookie();
 if (!$token || !($payload = verifyJWT($token))) {
     clearJWTCookie();
@@ -122,6 +133,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $log_stmt->bind_param('iss', $user_id, $log_action, $log_details);
                     $log_stmt->execute();
                     $log_stmt->close();
+
+                    // Handle variants
+                    $product_id = $stmt->insert_id;
+                    if (isset($_POST['variant_size']) && is_array($_POST['variant_size'])) {
+                        $variant_stmt = $conn->prepare("INSERT INTO tbl_product_variants (product_id, size, price, stock) VALUES (?, ?, ?, ?)");
+                        foreach ($_POST['variant_size'] as $key => $size) {
+                            if (!empty($size)) {
+                                $v_price = (float)($_POST['variant_price'][$key] ?? 0);
+                                $v_stock = (int)($_POST['variant_stock'][$key] ?? 0);
+                                $variant_stmt->bind_param('isdi', $product_id, $size, $v_price, $v_stock);
+                                $variant_stmt->execute();
+                            }
+                        }
+                        $variant_stmt->close();
+                    }
                 }
             } else {
                 $id = (int)($_POST['product_id'] ?? $_POST['id'] ?? 0);
@@ -156,6 +182,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $log_stmt->bind_param('iss', $user_id, $log_action, $log_details);
                     $log_stmt->execute();
                     $log_stmt->close();
+
+                    // --- UPDATE/ADD/DELETE VARIANTS ---
+                    $conn->query("DELETE FROM tbl_product_variants WHERE product_id = $id"); // Simple approach: clear and re-insert
+                    if (isset($_POST['variant_size']) && is_array($_POST['variant_size'])) {
+                        $variant_stmt = $conn->prepare("INSERT INTO tbl_product_variants (product_id, size, price, stock) VALUES (?, ?, ?, ?)");
+                        foreach ($_POST['variant_size'] as $key => $size) {
+                            if (!empty($size)) {
+                                $v_price = (float)($_POST['variant_price'][$key] ?? 0);
+                                $v_stock = (int)($_POST['variant_stock'][$key] ?? 0);
+                                $variant_stmt->bind_param('isdi', $id, $size, $v_price, $v_stock);
+                                $variant_stmt->execute();
+                            }
+                        }
+                        $variant_stmt->close();
+                    }
+                    // In a more complex system, you would compare existing variants and update/insert/delete individually
+                    // to preserve variant IDs, but for this scope, re-inserting is simpler.
+
+
                 }
             }
             $_SESSION['message'] = $message;
@@ -245,7 +290,7 @@ $unread_count = get_unread_count_staff($user_id);
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Product Management</title>
+    <title>Product Management - DPS Admin</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>/assets/css/admin_style.css"> 
     <style>
@@ -268,6 +313,12 @@ $unread_count = get_unread_count_staff($user_id);
         .stock-in { background: #dcfce7; color: #166534; }
         .stock-out { background: #fee2e2; color: #991b1b; }
         .inventory-summary { display: flex; gap: 20px; margin-bottom: 25px; }
+        .variants-container { margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px; }
+        .variant-row { display: flex; gap: 10px; margin-bottom: 8px; }
+        .variant-row input { flex: 1; }
+        #add-variant-btn { background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe; font-size: 0.8rem; font-weight: bold; }
+        .btn-remove-variant { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 0 8px; cursor: pointer; }
+
         .summary-card { background: white; padding: 15px 20px; border-radius: 12px; flex: 1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #eee; display: flex; align-items: center; gap: 15px; }
         .summary-icon { width: 45px; height: 45px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
         .icon-blue { background: #eef2ff; color: #6366f1; }
@@ -276,7 +327,7 @@ $unread_count = get_unread_count_staff($user_id);
 
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; }
         .modal.active { display: flex; }
-        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 500px; max-height: 90vh; overflow-y: auto; }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 600px; max-width: 95%; max-height: 90vh; overflow-y: auto; }
         .form-group { margin-bottom: 12px; }
         .form-group label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.85rem; color: #444; }
         .form-group select, .form-group input, .form-group textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 5px; }
@@ -313,7 +364,9 @@ $unread_count = get_unread_count_staff($user_id);
                 <?php if ($unread_count > 0): ?>
                     <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo (int)$unread_count; ?></span>
                 <?php endif; ?>
-            </a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
+            </a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>            
+            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'loyalty_points.php') ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'reward_redemption.php') ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>
             <?php if ($role === 'admin'): ?>
@@ -534,6 +587,20 @@ $unread_count = get_unread_count_staff($user_id);
                     <textarea name="description" id="description"></textarea>
                 </div>
 
+                <!-- Variants Section -->
+                <div class="variants-container">
+                    <label style="font-weight: bold; color: #4a3e94;">Sizes & Variants</label>
+                    <div id="variants-list">
+                        <!-- Variant rows will be injected here by JS -->
+                    </div>
+                    <button type="button" id="add-variant-btn" onclick="addVariantRow()">+ Add Size</button>
+                    <p style="font-size: 0.75rem; color: #666;">
+                        Add different sizes (e.g., 340G, 1.5KG) with their own price and stock.
+                        The 'Stock' and 'Price' fields above will be used if no variants are added.
+                    </p>
+                </div>
+
+
                 <div style="display:flex; gap:10px;">
                     <div class="form-group" style="flex:1;">
                         <label>Price</label>
@@ -565,6 +632,32 @@ $unread_count = get_unread_count_staff($user_id);
 
     <script>
         const filterGroups = <?php echo json_encode($filter_groups); ?>;
+        const allProductsWithVariants = <?php
+            $products_with_variants = [];
+            foreach ($products as $p) {
+                $p['variants'] = get_product_variants($p['id']);
+                $products_with_variants[] = $p;
+            }
+            echo json_encode($products_with_variants);
+        ?>;
+
+        function addVariantRow(size = '', price = '', stock = '') {
+            const list = document.getElementById('variants-list');
+            const row = document.createElement('div');
+            row.className = 'variant-row';
+            row.innerHTML = `
+                <input type="text" name="variant_size[]" placeholder="Size (e.g., 1.5KG)" value="${size}">
+                <input type="number" step="0.01" name="variant_price[]" placeholder="Price" value="${price}">
+                <input type="number" name="variant_stock[]" placeholder="Stock" value="${stock}">
+                <button type="button" class="btn-remove-variant" onclick="this.parentElement.remove()">×</button>
+            `;
+            list.appendChild(row);
+        }
+
+        function clearVariants() {
+            document.getElementById('variants-list').innerHTML = '';
+        }
+
 
         function openModal(mode, id = null, product = null) {
             const form = document.getElementById('productForm');
@@ -574,6 +667,12 @@ $unread_count = get_unread_count_staff($user_id);
                 document.getElementById('modalTitle').innerText = "Add Product";
                 document.getElementById('formAction').value = "add";
             } else {
+                const fullProductData = allProductsWithVariants.find(p => p.id == id);
+                if (!fullProductData) {
+                    alert('Product data not found!');
+                    return;
+                }
+                product = fullProductData;
                 document.getElementById('modalTitle').innerText = "Edit Product";
                 document.getElementById('formAction').value = "update";
                 document.getElementById('productId').value = product.id;
@@ -583,6 +682,12 @@ $unread_count = get_unread_count_staff($user_id);
                 document.getElementById('price').value = product.price;
                 document.getElementById('stock').value = product.stock;
                 document.getElementById('image_url').value = product.image_url;
+
+                // Populate variants
+                clearVariants();
+                if (product.variants && product.variants.length > 0) {
+                    product.variants.forEach(v => addVariantRow(v.size, v.price, v.stock));
+                }
 
                 // Handle mapping the comma-separated string back to dropdowns
                 if(product.category) {
@@ -625,7 +730,10 @@ $unread_count = get_unread_count_staff($user_id);
             document.getElementById('productModal').classList.add('active');
         }
 
-        function closeModal() { document.getElementById('productModal').classList.remove('active'); }
+        function closeModal() {
+            document.getElementById('productModal').classList.remove('active');
+            clearVariants();
+        }
 
         function deleteProduct(id) {
             if(confirm("Delete this product?")) {

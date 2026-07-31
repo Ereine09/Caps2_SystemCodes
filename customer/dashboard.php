@@ -1,9 +1,9 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
-// require_customer_login();
+require_customer_login(); // Ensure customer is logged in
 
 $customer = current_customer();
-$orders = get_customer_orders((int)$customer['id']);
+$orders = get_customer_orders((int)($customer['id'] ?? 0));
 
 // Fetch available rewards for the slider
 $rewards_res = mysqli_query($conn, "SELECT * FROM rewards WHERE stock > 0 ORDER BY points ASC LIMIT 10");
@@ -199,7 +199,7 @@ foreach ($orders as $order) {
             <a href="reward_catalog.php">See All Rewards <i class="fas fa-arrow-right"></i></a>
         </div>
         <div class="reward-slider">
-            <?php while($reward = mysqli_fetch_assoc($rewards_res)): ?>
+            <?php if ($rewards_res) { while($reward = mysqli_fetch_assoc($rewards_res)): ?>
                 <?php 
                     $price_display = 'Voucher';
                     if (preg_match('/[₱P](\d+)/', $reward['name'], $matches)) {
@@ -211,7 +211,7 @@ foreach ($orders as $order) {
                     <div class="voucher-name"><?php echo htmlspecialchars($reward['name']); ?></div>
                     <div class="voucher-points"><?php echo number_format($reward['points']); ?> Points</div>
                 </div>
-            <?php endwhile; ?>
+            <?php endwhile; } ?>
         </div>
     </div>
 

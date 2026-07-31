@@ -1,6 +1,6 @@
 body {
     background: 
-        linear-gradient(rgba(20, 24, 48, 0.35), rgba(74, 62, 148, 0.35)),
+        linear-gradient(rgba(20, 24, 48, 0.35), ),
         url('../../../assets/css/knowledgeville.png') center center / cover no-repeat fixed;
 }
 

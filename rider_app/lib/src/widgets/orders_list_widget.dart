@@ -229,7 +229,7 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
                         width: isSelected ? 1.5 : 1,
                       ),
                       boxShadow: isSelected
-                          ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]
+                          ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]
                           : null,
                     ),
                     child: Center(
@@ -283,7 +283,7 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
+                              color: Colors.black.withValues(alpha: 0.04),
                               blurRadius: 14,
                               offset: const Offset(0, 8),
                             ),

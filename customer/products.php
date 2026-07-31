@@ -48,7 +48,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['product_id'])) {
     $product_id = (int) $_POST['product_id'];
     $quantity = max(1, (int) ($_POST['quantity'] ?? 1));
     $product = get_product_by_id($product_id);
-    
+    $variant_id = isset($_POST['variant_id']) && !empty($_POST['variant_id']) ? (int)$_POST['variant_id'] : null;
+
     $message = '';
     $message_type = 'error';
     $success = false;
@@ -57,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['product_id'])) {
         $available_stock = get_product_stock($product_id); // Assume this function exists in includes/functions.php
         if ($quantity > $available_stock) {
             $message = 'Insufficient stock for "' . htmlspecialchars($product['name']) . '". Only ' . $available_stock . ' available.';
-        } elseif ($customer && add_customer_cart_item((int)$customer['id'], $product_id, $quantity)) {
+        } elseif ($customer && add_customer_cart_item((int)$customer['id'], $product_id, $quantity, $variant_id)) {
             $message = 'Product "' . htmlspecialchars($product['name']) . '" added to cart.';
             $message_type = 'success';
             $success = true;
@@ -281,6 +282,10 @@ foreach ($all_products as $p) {
     overflow: hidden;
     flex-grow: 0;
 }
+.product-card .price-stock-row {
+    margin-top: auto; /* Pushes this row to the bottom */
+    padding-top: 10px;
+}
 .product-meta {
     display: flex;
     gap: 8px;
@@ -299,7 +304,6 @@ foreach ($all_products as $p) {
     color: #312e81;
     margin-bottom: 15px;
     font-size: 1.1rem;
-    margin-top: auto; /* Pushes the price and form to the bottom */
 }
 .quantity-row {
     display: flex;
@@ -457,20 +461,59 @@ foreach ($all_products as $p) {
         <div class="shop-products">
             <div class="product-grid">
                 <?php foreach ($products as $product): ?>
+                    <?php $variants = get_product_variants($product['id']); ?>
                     <div class="product-card">
                         <?php if ($product['image_url']): ?>
                             <img src="<?php echo htmlspecialchars($product['image_url']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" onclick='openProductModal(<?php echo htmlspecialchars(json_encode($product), ENT_QUOTES, 'UTF-8'); ?>)' />
                         <?php endif; ?>
                         <div class="product-content">
                             <h3 style="cursor:pointer;" onclick='openProductModal(<?php echo htmlspecialchars(json_encode($product), ENT_QUOTES, 'UTF-8'); ?>)'><?php echo htmlspecialchars($product['name']); ?></h3>
-                            <div class="product-meta">
-                                <span class="meta-tag"><?php echo htmlspecialchars($product['category'] ?? 'General'); ?></span>
-                            </div>
+                            <?php $rating_info = get_product_average_rating($product['id']); ?>
+                            <?php if ($rating_info['count'] > 0): ?>
+                                <div style="margin-bottom: 8px; color: #f59e0b; font-weight: 700; font-size: 0.9rem;" title="Average rating of <?php echo number_format($rating_info['avg'], 1); ?> from <?php echo $rating_info['count']; ?> review(s)">
+                                    <?php echo str_repeat('★', round($rating_info['avg'])); ?><?php echo str_repeat('☆', 5 - round($rating_info['avg'])); ?>
+                                    <span style="color: #64748b; font-weight: 500; font-size: 0.8rem;">(<?php echo $rating_info['count']; ?>)</span>
+                                </div>
+                            <?php else: ?>
+                                <div style="margin-bottom: 8px; color: #94a3b8; font-size: 0.8rem;">No reviews yet</div>
+                            <?php endif; ?>
+
                             <p><?php echo htmlspecialchars($product['description']); ?></p>
-                            <div class="product-price">PHP <?php echo number_format($product['price'], 2); ?></div>
                             
-                            <form method="POST" action="" class="cart-ajax-form">
+                            <div class="price-stock-row">
+                                <div class="product-price" id="price-<?php echo $product['id']; ?>">
+                                    PHP <?php echo number_format($variants[0]['price'] ?? $product['price'], 2); ?>
+                                </div>
+                                <form method="POST" action="" class="cart-ajax-form">
                                 <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>" />
+                                <?php if (!empty($variants)): ?>
+                                    <div class="form-group" style="margin-bottom: 10px;">
+                                        <label for="variant_<?php echo $product['id']; ?>" style="font-size: 0.8rem; font-weight: 600; color: #475569;">Available Sizes:</label>
+                                        <select name="variant_id" id="variant_<?php echo $product['id']; ?>" class="product-variant-select" data-product-id="<?php echo $product['id']; ?>" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
+                                            <?php foreach ($variants as $variant): ?>
+                                                <option value="<?php echo $variant['id']; ?>" data-price="<?php echo $variant['price']; ?>">
+                                                    <?php echo htmlspecialchars($variant['size']); ?> (PHP <?php echo number_format($variant['price'], 2); ?>)
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        
+                                        <!-- Recommendation Box -->
+                                        <div style="background: #f0f9ff; border: 1px solid #e0f2fe; border-radius: 8px; padding: 12px; margin-top: 10px; font-size: 0.8rem; line-height: 1.5; color: #075985;">
+                                            <strong style="display: block; margin-bottom: 5px; color: #0c4a6e;"><i class="fas fa-cat"></i> Recommendation</strong>
+                                            <ul style="margin: 0; padding-left: 18px;">
+                                                <li><b>1 cat:</b> 1.5KG is a good balance if you're testing a new food.</li>
+                                                <li><b>2 or more cats:</b> 4.5KG offers the best value.</li>
+                                                <li><b>Just trying the food:</b> Buy the 340g first to make sure your cat likes it.</li>
+                                            </ul>
+                                        </div>
+
+                                    </div>
+                                <?php else: ?>
+                                    <div style="font-size: 0.8rem; color: #16a34a; font-weight: 600; margin-bottom: 10px;">
+                                        <i class="fas fa-check-circle"></i> In Stock: <?php echo $product['stock']; ?>
+                                    </div>
+                                <?php endif; ?>
+
                                 <div class="quantity-row">
                                     <label for="quantity_<?php echo $product['id']; ?>">Qty</label>
                                     <input type="number" id="quantity_<?php echo $product['id']; ?>" name="quantity" value="1" min="1" />
@@ -478,6 +521,7 @@ foreach ($all_products as $p) {
                                 <button type="submit" class="button add-cart-btn">Add to Cart</button>
                             </form>
                             <button type="button" class="button ask-product-btn" onclick='openProductInquiryModal(<?php echo htmlspecialchars(json_encode($product), ENT_QUOTES, 'UTF-8'); ?>)'>Ask about this product</button>
+                            </div>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -494,6 +538,15 @@ foreach ($all_products as $p) {
             <h2 id="modalName" style="margin-bottom: 10px; color: #1e293b;"></h2>
             <div id="modalMeta" style="margin-bottom: 15px;"></div>
             <p id="modalDesc" style="color: #475569; line-height: 1.6; margin-bottom: 20px; font-size: 1rem;"></p>
+            
+            <!-- Reviews Section -->
+            <div id="modalReviews" style="margin-top: 25px; border-top: 1px solid #eee; padding-top: 20px;">
+                <h3 style="margin-bottom: 15px;">Customer Feedback</h3>
+                <div id="modalReviewsList">
+                    <!-- Reviews will be loaded here via JS -->
+                </div>
+            </div>
+
             <div id="modalPrice" style="font-size: 1.4rem; font-weight: 800; color: #312e81;"></div>
         </div>
     </div>
@@ -537,6 +590,31 @@ function openProductModal(product) {
     document.getElementById("modalDesc").innerText = product.description;
     document.getElementById("modalPrice").innerText = "PHP " + parseFloat(product.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
     
+    // Fetch and display reviews
+    const reviewsList = document.getElementById("modalReviewsList");
+    reviewsList.innerHTML = '<p>Loading reviews...</p>';
+    fetch(`api/reviews_api.php?product_id=${product.id}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.reviews.length > 0) {
+                let reviewsHtml = '';
+                data.reviews.forEach(review => {
+                    reviewsHtml += `
+                        <div style="border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <strong>${escapeHtml(review.customer_name)}</strong>
+                                <span style="color: #f59e0b;">${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}</span>
+                            </div>
+                            <p style="margin: 5px 0 0; font-size: 0.9rem;">${escapeHtml(review.review_text)}</p>
+                        </div>
+                    `;
+                });
+                reviewsList.innerHTML = reviewsHtml;
+            } else {
+                reviewsList.innerHTML = '<p>No reviews yet. Be the first to leave one!</p>';
+            }
+        });
+
     const metaBox = document.getElementById("modalMeta");
     metaBox.innerHTML = `<span class="meta-tag" style="background: #eef2ff; color: #3730a3; border-radius: 8px; padding: 2px 10px; font-size: 0.92rem; font-weight: 600;">${product.category || 'General'}</span>`;
     
@@ -556,6 +634,12 @@ function openProductInquiryModal(product) {
 function closeProductInquiryModal() {
     document.getElementById('productInquiryModal').style.display = 'none';
     document.getElementById('inquiry_message').value = '';
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 async function loadFrequentlyBought() {
@@ -671,6 +755,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.disabled = false;
                 btn.innerText = originalBtnText;
             }
+        });
+    });
+
+    document.querySelectorAll('.product-variant-select').forEach(select => {
+        select.addEventListener('change', function() {
+            const productId = this.dataset.productId;
+            const selectedOption = this.options[this.selectedIndex];
+            const price = selectedOption.dataset.price;
+            document.getElementById(`price-${productId}`).innerText = 'PHP ' + parseFloat(price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
         });
     });
 

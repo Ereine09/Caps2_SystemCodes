@@ -34,11 +34,11 @@ $total_redeemed = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT SUM(po
 $active_customers_period = (int) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(DISTINCT customer_id) as total FROM (SELECT customer_id FROM loyalty_transactions WHERE DATE(created_at) BETWEEN '$date_from' AND '$date_to' UNION SELECT customer_id FROM reward_redemptions WHERE DATE(redeemed_at) BETWEEN '$date_from' AND '$date_to') as active_pool"))['total'] ?? 0);
 
 $net_points_circulation = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT SUM(loyalty_points) as total FROM customers"))['total'] ?? 0);
-$total_sales_from_loyalty_transactions = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(points_earned * 100), 0) AS total_sales_from_loyalty FROM loyalty_transactions WHERE DATE(created_at) BETWEEN '$date_from' AND '$date_to'"))['total_sales_from_loyalty'] ?? 0);
 
 // Fetch Total Sales and Order Count from Orders
 $total_sales = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(total), 0) AS total_sales FROM tbl_orders WHERE DATE(created_at) BETWEEN '$date_from' AND '$date_to'"))['total_sales'] ?? 0);
 $total_orders_count = (int) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as total FROM tbl_orders WHERE DATE(created_at) BETWEEN '$date_from' AND '$date_to'"))['total'] ?? 0);
+$date_to_inclusive = date('Y-m-d', strtotime($date_to . ' +1 day')); // For queries that need to include the end date
 
 // Prepare data for ML and AI
 $all_points = [];
@@ -50,7 +50,8 @@ $stats_summary = [
     'total_earned' => $total_earned,
     'total_redeemed' => $total_redeemed,
     'active_customers' => $active_customers_period,
-    'net_points_in_circulation' => $net_points_circulation
+    'net_points_in_circulation' => $net_points_circulation,
+    'total_sales' => $total_sales
 ];
 $ai_insight = getGeminiBusinessInsight($stats_summary);
 
@@ -175,7 +176,9 @@ while ($s_row = mysqli_fetch_assoc($summary_res)) { $daily_summary_data[] = $s_r
                 <?php if ($unread_count > 0): ?>
                     <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo (int)$unread_count; ?></span>
                 <?php endif; ?>
-            </a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
+            </a></li>            
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'loyalty_points.php') ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'reward_redemption.php') ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>
             <?php if ($role === 'admin'): ?>
@@ -244,30 +247,30 @@ while ($s_row = mysqli_fetch_assoc($summary_res)) { $daily_summary_data[] = $s_r
                 <p style="font-size: 1.5rem; font-weight: bold;"><?php echo number_format($net_points_circulation, 2); ?></p>
             </div>
             <div class="card" style="background: white; padding: 20px; border-radius: 12px; flex: 1; min-width: 200px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                <i class="fas fa-hand-holding-usd" style="font-size: 2rem; color: #16a085;"></i>
-                <h3>Sales from Loyalty (Period)</h3>
-                <p style="font-size: 1.5rem; font-weight: bold;">PHP <?php echo number_format($total_sales_from_loyalty_transactions, 2); ?></p>
-            </div>
-            <div class="card" style="background: white; padding: 20px; border-radius: 12px; flex: 1; min-width: 200px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
                 <i class="fas fa-users" style="font-size: 2rem; color: #8e44ad;"></i>
                 <h3>Active (Period)</h3>
                 <p style="font-size: 1.5rem; font-weight: bold;"><?php echo $active_customers_period; ?></p>
+            </div>
+            <div class="card" style="background: white; padding: 20px; border-radius: 12px; flex: 1; min-width: 200px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                <i class="fas fa-dollar-sign" style="font-size: 2rem; color: #27ae60;"></i>
+                <h3>Total Sales</h3>
+                <p style="font-size: 1.5rem; font-weight: bold;">PHP <?php echo number_format($total_sales, 2); ?></p>
             </div>
         </div>
 
         <div class="table-box" style="background: white; padding: 20px; border-radius: 12px; margin-bottom: 30px;">
             <h3>Daily Points Trend (Last 14 Days)</h3>
-            <canvas id="trendChart" height="80"></canvas>
+            <canvas id="trendChart" height="100"></canvas>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 30px;" id="charts-section">
             <div class="table-box" style="background: white; padding: 20px; border-radius: 12px;">
                 <h3>Loyalty Flow (Issued vs Redeemed)</h3>
-                <canvas id="loyaltyChart" height="200"></canvas>
+                <canvas id="loyaltyChart" height="150"></canvas>
             </div>
             <div class="table-box" style="background: white; padding: 20px; border-radius: 12px;">
                 <h3>Points Utilization Rate</h3>
-                <canvas id="utilizationChart" height="200"></canvas>
+                <canvas id="utilizationChart" height="100"></canvas>
             </div>
         </div>
 

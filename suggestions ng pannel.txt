@@ -1,5 +1,5 @@
 delivery fee like mag babayad ka ng 50 along caloocan
-10k for free delivery along caloocan
+200k for free delivery along caloocan
 points kapag  ay butal .0
 voucher
 kapag worth 100 mag coconvert yung points sa 1point
@@ -7,45 +7,82 @@ kapag 50 worth .50 lang sya
 
 delivery paano malalagay sa system ng specific area and dapat madetect ng 10ave and grace park lang ang sakop ng delivery
 
+Just make me the admin/dashboard side bar and then put it in these files because nothing has been changed yet.
 
-what if you just remove the Add Points (from Purchase)
-in loyalty_managements/modules/customers/loyalty_points.php
+this is the files you will fix
+admin/staff_management.php x
+admin/activity_logs.php x
+admin/manage_rewards.php x
+admin/analytics.php x 
+customers/customers.php x 
 
-because the customer's current points will actually change, so all that's left is Adjust Points (Manual)
+<div class="sidebar">
+        <div class="sidebar-brand" style="text-align: center; padding: 20px 15px;">
+            <img src="<?php echo SYSTEM_LOGO_URL; ?>" alt="Logo" style="max-width: 160px; max-height: 80px; display: block; margin: 0 auto 10px; border-radius: 5px;">
+            <h2 style="color: white; font-size: 1rem; margin: 0; line-height: 1.2;"><?php echo htmlspecialchars(SYSTEM_NAME); ?></h2>
+        </div>
+        <ul class="nav-links" style="list-style: none; padding: 0;">
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/dashboard.php" <?php echo basename($_SERVER['PHP_SELF']) === 'dashboard.php' ? 'class="active"' : ''; ?>><i class="fas fa-home"></i> Dashboard</a></li>
+            <?php if ($user_role === 'admin'): ?>
+                <li><a href="<?php echo BASE_URL; ?>/modules/admin/staff_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'staff_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-users-cog"></i> Staff Management</a></li>
+                <li><a href="<?php echo BASE_URL; ?>/modules/admin/activity_logs.php" <?php echo basename($_SERVER['PHP_SELF']) === 'activity_logs.php' ? 'class="active"' : ''; ?>><i class="fas fa-history"></i> Activity Logs</a></li>
+            <?php endif; ?>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/manage_rewards.php" <?php echo basename($_SERVER['PHP_SELF']) === 'manage_rewards.php' ? 'class="active"' : ''; ?>><i class="fas fa-boxes"></i> Manage Rewards</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/products.php" <?php echo basename($_SERVER['PHP_SELF']) === 'products.php' ? 'class="active"' : ''; ?>><i class="fas fa-store"></i> Products</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/orders.php" <?php echo basename($_SERVER['PHP_SELF']) === 'orders.php' ? 'class="active"' : ''; ?>><i class="fas fa-shopping-cart"></i> Orders</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/messages.php" <?php echo basename($_SERVER['PHP_SELF']) === 'messages.php' ? 'class="active"' : ''; ?>><i class="fas fa-comment-dots"></i> Messages</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'loyalty_points.php') ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'reward_redemption.php') ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>
+            <?php if ($user_role === 'admin'): ?>
+                <li><a href="<?php echo BASE_URL; ?>/modules/admin/analytics.php" <?php echo basename($_SERVER['PHP_SELF']) === 'analytics.php' ? 'class="active"' : ''; ?>><i class="fas fa-chart-line"></i> Analytics & Reports</a></li>
+            <?php endif; ?>
+        </ul>
+        <a href="<?php echo BASE_URL; ?>/modules/auth/logout.php" class="logout-link" style="position: absolute; bottom: 20px; left: 20px; text-decoration: none;">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+    </div>
 
-and I'll just add a walk in purchase to the option and ₱0 = 0.00 points (Rate: ₱100 = 1 point) that's what I think
-
-next na ipopromt
-
-
-
-
-
-
-Ito ung mga need Iadd sa features:
-
-Customer Portal for customer registration, login, and account access
-
-Online Ordering for browsing and purchasing available products through the web-based system
-
-Order Fulfillment Option allowing customers to choose between delivery or pickup
-
-Pickup Scheduling where customers can select their preferred pickup time for ordered products
-
-Delivery Option for customers who want their orders delivered to a nearby serviceable area
-
-Delivery Area Validation to check whether the customer’s address is within the store’s covered delivery range
-
-Bulk Order Processing for orders with larger purchase amounts
-
-Free Delivery for Bulk Orders for purchases worth ₱2,000 or more, limited to nearby serviceable areas and surrounding locations, (10th ave to Grace park) 
-
-Loyalty Points System where customers earn 1 point for every ₱100 purchase
+use this code and put inside them
 
 
 
 
+Should we apply the same AJAX auto-refresh logic to admin/messages.php so they don't have to reload either?
 
-test rider
-testrider1@gmail.com
-password123
+
+
+            'reward_code' => 'DISC10',
+            'name' => '₱10 Discount Voucher',
+            'description' => 'Get a ₱10 discount on your next purchase. A small thank you for your loyalty!',
+            'points' => 100.00,
+            'stock' => 999,
+            'validity_days' => 30
+        ],
+        [
+            'reward_code' => 'DISC25',
+            'name' => '₱25 Discount Voucher',
+            'description' => 'Enjoy a ₱25 discount on any order, perfect for your daily essentials.',
+            'points' => 250.00,
+            'stock' => 999,
+            'validity_days' => 30
+        ],
+        [
+            'reward_code' => 'DISC50',
+            'name' => '₱50 Discount Voucher',
+            'description' => 'A ₱50 discount for our loyal customers. Use it on your next big purchase!',
+            'points' => 480.00,
+            'stock' => 500,
+            'validity_days' => 60
+        ],
+        [
+            'reward_code' => 'DISC100',
+            'name' => '₱100 Discount Voucher',
+            'description' => 'The ultimate discount! Get ₱100 off as a thank you for your continued support.',
+            'points' => 950.00,
+            'stock' => 250,
+            'validity_days' => 60
+
+
+ - DPS Admin
+

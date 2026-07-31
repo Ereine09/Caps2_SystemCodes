@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
-// require_customer_login();
+require_customer_login(); // Ensure customer is logged in
 
 $customer = current_customer();
 
@@ -124,10 +124,14 @@ if ($view_id > 0) {
                         <div style="margin-top: 20px;">
                             <p>Use the code below during checkout to apply your discount.</p>
                         </div>
+                        <div style="margin-top: 10px; text-align: center; font-size: 0.85rem; color: #666;">
+                            <i class="fas fa-info-circle"></i> This voucher is valid for 7 days from redemption.
+                            It can be used in-store or online.
+                        </div>
                         <div class="card-number">
                             <strong>Voucher Code:</strong>
                             <?php echo htmlspecialchars($redemption['card_number']); ?>
-                            <button class="copy-btn" onclick="copyToClipboard('<?php echo htmlspecialchars($redemption['card_number']); ?>')">Copy</button>
+                            <button class="copy-btn" onclick="copyToClipboard(this, '<?php echo htmlspecialchars($redemption['card_number']); ?>')">Copy</button>
                         </div>
                         <?php endif; ?>
 
@@ -147,9 +151,13 @@ if ($view_id > 0) {
         </div>
 
         <script>
-            function copyToClipboard(text) {
+            function copyToClipboard(buttonElement, text) {
                 navigator.clipboard.writeText(text).then(function() {
-                    alert('Copied to clipboard!');
+                    const originalText = buttonElement.innerText;
+                    buttonElement.innerText = 'Copied!';
+                    setTimeout(function() {
+                        buttonElement.innerText = originalText;
+                    }, 1500); // Revert after 1.5 seconds
                 });
             }
         </script>
@@ -181,7 +189,7 @@ if ($redemptions_query) {
             <i class="fas fa-gift fa-3x" style="color: #cbd5e1; margin-bottom: 20px;"></i>
             <h3>No rewards redeemed yet</h3>
             <p>Start shopping and earning points to redeem rewards!</p>
-            <a href="reward_catalog.php" class="copy-btn" style="background: #0082c3; padding: 12px 25px; text-decoration: none; display: inline-block; margin-top: 15px;">Browse Rewards</a>
+            <a href="reward_catalog.php" class="copy-btn" style="background: #0082c3; color: white; padding: 12px 25px; text-decoration: none; display: inline-block; margin-top: 15px;">Browse Rewards</a>
         </div>
     <?php else: ?>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">

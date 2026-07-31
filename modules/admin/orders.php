@@ -48,27 +48,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'], $_POST['o
             $stmt->close();
 
             // Only notify if status actually changed and we have an email
-            if ($old_order_status !== $new_order_status && !empty($prev['email'])) {
-                $order_number = $prev['order_number'] ?? ('#' . $order_id);
-                $customer_name = $prev['name'] ?? 'Customer';
-                $customer_email = $prev['email'];
-                $new_status_label = $statuses[$new_order_status] ?? $new_order_status;
+            try {
+                // Only notify if status actually changed and we have an email
+                if ($old_order_status !== $new_order_status && !empty($prev['email'])) {
+                    $order_number = $prev['order_number'] ?? ('#' . $order_id);
+                    $customer_name = $prev['name'] ?? 'Customer';
+                    $customer_email = $prev['email'];
+                    $new_status_label = $statuses[$new_order_status] ?? $new_order_status;
 
-                $title = "Order {$order_number} status update";
-                $message = "Hi {$customer_name},\n\nYour order {$order_number} has been updated to: {$new_status_label}.\n\nIf you have any questions, please contact us.\n";
+                    $title = "Order {$order_number} status update";
+                    $message = "Hi {$customer_name},\n\nYour order {$order_number} has been updated to: {$new_status_label}.\n\nIf you have any questions, please contact us.\n";
 
-                // Save + send email via the existing notification helper
-                notifications_create($conn, [
-                    'user_id' => NULL, // customer-initiated context
-                    'customer_id' => (int) ($prev['customer_id'] ?? 0),
-                    'type' => 'order_status_update',
-                    'channel' => 'email',
-                    'title' => $title,
-                    'message' => $message,
-                    'reference_table' => 'tbl_orders',
-                    'reference_id' => $order_id,
-                    'email_to' => $customer_email,
-                ]);
+                    // Save + send email via the existing notification helper
+                    $notification_sent = notifications_create($conn, [
+                        'user_id' => NULL, // customer-initiated context
+                        'customer_id' => (int) ($prev['customer_id'] ?? 0),
+                        'type' => 'order_status_update',
+                        'channel' => 'email',
+                        'title' => $title,
+                        'message' => $message,
+                        'reference_table' => 'tbl_orders',
+                        'reference_id' => $order_id,
+                        'email_to' => $customer_email,
+                    ]);
+                    if (!$notification_sent) {
+                        error_log("Failed to send order status update email for order $order_id via notifications_create.");
+                    }
+                }
+
+                // --- NEW FEATURE: QR CODE & CONFIRMATION EMAIL ---
+                // If the new status is 'confirmed', generate QR and send email.
+                if ($new_order_status === 'confirmed' && $old_order_status !== 'confirmed') {
+                    send_payment_confirmation_email($order_id, $prev['email'], $prev['name']);
+                }
+            } catch (Exception $e) {
+                error_log("Error sending order status email for order $order_id: " . $e->getMessage());
+
             }
 
             // --- NEW FEATURE: QR CODE & CONFIRMATION EMAIL ---
@@ -132,7 +147,7 @@ $unread_count = get_unread_count_staff($user_id);
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Orders</title>
+    <title>Admin Orders - DPS Admin</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>/assets/css/admin_style.css">
     <style>
@@ -176,7 +191,9 @@ $unread_count = get_unread_count_staff($user_id);
                 <?php if ($unread_count > 0): ?>
                     <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo (int)$unread_count; ?></span>
                 <?php endif; ?>
-            </a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
+            </a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'loyalty_points.php') ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'reward_redemption.php') ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>
             

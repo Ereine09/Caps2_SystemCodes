@@ -216,7 +216,21 @@ if (isset($_GET['id'])) {
                                 <?php foreach ($order_items as $item): ?>
                                     <tr>
                                         <td style="width: 60px;"><img src="<?php echo htmlspecialchars($item['image_url'] ?: BASE_URL . '/assets/img/placeholder.png'); ?>" class="item-img" alt=""></td>
-                                        <td><strong><?php echo htmlspecialchars($item['product_name']); ?></strong><br><small style="color: #64748b;">PHP <?php echo number_format($item['unit_price'], 2); ?></small></td>
+                                        <td>
+                                            <strong><?php echo htmlspecialchars($item['product_name']); ?></strong><br>
+                                            <small style="color: #64748b;">PHP <?php echo number_format($item['unit_price'], 2); ?></small>
+                                            <?php if ($order['order_status'] === 'completed'): ?>
+                                                <?php if (has_customer_reviewed_product((int)$customer['id'], (int)$item['product_id'], (int)$order['id'])): ?>
+                                                    <div style="margin-top: 8px; font-size: 0.9rem; color: #10b981; font-weight: 600;"><i class="fas fa-check-circle"></i> Thank you for your review!</div>
+                                                <?php else: ?>
+                                                    <a href="submit_review.php?order_id=<?php echo $order['id']; ?>&product_id=<?php echo $item['product_id']; ?>" 
+                                                       class="button" 
+                                                       style="font-size: 0.85rem; padding: 8px 12px; margin-top: 8px; background: #f59e0b; display: inline-block;">
+                                                       <i class="fas fa-star"></i> Write a Review
+                                                    </a>
+                                                <?php endif; ?>
+                                            <?php endif; ?>
+                                        </td>
                                         <td>x<?php echo htmlspecialchars($item['quantity']); ?></td>
                                         <td><strong>PHP <?php echo number_format($item['total_price'], 2); ?></strong></td>
                                     </tr>
@@ -235,6 +249,9 @@ if (isset($_GET['id'])) {
                         <?php else: ?>
                             <div class="info-item" style="flex-direction: column; gap: 5px;"><span class="info-label">Address</span><span class="info-value" style="font-weight: 500; font-size: 0.85rem;"><?php echo htmlspecialchars($order['delivery_address']); ?></span></div>
                             <div class="info-item"><span class="info-label">Phone</span><span class="info-value"><?php echo htmlspecialchars($order['delivery_phone']); ?></span></div>
+                        <?php endif; ?>
+                        <?php if (!empty($order['order_notes'])): ?>
+                            <div class="info-item" style="flex-direction: column; gap: 5px;"><span class="info-label">Order Notes</span><span class="info-value" style="font-weight: 500; font-size: 0.85rem;"><?php echo nl2br(htmlspecialchars($order['order_notes'])); ?></span></div>
                         <?php endif; ?>
                     </div>
                     <div class="info-card">

@@ -77,7 +77,9 @@ $unread_count = get_unread_count_staff($user_id);
                 <?php if ($unread_count > 0): ?>
                     <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo (int)$unread_count; ?></span>
                 <?php endif; ?>
-            </a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
+            </a></li>            
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'loyalty_points.php') ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'reward_redemption.php') ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>
             
@@ -148,19 +150,23 @@ $unread_count = get_unread_count_staff($user_id);
                             
                             // COLOR LOGIC PARA SA ACTION COLUMN
                             $action_color = '#3498db'; // Default Blue
-                            if ($log['action'] == 'DELETE') {
+                            if ($log['action'] === 'DELETE' || $log['action'] === 'delete_reward') {
                                 $action_color = '#e74c3c'; // Red
-                            } elseif ($log['action'] == 'POINT_ADJUSTMENT' || $log['action'] == 'LOYALTY_POINTS') {
+                            } elseif ($log['action'] === 'POINT_ADJUSTMENT' || $log['action'] === 'REWARD_REDEMPTION') {
                                 $action_color = '#f39c12'; // Gold/Orange
                             }
-
+//Point Adjustment
                             echo "<tr>";
                             // PINALITAN: $log['timestamp'] -> $log['created_at']
                             echo "<td style='padding:15px;'>" . date("M d, Y - h:i A", strtotime($log['created_at'])) . "</td>";
                             echo "<td style='padding:15px;'><strong>" . htmlspecialchars($u_display) . "</strong></td>";
                             
                             echo "<td style='padding:15px; color: " . $action_color . "; font-weight: bold;'>";
-                            echo "<i class='fas " . ($log['action'] == 'POINT_ADJUSTMENT' ? 'fa-adjust' : 'fa-info-circle') . "'></i> " . htmlspecialchars($log['action']);
+                            
+                            $display_action = str_replace('_', ' ', $log['action']);
+                            $icon = ($log['action'] === 'POINT_ADJUSTMENT') ? 'fa-adjust' : 'fa-info-circle';
+
+                            echo "<i class='fas " . $icon . "'></i> " . htmlspecialchars(ucwords(strtolower($display_action)));
                             echo "</td>";
 
                             echo "<td style='padding:15px;'>" . htmlspecialchars($log['details']) . "</td>";
