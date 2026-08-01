@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api/api_client.dart';
+import '../constants/api_constants.dart';
 import '../screens/rider_shipment_detail_screen.dart';
 
 class OrdersListWidget extends StatefulWidget {
@@ -19,9 +19,7 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
   List<dynamic> _assignments = [];
   String _selectedTab = 'New';
 
-  final String _baseUrl = kIsWeb
-      ? 'http://localhost/loyalty_managements'
-      : 'http://10.0.2.2/loyalty_managements';
+  final String _baseUrl = baseUrl;
 
   @override
   void initState() {

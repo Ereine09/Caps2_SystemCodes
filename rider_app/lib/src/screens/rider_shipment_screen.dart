@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api/api_client.dart';
+import '../constants/api_constants.dart';
 import '../screens/order.dart'; 
 import 'rider_shipment_detail_screen.dart';
 
@@ -14,7 +15,7 @@ class RiderShipmentScreen extends StatefulWidget {
 class _RiderShipmentScreenState extends State<RiderShipmentScreen> {
   late Future<List<Order>> _deliveriesFuture;
   final ApiClient _apiClient = ApiClient(
-    baseUrl: 'http://localhost/loyalty_managements/customer', 
+    baseUrl: customerBaseUrl, 
   );
 
   String _selectedFilter = 'Today';

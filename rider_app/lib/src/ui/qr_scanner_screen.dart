@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../api/api_client.dart';
+import '../constants/api_constants.dart';
 
 class QRScannerScreen extends StatefulWidget {
   final String token;
@@ -16,9 +16,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   bool _isProcessing = false;
   final MobileScannerController _cameraController = MobileScannerController();
 
-  final String _baseUrl = kIsWeb 
-      ? 'http://localhost/loyalty_managements' 
-      : 'http://10.0.2.2/loyalty_managements';
+  final String _baseUrl = baseUrl;
 
   Future<void> _updateOrderStatus(String orderNumber) async {
     setState(() => _isProcessing = true);

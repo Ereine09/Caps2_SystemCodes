@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
-
 import 'src/state/auth_state.dart';
 import 'src/ui/login_screen.dart';
 import 'src/ui/home_screen.dart';
@@ -9,33 +7,41 @@ import 'src/ui/home_screen.dart';
 void main() {
   runApp(
     ChangeNotifierProvider(
-      create: (_) => AuthState(),
-      child: const RiderApp(),
+      create: (context) => AuthState(),
+      child: const MyApp(),
     ),
   );
 }
 
-class RiderApp extends StatelessWidget {
-  const RiderApp({super.key});
+class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Check for a saved login session when the app starts
+    context.read<AuthState>().checkLoginStatus();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
       title: 'Rider App',
+      debugShowCheckedModeBanner: false, // Removes the DEBUG banner in the corner
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-        useMaterial3: true,
+        primarySwatch: Colors.teal,
       ),
       home: Consumer<AuthState>(
-        builder: (context, auth, _) {
-          if (auth.isAuthed) {
-            return const HomeScreen();
-          }
-          return const LoginScreen();
+        builder: (context, auth, child) {
+          // If logged in, show HomeScreen, otherwise show LoginScreen
+          return auth.isLoggedIn ? const HomeScreen() : const LoginScreen();
         },
       ),
     );
   }
 }
-

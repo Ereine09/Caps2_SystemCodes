@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../state/auth_state.dart';
 import '../constants/colors.dart';
 import '../screens/rider_shipment_screen.dart';
+import '../screens/remittance_screen.dart'; // Import the new screen
+import '../screens/qr_scanner_screen.dart'; // Import the QR Scanner
 
 class RiderBottomNavBar extends StatelessWidget {
   const RiderBottomNavBar({super.key});
@@ -17,7 +19,7 @@ class RiderBottomNavBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(40),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
+            color: Colors.black.withOpacity(0.12),
             blurRadius: 20,
             offset: const Offset(0, 8),
           )
@@ -38,21 +40,44 @@ class RiderBottomNavBar extends StatelessWidget {
           
           GestureDetector(
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Scan or Action Feature Triggered')),
-              );
+              // This now opens the QR Scanner screen
+              final token = context.read<AuthState>().token;
+              if (token != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => QRScannerScreen(token: token)),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Authentication token missing. Please log in again.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
             },
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(color: AppColors.accentOrange, shape: BoxShape.circle),
-              child: const Icon(Icons.add, color: Colors.white, size: 22),
+              decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+              child: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 22),
             ),
           ),
           
-          _navItem(Icons.analytics_outlined, 'History', false),
+          GestureDetector(
+            onTap: () {
+              final token = context.read<AuthState>().token;
+              if (token != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => RemittanceScreen(token: token)),
+                );
+              }
+            },
+            child: _navItem(Icons.payments_outlined, 'Remittance', false), // New Remittance Icon
+          ),
           
           GestureDetector(
-            onTap: () => context.read<AuthState>().clear(),
+            onTap: () => context.read<AuthState>().logout(),
             child: _navItem(Icons.logout, 'Logout', false),
           ),
         ],

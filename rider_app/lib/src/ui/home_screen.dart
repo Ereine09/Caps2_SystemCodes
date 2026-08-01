@@ -55,7 +55,7 @@ class HomeScreen extends StatelessWidget {
                 ),
                 Text(
                   'Active Duty',
-                  style: TextStyle(color: AppColors.primary.withValues(alpha: 0.8), fontWeight: FontWeight.w600),
+                  style: TextStyle(color: AppColors.primary.withOpacity(0.8), fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -68,8 +68,8 @@ class HomeScreen extends StatelessWidget {
       
       // 2. Changed FloatingActionButton to trigger the QR Scanner
       floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF4a3e94),
-        child: const Icon(Icons.qr_code_scanner_outlined),
+        backgroundColor: AppColors.primary,
+        child: const Icon(Icons.qr_code_scanner_outlined, color: Colors.white),
         onPressed: () {
           final token = auth.token;
           if (token == null || token.isEmpty) {

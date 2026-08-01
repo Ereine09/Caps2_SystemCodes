@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:http/http.dart' as http;
+import '../constants/api_constants.dart';
+import '../constants/colors.dart';
 
 class QRScannerScreen extends StatefulWidget {
   final String token;
@@ -18,10 +19,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   String apiResponse = '';
   bool hasError = false;
 
-  // Automatically switch between Localhost (for Web/iOS) and 10.0.2.2 (for Android Emulator)
-  final String _baseUrl = kIsWeb 
-      ? 'http://localhost/loyalty_managements' 
-      : 'http://10.0.2.2/loyalty_managements';
+  // Centralized base URL from api_constants.dart (handles web/emulator/real device)
+  final String _baseUrl = baseUrl;
 
   final MobileScannerController _cameraController = MobileScannerController();
 
@@ -93,7 +92,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Confirm Delivery'),
-        backgroundColor: const Color(0xFF4a3e94), // Purple color
+        backgroundColor: AppColors.primary,
       ),
       body: Container(
         width: double.infinity,
@@ -126,7 +125,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: isProcessing ? null : (isScanning ? () => setState(() => isScanning = false) : _resetScanner),
-        backgroundColor: isScanning ? Colors.redAccent : const Color(0xFF4a3e94),
+        backgroundColor: isScanning ? Colors.redAccent : AppColors.primary,
         icon: Icon(isScanning ? Icons.stop : Icons.camera_alt),
         label: Text(isScanning ? 'Stop' : 'Start Scan'),
       ),

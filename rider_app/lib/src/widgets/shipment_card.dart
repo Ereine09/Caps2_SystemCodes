@@ -46,7 +46,7 @@ class ShipmentCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
+              color: Colors.black.withOpacity(0.02),
               blurRadius: 10,
               offset: const Offset(0, 4),
             )
@@ -85,7 +85,7 @@ class ShipmentCard extends StatelessWidget {
                     width: 14, height: 14,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: isDone ? AppColors.accentOrange : Colors.grey[300],
+                      color: isDone ? AppColors.orange : Colors.grey[300],
                       border: Border.all(color: Colors.white, width: 2),
                     ),
                   );

@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart'; // <-- Tiyaking may import nito sa taas para sa DioException
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
+import '../constants/api_constants.dart';
 import '../widgets/api_error_banner.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -22,9 +22,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _loading = false;
   String? _error;
 
-  final String _baseUrl = kIsWeb 
-      ? 'http://localhost/loyalty_managements' 
-      : 'http://10.0.2.2/loyalty_managements';
+  final String _baseUrl = baseUrl;
 
   Future<void> _register() async {
     setState(() {
