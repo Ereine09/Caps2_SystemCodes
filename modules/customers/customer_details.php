@@ -105,7 +105,7 @@ $timeline = $timeline_stmt->get_result();
                 </a>
             </li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
-            <li>
+<li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance</a></li>            <li>
                 <a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" 
                    class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>">
                     <i class="fas fa-user-friends"></i> Customers

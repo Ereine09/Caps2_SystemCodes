@@ -157,6 +157,11 @@ function ensure_customer_tables(mysqli $conn): void {
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS voucher_code VARCHAR(100) DEFAULT NULL AFTER discount_amount");
 
     // --- ADD: Column for VAT ---
+    $check_delivery_status_col = "SHOW COLUMNS FROM `tbl_delivery` LIKE 'status'";
+    $res_delivery_status = $conn->query($check_delivery_status_col);
+    if ($res_delivery_status && $res_delivery_status->num_rows === 0) {
+        $conn->query("ALTER TABLE `tbl_delivery` MODIFY COLUMN `status` ENUM('pending','in_transit','delivered','failed') NOT NULL DEFAULT 'pending';");
+    }
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS vat_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER subtotal");
 
     // --- ADD: Columns for Bank Transfer payment ---

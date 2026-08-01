@@ -151,7 +151,7 @@ $subtotal_gross = cart_subtotal();
                     </div>
                     <div class="total-row">
                         <span style="color: #64748b;">Estimated Points</span>
-                        <span style="color: #10b981; font-weight: 700;">+<?php echo number_format($subtotal_gross / 100, 2); ?> pts</span>
+                        <span style="color: #10b981; font-weight: 700;">+<?php echo number_format($subtotal_net / 100, 2); ?> pts</span>
                     </div>
                     <div class="total-row grand-total">
                         <span>Total</span>

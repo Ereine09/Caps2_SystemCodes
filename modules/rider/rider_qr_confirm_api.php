@@ -106,11 +106,11 @@ try {
 
     // Update delivery status to delivered
     $stmt2 = $conn->prepare(
-        "UPDATE tbl_delivery
-         SET status = 'delivered', delivered_at = NOW(), updated_at = NOW()
+        "UPDATE tbl_delivery 
+         SET status = 'delivered', delivered_at = NOW(), updated_at = NOW(), rider_id = ?
          WHERE id = ?"
     );
-    $stmt2->bind_param('i', $delivery_id);
+    $stmt2->bind_param('ii', $rider_id, $delivery_id);
     $stmt2->execute();
     $stmt2->close();
 

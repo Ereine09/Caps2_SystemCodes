@@ -77,6 +77,22 @@ $unread_count = get_unread_count_staff($user_id);
         .status-badge { padding: 3px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: bold; color: white; }
         .status-approved { background: #10b981; }
         .status-pending { background: #f59e0b; }
+
+                /* 1. Prevent double scrollbar on body */
+        body {
+            overflow-x: hidden;
+        }
+
+        /* 2. Hide scrollbar for Chrome, Safari and Opera */
+        .sidebar::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* 3. Hide scrollbar for IE, Edge and Firefox */
+        .sidebar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
     </style>
 </head>
 <body>
@@ -101,7 +117,7 @@ $unread_count = get_unread_count_staff($user_id);
             </a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/messages.php"><i class="fas fa-comment-dots"></i> Messages <?php if ($unread_count > 0) echo "<span class='notif-badge'>$unread_count</span>"; ?></a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php" class="active"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php"><i class="fas fa-user-friends"></i> Customers</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance</a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php"><i class="fas fa-gift"></i> Reward Redemption</a></li>
             <?php if ($role === 'admin'): ?>

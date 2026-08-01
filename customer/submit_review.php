@@ -56,13 +56,16 @@ include __DIR__ . '/includes/header.php';
 
 <style>
 .review-form-container {
-    max-width: 700px;
-    margin: 0 auto;
-    background: white;
-    padding: 30px;
-    border-radius: 12px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    max-width: 850px; /* Widened from 700px to fill the space better */
+    width: 90%; /* Ensures responsiveness on smaller screens */
+    margin: 40px auto; /* Centering with generous top/bottom space */
+    background: #ffffff;
+    padding: 40px; /* Increased padding for better breathing room */
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+    border: 1px solid #e2e8f0; /* Soft border matching your UI style */
 }
+
 .product-to-review {
     display: flex;
     align-items: center;
@@ -82,11 +85,14 @@ include __DIR__ . '/includes/header.php';
     display: flex;
     flex-direction: row-reverse;
     justify-content: center;
-    font-size: 3.5rem;/* star sizeeeeee*/
+    size: 6.5rem; /* Adjust the size of the stars */
+    font-size: 6.5rem;/* star sizeeeeee*/
     gap: 5px;
 }
 .star-rating input { display: none; }
 .star-rating label {
+    font-size: 4rem; /* Change this value to make them bigger (e.g., 5rem, 6rem) */
+    line-height: 1;
     color: #e2e8f0;
     cursor: pointer;
     transition: color 0.2s;
@@ -96,6 +102,8 @@ include __DIR__ . '/includes/header.php';
 .star-rating label:hover ~ label {
     color: #f59e0b;
 }
+
+
 </style>
 
 <section class="customer-panel">

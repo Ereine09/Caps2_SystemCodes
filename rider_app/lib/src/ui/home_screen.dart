@@ -4,6 +4,8 @@ import '../state/auth_state.dart';
 import '../widgets/orders_list_widget.dart';
 import '../widgets/rider_bottom_nav.dart';
 import '../constants/colors.dart';
+// 1. Import your QR Scanner screen
+import '../screens/qr_scanner_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -63,6 +65,32 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
+      
+      // 2. Changed FloatingActionButton to trigger the QR Scanner
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF4a3e94),
+        child: const Icon(Icons.qr_code_scanner_outlined),
+        onPressed: () {
+          final token = auth.token;
+          if (token == null || token.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Authentication token missing. Please log in again.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+
+          // Open QRScannerScreen and pass the rider token
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => QRScannerScreen(token: token),
+            ),
+          );
+        },
+      ),
+
       bottomNavigationBar: const RiderBottomNavBar(),
     );
   }
