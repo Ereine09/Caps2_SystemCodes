@@ -131,9 +131,21 @@
 
                 // This is where you would get the rider's JWT token
                 // For this example, I'll use a placeholder.
-                // In a real app, you'd get this from a cookie or local storage after login.
-                const riderJwtToken = 'PASTE_RIDER_JWT_TOKEN_HERE';
+                // In a real app, you'd get this from a cookie or local storage after login. Let's try to get it from a cookie.
+                const getCookie = (name) => {
+                    const value = `; ${document.cookie}`;
+                    const parts = value.split(`; ${name}=`);
+                    if (parts.length === 2) return parts.pop().split(';').shift();
+                };
+                const riderJwtToken = getCookie('rider_jwt'); // Assuming the JWT is stored in a cookie named 'rider_jwt'
 
+                if (!riderJwtToken) {
+                    loadingSpinner.style.display = 'none';
+                    resultBox.style.display = 'block';
+                    resultBox.className = 'result-box error';
+                    resultBox.textContent = 'Error: Rider not logged in. Please login first.';
+                    return;
+                }
                 fetch('../modules/rider/rider_qr_confirm_api.php', {
                     method: 'POST',
                     headers: {

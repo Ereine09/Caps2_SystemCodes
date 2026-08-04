@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -18,16 +19,25 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
   final String _baseUrl = baseUrl;
 
-  Future<void> _updateOrderStatus(String orderNumber) async {
+  Future<void> _confirmDelivery(String qrCodeData) async {
     setState(() => _isProcessing = true);
     _cameraController.stop(); // I-pause muna ang camera para hindi mag-scan nang paulit-ulit
 
     try {
+      // Decode the JSON from the QR code
+      final Map<String, dynamic> qrData = jsonDecode(qrCodeData);
+      final int? deliveryId = qrData['delivery_id'];
+
+      if (deliveryId == null) {
+        throw Exception('Invalid QR code data. Missing delivery_id.');
+      }
+
       final api = ApiClient(baseUrl: _baseUrl);
       final res = await api.postJson<Map<String, dynamic>>(
-        '/modules/rider/rider_complete_order_api.php',
+        '/modules/rider/rider_qr_confirm_api.php', // Correct API endpoint
         body: {
-          'order_number': orderNumber,
+          'delivery_id': deliveryId,
+          'qr_code': qrCodeData, // Send the full raw QR content
         },
         headers: {
           'Authorization': 'Bearer ${widget.token}',
@@ -36,12 +46,12 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
       final body = res.data ?? {};
       if (body['success'] != true) {
-        throw Exception(body['message'] ?? 'Failed to complete order');
+        throw Exception(body['message'] ?? 'Failed to confirm delivery');
       }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(body['message'] ?? 'Order marked as Completed!'), backgroundColor: Colors.green),
+        SnackBar(content: Text(body['message'] ?? 'Delivery Confirmed!'), backgroundColor: Colors.green),
       );
       Navigator.of(context).pop(); // Bumalik sa Dashboard pagkatapos mag-success
     } catch (e) {
@@ -82,7 +92,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
               for (final barcode in barcodes) {
                 final String? rawValue = barcode.rawValue;
                 if (rawValue != null && rawValue.isNotEmpty) {
-                  _updateOrderStatus(rawValue.trim());
+                  _confirmDelivery(rawValue.trim());
                   break;
                 }
               }
@@ -108,7 +118,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                   children: [
                     CircularProgressIndicator(color: Colors.white),
                     SizedBox(height: 16),
-                    Text('Updating order status...', style: TextStyle(color: Colors.white, fontSize: 16)),
+                    Text('Confirming Delivery...', style: TextStyle(color: Colors.white, fontSize: 16)),
                   ],
                 ),
               ),
