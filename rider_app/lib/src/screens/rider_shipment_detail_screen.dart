@@ -4,16 +4,19 @@ import 'package:provider/provider.dart';
 import '../api/api_client.dart';
 import '../screens/order.dart';
 import '../state/auth_state.dart';
+import '../constants/colors.dart'; // Import AppColors
 import '../ui/qr_scanner_screen.dart'; // Ensure this path is correct
 
 class RiderShipmentDetailScreen extends StatefulWidget {
   final int orderId;
   final ApiClient apiClient;
+  final String token;
 
   const RiderShipmentDetailScreen({
     Key? key,
     required this.orderId,
     required this.apiClient,
+    this.token = '',
   }) : super(key: key);
 
   @override
@@ -32,7 +35,7 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
 
   Future<Order> _fetchDetails() async {
     try {
-      final data = await widget.apiClient.getDeliveryDetails(widget.orderId);
+      final data = await widget.apiClient.getDeliveryDetails(widget.orderId, token: widget.token);
       return Order.fromJson(data);
     } catch (e) {
       throw Exception('Failed to load order details: $e');
@@ -40,10 +43,7 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
   }
 
   void _navigateToQRScanner() async {
-    // In a real app, get the riderId from your authentication state management solution.
-    const int riderId = 1;
-
-    final authToken = context.read<AuthState>().token ?? '';
+    final authToken = widget.token.isNotEmpty ? widget.token : (context.read<AuthState>().token ?? '');
 
     final qrCodeResult = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (context) => QRScannerScreen(token: authToken)),
@@ -55,7 +55,7 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
       });
 
       try {
-        final response = await widget.apiClient.verifyDeliveryQR(qrCodeResult, riderId);
+        final response = await widget.apiClient.verifyDeliveryQR(qrCodeResult, 0);
 
         if (response['success'] == true) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -89,8 +89,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Shipment Details'),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        backgroundColor: AppColors.cardBg, // Use AppColors.cardBg for consistency
+        elevation: 0.5, // Keep elevation for subtle separation
       ),
       body: FutureBuilder<Order>(
         future: _detailsFuture,
@@ -164,14 +164,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.0))
               : const Icon(Icons.qr_code_scanner),
           label: Text(_isVerifyingQR ? 'Verifying...' : 'Confirm with QR Code'),
-          onPressed: _isVerifyingQR ? null : _navigateToQRScanner,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Theme.of(context).primaryColor,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
+          onPressed: _isVerifyingQR ? null : _navigateToQRScanner, // ElevatedButton theme will apply
+          // style: ElevatedButton.styleFrom is removed as it's now handled by the global theme
         ),
       ),
     );
@@ -217,4 +211,3 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
     );
   }
 }
-

@@ -37,6 +37,7 @@ $net_points_circulation = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELEC
 
 // Fetch Total Sales and Order Count from Orders
 $total_sales = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(total), 0) AS total_sales FROM tbl_orders WHERE DATE(created_at) BETWEEN '$date_from' AND '$date_to'"))['total_sales'] ?? 0);
+$unremitted_cod = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(total), 0) AS total FROM tbl_orders WHERE DATE(created_at) BETWEEN '$date_from' AND '$date_to' AND payment_method = 'cod' AND payment_settled = 0"))['total'] ?? 0);
 $total_orders_count = (int) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as total FROM tbl_orders WHERE DATE(created_at) BETWEEN '$date_from' AND '$date_to'"))['total'] ?? 0);
 $date_to_inclusive = date('Y-m-d', strtotime($date_to . ' +1 day')); // For queries that need to include the end date
 
@@ -149,6 +150,17 @@ while ($s_row = mysqli_fetch_assoc($summary_res)) { $daily_summary_data[] = $s_r
         .badge-danger { background: #e74c3c; }
         .badge-secondary { background: #95a5a6; }
         .ai-insight-box { background: #f0f7ff; border-left: 5px solid #3498db; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+
+        body {
+    overflow-x: hidden;
+}
+    .sidebar::-webkit-scrollbar {
+    display: none;
+}
+    .sidebar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
     </style>
 </head>
 <body>
@@ -171,6 +183,8 @@ while ($s_row = mysqli_fetch_assoc($summary_res)) { $daily_summary_data[] = $s_r
                     <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo $pending_orders_count; ?></span>
                 <?php endif; ?>
             </a></li>
+             <li><a href="<?php echo BASE_URL; ?>/modules/admin/delivery.php" class="<?php echo basename($_SERVER['PHP_SELF']) === 'delivery.php' ? 'active' : ''; ?>"><i class="fas fa-truck"></i> Delivery</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/about.php" <?php echo basename($_SERVER['PHP_SELF']) === 'about.php' ? 'class="active"' : ''; ?>><i class="fas fa-info-circle"></i> About Us</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/messages.php" <?php echo basename($_SERVER['PHP_SELF']) === 'messages.php' ? 'class="active"' : ''; ?>>
                 <i class="fas fa-comment-dots"></i> Messages
                 <?php if ($unread_count > 0): ?>
@@ -251,10 +265,15 @@ while ($s_row = mysqli_fetch_assoc($summary_res)) { $daily_summary_data[] = $s_r
                 <h3>Active (Period)</h3>
                 <p style="font-size: 1.5rem; font-weight: bold;"><?php echo $active_customers_period; ?></p>
             </div>
-            <div class="card" style="background: white; padding: 20px; border-radius: 12px; flex: 1; min-width: 200px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+<div class="card" style="background: white; padding: 20px; border-radius: 12px; flex: 1; min-width: 200px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
                 <i class="fas fa-dollar-sign" style="font-size: 2rem; color: #27ae60;"></i>
                 <h3>Total Sales</h3>
                 <p style="font-size: 1.5rem; font-weight: bold;">PHP <?php echo number_format($total_sales, 2); ?></p>
+            </div>
+            <div class="card" style="background: white; padding: 20px; border-radius: 12px; flex: 1; min-width: 200px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                <i class="fas fa-hand-holding-usd" style="font-size: 2rem; color: #e74c3c;"></i>
+                <h3>Unremitted COD</h3>
+                <p style="font-size: 1.5rem; font-weight: bold;">PHP <?php echo number_format($unremitted_cod, 2); ?></p>
             </div>
         </div>
 

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'src/state/auth_state.dart';
 import 'src/ui/login_screen.dart';
 import 'src/ui/home_screen.dart';
+import 'src/constants/colors.dart'; // Import AppColors
 
 void main() {
   runApp(
@@ -34,7 +35,36 @@ class _MyAppState extends State<MyApp> {
       title: 'Rider App',
       debugShowCheckedModeBanner: false, // Removes the DEBUG banner in the corner
       theme: ThemeData(
-        primarySwatch: Colors.teal,
+        scaffoldBackgroundColor: AppColors.background,
+        primaryColor: AppColors.primary, // Set primary color for general use
+        colorScheme: ColorScheme.fromSwatch(
+          primarySwatch: Colors.teal, // Fallback for some widgets
+        ).copyWith(
+          primary: AppColors.primary,
+          secondary: AppColors.accent,
+        ),
+        cardTheme: CardThemeData(
+          color: AppColors.cardBg,
+          elevation: 4,
+          shadowColor: Colors.black12,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.primary),
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
       ),
       home: Consumer<AuthState>(
         builder: (context, auth, child) {

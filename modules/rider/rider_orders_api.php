@@ -72,6 +72,63 @@ try {
         $rider_check->close();
     }
 
+$action = strtolower(trim((string)($_GET['action'] ?? '')));
+
+    // Handle get_order_details early so we can return a single rich order object.
+    if ($action === 'get_order_details') {
+        $order_id = (int)($_GET['id'] ?? 0);
+        if ($order_id <= 0) {
+            throw new Exception('Invalid order id');
+        }
+
+        $order_q = $conn->prepare("SELECT * FROM tbl_orders WHERE id = ? LIMIT 1");
+        $order_q->bind_param('i', $order_id);
+        $order_q->execute();
+        $order_row = $order_q->get_result()->fetch_assoc();
+        $order_q->close();
+
+        if (!$order_row) {
+            throw new Exception('Order not found');
+        }
+
+        $items_q = $conn->prepare(
+            "SELECT oi.id, oi.order_id, oi.product_id, oi.product_name, oi.quantity,
+                    oi.unit_price, oi.total_price
+             FROM tbl_order_items oi WHERE oi.order_id = ?"
+        );
+        $items_q->bind_param('i', $order_id);
+        $items_q->execute();
+        $items = $items_q->get_result()->fetch_all(MYSQLI_ASSOC);
+        $items_q->close();
+
+        $cust_name = '';
+        $cust_phone = '';
+        $cust_email = '';
+        if (!empty($order_row['customer_id'])) {
+            $cst = $conn->prepare("SELECT name, phone, email FROM customers WHERE id = ? LIMIT 1");
+            $cst->bind_param('i', $order_row['customer_id']);
+            $cst->execute();
+            $cst_row = $cst->get_result()->fetch_assoc();
+            $cst->close();
+            if ($cst_row) {
+                $cust_name = $cst_row['name'] ?? '';
+                $cust_phone = $cst_row['phone'] ?? '';
+                $cust_email = $cst_row['email'] ?? '';
+            }
+        }
+
+        $response['success'] = true;
+        $response['data'] = array_merge($order_row, [
+            'id' => (int)$order_row['id'],
+            'customer_name' => $cust_name,
+            'customer_phone' => $cust_phone,
+            'customer_email' => $cust_email,
+            'items' => $items,
+        ]);
+        echo json_encode($response);
+        exit;
+    }
+
     $statuses = [
         'pending' => 'Pending',
         'confirmed' => 'Confirmed',

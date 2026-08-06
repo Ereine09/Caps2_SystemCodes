@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../api/api_client.dart';
 import '../constants/api_constants.dart';
+import '../constants/colors.dart';
 
 class QRScannerScreen extends StatefulWidget {
   final String token;
@@ -14,17 +15,15 @@ class QRScannerScreen extends StatefulWidget {
 }
 
 class _QRScannerScreenState extends State<QRScannerScreen> {
-  bool _isProcessing = false;
-  final MobileScannerController _cameraController = MobileScannerController();
-
+  bool isProcessing = false;
+  final MobileScannerController cameraController = MobileScannerController();
   final String _baseUrl = baseUrl;
 
   Future<void> _confirmDelivery(String qrCodeData) async {
-    setState(() => _isProcessing = true);
-    _cameraController.stop(); // I-pause muna ang camera para hindi mag-scan nang paulit-ulit
+    setState(() => isProcessing = true);
+    cameraController.stop();
 
     try {
-      // Decode the JSON from the QR code
       final Map<String, dynamic> qrData = jsonDecode(qrCodeData);
       final int? deliveryId = qrData['delivery_id'];
 
@@ -34,10 +33,10 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
       final api = ApiClient(baseUrl: _baseUrl);
       final res = await api.postJson<Map<String, dynamic>>(
-        '/modules/rider/rider_qr_confirm_api.php', // Correct API endpoint
+        '/modules/rider/rider_qr_confirm_api.php',
         body: {
           'delivery_id': deliveryId,
-          'qr_code': qrCodeData, // Send the full raw QR content
+          'qr_code': qrCodeData,
         },
         headers: {
           'Authorization': 'Bearer ${widget.token}',
@@ -51,43 +50,47 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(body['message'] ?? 'Delivery Confirmed!'), backgroundColor: Colors.green),
+        SnackBar(
+          content: Text(body['message'] ?? 'Delivery Confirmed!'),
+          backgroundColor: Colors.green,
+        ),
       );
-      Navigator.of(context).pop(); // Bumalik sa Dashboard pagkatapos mag-success
+      Navigator.of(context).pop();
     } catch (e) {
       String errMsg = e.toString().replaceAll('Exception: ', '');
       if (e is DioException) {
         errMsg = e.error?.toString() ?? 'Server update failed';
       }
-
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(errMsg), backgroundColor: Colors.red),
       );
-      
-      // Kung nag-error, buhayin ulit ang camera para makapag-scan uli
-      setState(() => _isProcessing = false);
-      _cameraController.start();
+      setState(() => isProcessing = false);
+      cameraController.start();
     }
   }
 
   @override
   void dispose() {
-    _cameraController.dispose();
+    cameraController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Scan Customer E-Receipt')),
+      appBar: AppBar(
+        title: const Text('Scan Customer E-Receipt'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: Stack(
         children: [
           MobileScanner(
-            controller: _cameraController,
+            controller: cameraController,
             onDetect: (capture) {
-              if (_isProcessing) return;
-              
+              if (isProcessing) return;
               final List<Barcode> barcodes = capture.barcodes;
               for (final barcode in barcodes) {
                 final String? rawValue = barcode.rawValue;
@@ -98,18 +101,20 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
               }
             },
           ),
-          // Custom scanner overlay outline
           Center(
             child: Container(
-              width: 250,
-              height: 250,
+              width: 260,
+              height: 260,
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.red, width: 3),
-                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.accent, width: 3),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 10)
+                ],
               ),
             ),
           ),
-          if (_isProcessing)
+          if (isProcessing)
             Container(
               color: Colors.black54,
               child: const Center(
@@ -118,7 +123,10 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                   children: [
                     CircularProgressIndicator(color: Colors.white),
                     SizedBox(height: 16),
-                    Text('Confirming Delivery...', style: TextStyle(color: Colors.white, fontSize: 16)),
+                    Text(
+                      'Confirming Delivery...',
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
               ),

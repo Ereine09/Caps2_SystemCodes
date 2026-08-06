@@ -41,9 +41,9 @@ try {
         throw new Exception('Invalid receipt data or empty order number.');
     }
 
-    // I-check muna kung umiiral ang order na ito
+// I-check muna kung umiiral ang order na ito
     // Paki-adjust ang table name (`orders` / `tbl_orders`) at column names base sa database mo
-    $stmt = $conn->prepare("SELECT id, status FROM tbl_orders WHERE order_number = ? LIMIT 1");
+    $stmt = $conn->prepare("SELECT id, order_status FROM tbl_orders WHERE order_number = ? LIMIT 1");
     $stmt->bind_param('s', $order_number);
     $stmt->execute();
     $order = $stmt->get_result()->fetch_assoc();
@@ -53,12 +53,12 @@ try {
         throw new Exception('Order not found in the system.');
     }
 
-    if ($order['status'] === 'completed') {
+    if ($order['order_status'] === 'completed') {
         throw new Exception('This order is already marked as completed.');
     }
 
     // I-update ang status ng order tungo sa 'completed'
-    $update_stmt = $conn->prepare("UPDATE tbl_orders SET status = 'completed' WHERE order_number = ?");
+    $update_stmt = $conn->prepare("UPDATE tbl_orders SET order_status = 'completed' WHERE order_number = ?");
     $update_stmt->bind_param('s', $order_number);
 
     if ($update_stmt->execute()) {

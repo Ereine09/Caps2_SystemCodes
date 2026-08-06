@@ -37,10 +37,15 @@ function ensureRiderSchema(mysqli $conn): void
         )
     ");
 
+    // NOTE: The remittance table is now managed by `remittance_schema_helper.php`
+    // (`ensure_remittance_schema()`), which creates `tbl_rider_remittances` and
+    // `tbl_rider_remittance_items`. The old standalone `rider_remittances` table
+    // is intentionally no longer created here to avoid duplicate/unused tables.
+}
+
     // Add rider_id to orders table to assign deliveries
     $check_col = $conn->query("SHOW COLUMNS FROM `tbl_orders` LIKE 'rider_id'");
     if ($check_col && $check_col->num_rows === 0) {
         $conn->query("ALTER TABLE `tbl_orders` ADD COLUMN `rider_id` INT NULL DEFAULT NULL AFTER `customer_id`");
         $conn->query("ALTER TABLE `tbl_orders` ADD CONSTRAINT `fk_order_rider` FOREIGN KEY (`rider_id`) REFERENCES `riders`(`id`) ON DELETE SET NULL");
     }
-}

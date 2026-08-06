@@ -151,7 +151,10 @@ try {
         }
 
 // 3. Award Loyalty Points (simplified from checkout.php) - based on raw product prices from DB (no VAT stripping needed since DB prices are already the final retail prices)
-        $points_earned = round($subtotal / 100, 2);
+        // Points are earned on the subtotal before any discounts.
+        // The API currently doesn't handle vouchers, but this ensures consistency.
+        $points_earned = round($subtotal / 100, 2); 
+
         if ($points_earned > 0) {
             $transaction_stmt = $conn->prepare("INSERT INTO loyalty_transactions (customer_id, user_id, product_name, quantity_kg, points_earned, order_id) VALUES (?, NULL, ?, 0.00, ?, ?)");
             $product_name_for_transaction = 'Online Purchase (Order #' . $order_id . ')';

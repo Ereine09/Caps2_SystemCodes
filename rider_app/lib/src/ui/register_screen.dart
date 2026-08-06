@@ -1,9 +1,10 @@
-import 'package:dio/dio.dart'; // <-- Tiyaking may import nito sa taas para sa DioException
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../constants/api_constants.dart';
 import '../widgets/api_error_banner.dart';
+import '../constants/colors.dart'; // Import AppColors
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -95,67 +96,85 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Rider Registration')),
+      appBar: AppBar(
+        title: const Text('Rider Registration'),
+        backgroundColor: AppColors.cardBg, // Consistent with login_screen's body background
+        elevation: 0.5,
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (_error != null) ApiErrorBanner(message: _error!),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _usernameCtrl,
-                    decoration: const InputDecoration(labelText: 'Username'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+            constraints: const BoxConstraints(maxWidth: 400), // Max width for the card
+            child: Card(
+              elevation: 4,
+              shadowColor: Colors.black12,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              color: AppColors.cardBg,
+              child: Padding(
+                padding: const EdgeInsets.all(28.0), // Consistent padding with login_screen
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Rider Registration',
+                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textMain),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      if (_error != null) ...[
+                        ApiErrorBanner(message: _error!),
+                        const SizedBox(height: 16),
+                      ],
+                      TextFormField(
+                        controller: _usernameCtrl,
+                        decoration: const InputDecoration(labelText: 'Username', prefixIcon: Icon(Icons.person_outline)),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16), // Consistent spacing
+                      TextFormField(
+                        controller: _emailCtrl,
+                        decoration: const InputDecoration(labelText: 'Email Address', prefixIcon: Icon(Icons.email_outlined)),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Required';
+                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v.trim())) {
+                            return 'Please enter a valid email address';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16), // Consistent spacing
+                      TextFormField(
+                        controller: _passwordCtrl,
+                        decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline)),
+                        obscureText: true,
+                        validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16), // Consistent spacing
+                      TextFormField(
+                        controller: _confirmPasswordCtrl,
+                        decoration: const InputDecoration(labelText: 'Confirm Password', prefixIcon: Icon(Icons.lock_outline)),
+                        obscureText: true,
+                        validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton( // Changed to ElevatedButton to use global theme
+                        onPressed: _loading ? null : _register,
+                        child: _loading
+                            ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('Register', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(height: 16), // Consistent spacing
+                      TextButton(
+                        onPressed: _loading ? null : () => Navigator.of(context).pop(),
+                        child: const Text("Already have an account? Login here", style: TextStyle(color: AppColors.primary)),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _emailCtrl,
-                    decoration: const InputDecoration(labelText: 'Email Address'),
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Required';
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v.trim())) {
-                        return 'Please enter a valid email address';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _passwordCtrl,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                    obscureText: true,
-                    validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _confirmPasswordCtrl,
-                    decoration: const InputDecoration(labelText: 'Confirm Password'),
-                    obscureText: true,
-                    validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 20),
-                  FilledButton(
-                    onPressed: _loading ? null : _register,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.green,
-                    ),
-                    child: _loading
-                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Register'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _loading ? null : () => Navigator.of(context).pop(),
-                    child: const Text("Already have an account? Login here"),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

@@ -1,12 +1,24 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
-// require_customer_login();
+require_customer_login();
 
 $customer = current_customer();
+
+// Ensure tbl_deliveries table exists
+$conn->query("CREATE TABLE IF NOT EXISTS tbl_deliveries (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    delivery_status ENUM('pending', 'accepted', 'picked_up', 'out_for_delivery', 'delivered', 'failed_delivery', 'cancelled') NOT NULL DEFAULT 'pending',
+    qr_confirmation_token VARCHAR(255) NULL,
+    delivered_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES tbl_orders(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 $order = null;
 $order_items = [];
+$delivery_details = null;
 $orders = [];
-
 if (isset($_GET['id'])) {
     $order_id = (int) $_GET['id'];
     $order = get_order_by_id($order_id, (int) $customer['id']);
@@ -17,7 +29,7 @@ if (isset($_GET['id'])) {
         if (!$delivery_details) {
             // Auto-create a delivery record if it doesn't exist yet in tbl_delivery
             $token = bin2hex(random_bytes(16));
-            $insert_stmt = $conn->prepare("INSERT INTO tbl_delivery (order_id, delivery_status, qr_confirmation_token) VALUES (?, 'pending', ?)");
+            $insert_stmt = $conn->prepare("INSERT INTO tbl_deliveries (order_id, delivery_status, qr_confirmation_token) VALUES (?, 'pending', ?)");
             if ($insert_stmt) {
                 $insert_stmt->bind_param("is", $order['id'], $token);
                 $insert_stmt->execute();
@@ -28,7 +40,7 @@ if (isset($_GET['id'])) {
         } elseif (empty($delivery_details['qr_confirmation_token'])) {
             // Auto-generate token if record exists but token is missing
             $token = bin2hex(random_bytes(16));
-            $update_stmt = $conn->prepare("UPDATE tbl_delivery SET qr_confirmation_token = ? WHERE id = ?");
+            $update_stmt = $conn->prepare("UPDATE tbl_deliveries SET qr_confirmation_token = ? WHERE id = ?");
             if ($update_stmt) {
                 $update_stmt->bind_param("si", $token, $delivery_details['id']);
                 $update_stmt->execute();
@@ -168,8 +180,8 @@ if (isset($_GET['id'])) {
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
-
             <?php if ($delivery_details && $order['order_status'] !== 'cancelled'): ?>
+
                 <div class="info-card" style="margin-top: 25px; text-align: center; border-left: 5px solid #10b981;">
                     <h4 style="justify-content: center;"><i class="fas fa-qrcode"></i> Delivery Confirmation QR</h4>
                     <p style="font-size: 0.9rem; color: #475569; max-width: 450px; margin: 0 auto 20px;">

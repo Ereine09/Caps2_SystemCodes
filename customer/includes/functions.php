@@ -1,10 +1,7 @@
 <?php
 // Core autoloader and path definitions are now in bootstrap.php
-
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
-// QR library is optional in some deployments.
-// If the Endroid QR package is not installed, we will skip QR generation to avoid fatal errors.
 use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
 
@@ -25,6 +22,7 @@ function ensure_customer_tables(mysqli $conn): void {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
         "CREATE TABLE IF NOT EXISTS tbl_product_variants (
             id INT AUTO_INCREMENT PRIMARY KEY,
             product_id INT NOT NULL,
@@ -34,6 +32,7 @@ function ensure_customer_tables(mysqli $conn): void {
             FOREIGN KEY (product_id) REFERENCES tbl_product_inventory(id) ON DELETE CASCADE,
             UNIQUE KEY uniq_product_size (product_id, size)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
         "CREATE TABLE IF NOT EXISTS tbl_cart (
             id INT AUTO_INCREMENT PRIMARY KEY,
             customer_id INT NOT NULL,
@@ -47,6 +46,7 @@ function ensure_customer_tables(mysqli $conn): void {
             FOREIGN KEY (product_id) REFERENCES tbl_product_inventory(id) ON DELETE CASCADE,
             FOREIGN KEY (variant_id) REFERENCES tbl_product_variants(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
         "CREATE TABLE IF NOT EXISTS tbl_orders (
             id INT AUTO_INCREMENT PRIMARY KEY,
             customer_id INT NOT NULL,
@@ -69,10 +69,10 @@ function ensure_customer_tables(mysqli $conn): void {
             total_after_discount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
             voucher_id INT DEFAULT NULL,
             voucher_code VARCHAR(100) DEFAULT NULL,
-            voucher_discount_type ENUM('fixed','percent') DEFAULT NULL,
+            voucher_discount_type ENUM('fixed', 'percent') DEFAULT NULL,
             voucher_discount_value DECIMAL(10,2) DEFAULT 0.00,
             total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-            payment_method ENUM('cod','gcash','pay_at_shop','bank') NOT NULL DEFAULT 'cod',
+            payment_method ENUM('cod', 'gcash', 'pay_at_shop', 'bank') NOT NULL DEFAULT 'cod',
             payment_reference VARCHAR(100) DEFAULT NULL,
             bank_name VARCHAR(100) DEFAULT NULL,
             bank_account_name VARCHAR(255) DEFAULT NULL,
@@ -81,6 +81,7 @@ function ensure_customer_tables(mysqli $conn): void {
             updated_at DATETIME DEFAULT NULL,
             FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
         "CREATE TABLE IF NOT EXISTS tbl_order_items (
             id INT AUTO_INCREMENT PRIMARY KEY,
             order_id INT NOT NULL,
@@ -95,6 +96,7 @@ function ensure_customer_tables(mysqli $conn): void {
             FOREIGN KEY (product_id) REFERENCES tbl_product_inventory(id) ON DELETE CASCADE,
             INDEX (variant_size)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
         "CREATE TABLE IF NOT EXISTS tbl_product_reviews (
             id INT AUTO_INCREMENT PRIMARY KEY,
             order_id INT NOT NULL,
@@ -108,10 +110,11 @@ function ensure_customer_tables(mysqli $conn): void {
             FOREIGN KEY (product_id) REFERENCES tbl_product_inventory(id) ON DELETE CASCADE,
             FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
         "CREATE TABLE IF NOT EXISTS tbl_delivery (
             id INT AUTO_INCREMENT PRIMARY KEY,
             order_id INT NOT NULL,
-            delivery_type ENUM('pickup','delivery') NOT NULL DEFAULT 'delivery',
+            delivery_type ENUM('pickup', 'delivery') NOT NULL DEFAULT 'delivery',
             address TEXT DEFAULT NULL,
             phone VARCHAR(50) DEFAULT NULL,
             instructions TEXT DEFAULT NULL,
@@ -123,6 +126,7 @@ function ensure_customer_tables(mysqli $conn): void {
             updated_at DATETIME DEFAULT NULL,
             FOREIGN KEY (order_id) REFERENCES tbl_orders(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
         "CREATE TABLE IF NOT EXISTS tbl_vouchers (
             id INT AUTO_INCREMENT PRIMARY KEY,
             code VARCHAR(100) NOT NULL UNIQUE,
@@ -143,72 +147,47 @@ function ensure_customer_tables(mysqli $conn): void {
         $conn->query($sql);
     }
 
-    // Ensure existing table ENUM values match the PHP status list
-    $conn->query("ALTER TABLE tbl_orders MODIFY COLUMN order_status 
-        ENUM('pending','confirmed','processing','ready_for_pickup','out_for_delivery','to_ship','to_receive','reviews','completed','cancelled')
-        NOT NULL DEFAULT 'pending'");
+    // Schema Adjustments
+    $conn->query("ALTER TABLE tbl_orders MODIFY COLUMN order_status ENUM('pending','confirmed','processing','ready_for_pickup','out_for_delivery','to_ship','to_receive','reviews','completed','cancelled') NOT NULL DEFAULT 'pending'");
+    $conn->query("ALTER TABLE tbl_orders MODIFY COLUMN payment_method ENUM('cod','gcash','pay_at_shop','bank') NOT NULL DEFAULT 'cod'");
 
-    // Ensure payment_method enum supports all checkout options
-    $conn->query("ALTER TABLE tbl_orders MODIFY COLUMN payment_method 
-        ENUM('cod','gcash','pay_at_shop','bank') NOT NULL DEFAULT 'cod'");
-
-    // --- FIX: Add missing columns if they don't exist to prevent "Unknown column" errors ---
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER loyalty_points_earned");
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS voucher_code VARCHAR(100) DEFAULT NULL AFTER discount_amount");
 
-    // --- ADD: Column for VAT ---
-    $check_delivery_status_col = "SHOW COLUMNS FROM `tbl_delivery` LIKE 'status'";
-    $res_delivery_status = $conn->query($check_delivery_status_col);
+    $res_delivery_status = $conn->query("SHOW COLUMNS FROM `tbl_delivery` LIKE 'status'");
     if ($res_delivery_status && $res_delivery_status->num_rows === 0) {
-        $conn->query("ALTER TABLE `tbl_delivery` MODIFY COLUMN `status` ENUM('pending','in_transit','delivered','failed') NOT NULL DEFAULT 'pending';");
+        $conn->query("ALTER TABLE `tbl_delivery` MODIFY COLUMN `status` ENUM('pending','in_transit','delivered','failed') NOT NULL DEFAULT 'pending'");
     }
-    $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS vat_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER subtotal");
 
-    // --- ADD: Columns for Bank Transfer payment ---
+    $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS vat_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER subtotal");
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100) DEFAULT NULL AFTER payment_reference");
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS bank_account_name VARCHAR(255) DEFAULT NULL AFTER bank_name");
-
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS order_notes TEXT DEFAULT NULL AFTER delivery_address");
-    // --- ADD: variant_id to cart and variant_size to order_items ---
-    $conn->query("ALTER TABLE tbl_cart ADD COLUMN IF NOT EXISTS variant_id INT NULL AFTER quantity, ADD FOREIGN KEY (variant_id) REFERENCES tbl_product_variants(id) ON DELETE CASCADE");
+    
+    $conn->query("ALTER TABLE tbl_cart ADD COLUMN IF NOT EXISTS variant_id INT NULL AFTER quantity");
     $conn->query("ALTER TABLE tbl_order_items ADD COLUMN IF NOT EXISTS variant_size VARCHAR(100) DEFAULT NULL AFTER product_name");
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS payment_proof_path VARCHAR(255) DEFAULT NULL AFTER bank_account_name");
-
-    // Add qr_confirmation_token to tbl_delivery
     $conn->query("ALTER TABLE tbl_delivery ADD COLUMN IF NOT EXISTS qr_confirmation_token VARCHAR(255) DEFAULT NULL AFTER delivered_at");
 
-    // The other voucher columns from the original CREATE TABLE are not used in create_customer_order, so they are not strictly needed to fix this error.
-    // You can add them here if other parts of your application need them.
-
-    // --- FIX: Ensure loyalty_transactions.user_id is NULLable (needed for customer-initiated checkouts) ---
+    // Loyalty Transactions Adjustment
     $lt_table = mysqli_query($conn, "SHOW TABLES LIKE 'loyalty_transactions'");
     if ($lt_table && mysqli_num_rows($lt_table) > 0) {
-        // Make user_id nullable
-        $col_null = mysqli_query($conn, "SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'loyalty_transactions' AND COLUMN_NAME = 'user_id' AND TABLE_SCHEMA = DATABASE()");
+        $col_null = mysqli_query($conn, "SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='loyalty_transactions' AND COLUMN_NAME='user_id' AND TABLE_SCHEMA=DATABASE()");
         if ($col_null) {
             $row = mysqli_fetch_assoc($col_null);
             if ($row && $row['IS_NULLABLE'] === 'NO') {
                 $conn->query("ALTER TABLE loyalty_transactions MODIFY COLUMN user_id INT NULL");
             }
         }
-        // Add order_id column if missing
         $check_order_id = mysqli_query($conn, "SHOW COLUMNS FROM loyalty_transactions LIKE 'order_id'");
-        if ($check_order_id && mysqli_num_rows($check_order_id) == 0) {
+        if ($check_order_id && mysqli_num_rows($check_order_id) === 0) {
             $conn->query("ALTER TABLE loyalty_transactions ADD COLUMN order_id INT DEFAULT NULL AFTER points_earned");
         }
     }
 
-    $conn->query(
-        "CREATE OR REPLACE VIEW tbl_customer_records AS
-         SELECT id, name, email, phone, gender, age, address, loyalty_points, created_at
-         FROM customers"
-    );
-
-    $conn->query(
-        "CREATE OR REPLACE VIEW tbl_user_accounts AS
-         SELECT id, username, first_name, last_name, role, email, password, reset_token, reset_expiry, password_reset_at, login_attempts, lock_until
-         FROM users"
-    );
+    // Views
+    $conn->query("CREATE OR REPLACE VIEW tbl_customer_records AS SELECT id, name, email, phone, gender, age, address, loyalty_points, created_at FROM customers");
+    $conn->query("CREATE OR REPLACE VIEW tbl_user_accounts AS SELECT id, username, first_name, last_name, role, email, password, reset_token, reset_expiry, password_reset_at, login_attempts, lock_until FROM users");
 
     ensure_default_products($conn);
 }
@@ -278,7 +257,6 @@ function ensure_default_products(mysqli $conn): void {
 function get_available_products(): array {
     global $customer_db;
     ensure_customer_tables($customer_db);
-
     $products = [];
     $result = $customer_db->query("SELECT * FROM tbl_product_inventory ORDER BY name ASC");
     if ($result) {
@@ -316,9 +294,6 @@ function get_product_variants(int $product_id): array {
     return $variants;
 }
 
-/**
- * Get current stock for a product
- */
 function get_product_stock(int $product_id): int {
     global $customer_db;
     $stmt = $customer_db->prepare("SELECT stock FROM tbl_product_inventory WHERE id = ?");
@@ -330,25 +305,19 @@ function get_product_stock(int $product_id): int {
     return $row ? (int)$row['stock'] : 0;
 }
 
-/**
- * Deduct stock from inventory
- */
 function deduct_product_stock(int $product_id, int $quantity): bool {
     global $customer_db;
-    // Ensure we don't go below zero using a WHERE clause check
     $stmt = $customer_db->prepare("UPDATE tbl_product_inventory SET stock = stock - ? WHERE id = ? AND stock >= ?");
     $stmt->bind_param('iii', $quantity, $product_id, $quantity);
     $success = $stmt->execute();
     $affected = $customer_db->affected_rows;
     $stmt->close();
-    
     return $success && $affected > 0;
 }
 
 function get_products_by_category(string $category): array {
     global $customer_db;
     ensure_customer_tables($customer_db);
-
     $products = [];
     $search_term = '%' . $category . '%';
     $stmt = $customer_db->prepare("SELECT * FROM tbl_product_inventory WHERE category LIKE ? ORDER BY name ASC");
@@ -377,7 +346,6 @@ function get_products_by_category(string $category): array {
 function get_all_categories(): array {
     global $customer_db;
     ensure_customer_tables($customer_db);
-
     $categories = [];
     $result = $customer_db->query("SELECT DISTINCT category FROM tbl_product_inventory WHERE category IS NOT NULL AND category != '' ORDER BY category ASC");
     if ($result) {
@@ -392,18 +360,15 @@ function get_all_categories(): array {
 function get_product_by_id(int $product_id): ?array {
     global $customer_db;
     ensure_customer_tables($customer_db);
-
     $stmt = $customer_db->prepare("SELECT * FROM tbl_product_inventory WHERE id = ? LIMIT 1");
     $stmt->bind_param('i', $product_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $product = $result->fetch_assoc();
     $stmt->close();
-
     if (!$product) {
         return null;
     }
-
     return [
         'id' => (int)$product['id'],
         'sku' => $product['sku'],
@@ -441,9 +406,9 @@ function get_customer_account_by_email(string $email): ?array {
     global $customer_db;
     $stmt = $customer_db->prepare(
         "SELECT ca.*, c.id AS customer_id, c.email AS customer_email, c.name AS customer_name
-         FROM customer_login_credentials ca
-         JOIN tbl_customer_records c ON ca.customer_id = c.id
-         WHERE c.email = ? LIMIT 1"
+        FROM customer_login_credentials ca
+        JOIN tbl_customer_records c ON ca.customer_id = c.id
+        WHERE c.email = ? LIMIT 1"
     );
     $stmt->bind_param('s', $email);
     $stmt->execute();
@@ -837,10 +802,10 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
     // --- Final Calculations after Discount ---
     $free_delivery = $delivery_fee <= 0.00 ? 1 : 0;
     $bulk_order = detect_bulk_order($subtotal_inc_vat, $total_items) ? 1 : 0;
-    $loyalty_points = calculate_loyalty_points($subtotal_ex_vat - $discount_amount); // Points based on ex-VAT amount AFTER discount
+    $loyalty_points = calculate_loyalty_points($subtotal_ex_vat); // Points based on ex-VAT amount BEFORE discount
 
     $order_number = generate_order_number();
-    error_log("DEBUG: Order #{$order_number} - Calculated Loyalty Points: {$loyalty_points} from (Subtotal ex-VAT: {$subtotal_ex_vat} - Discount: {$discount_amount})");
+    error_log("DEBUG: Order #{$order_number} - Calculated Loyalty Points: {$loyalty_points} from (Subtotal ex-VAT: {$subtotal_ex_vat})");
     
     $payment_method = (string)($details['payment_method'] ?? 'cod');
 

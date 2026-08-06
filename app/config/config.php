@@ -68,13 +68,13 @@ define('GEMINI_API_KEY', $db_settings['GEMINI_API_KEY'] ?? 'AIzaSyCofnT2g8NjU4-_
 // SMTP Email Configuration (PHPMailer)
 define('SMTP_HOST', $db_settings['SMTP_HOST'] ?? 'smtp.gmail.com');
 define('SMTP_AUTH', isset($db_settings['SMTP_AUTH']) ? (bool)$db_settings['SMTP_AUTH'] : true);
-define('SMTP_USERNAME', $db_settings['SMTP_USERNAME'] ?? 'elaisareinebelandres09@gmail.com');
+define('SMTP_USERNAME', $db_settings['SMTP_USERNAME'] ?? 'dpsloyaltymanagement@gmail.com');
 
 // FORCING CODE PASSWORD: We ignore the database for this specific line to ensure your new App Password is used.
-define('SMTP_PASSWORD', 'ytuo glsr bjhk upzu');
+define('SMTP_PASSWORD', 'nxnr qiii bovq cutq');
 
 define('SMTP_PORT', (int)($db_settings['SMTP_PORT'] ?? 587));
-define('SMTP_FROM_EMAIL', $db_settings['SMTP_FROM_EMAIL'] ?? 'ereinebelandres09@gmail.com');
+define('SMTP_FROM_EMAIL', $db_settings['SMTP_FROM_EMAIL'] ?? 'dpsloyaltymanagement@gmail.com');
 define('SMTP_FROM_NAME', $db_settings['SMTP_FROM_NAME'] ?? SYSTEM_NAME);
 
 // Business Logic

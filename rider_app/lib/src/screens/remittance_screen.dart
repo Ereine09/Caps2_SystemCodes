@@ -35,18 +35,18 @@ class _RemittanceScreenState extends State<RemittanceScreen> {
 
       final data = response.data;
       if (data != null && data['success'] == true) {
-        return data['data'];
+        return Map<String, dynamic>.from(data['data']);
       } else {
         throw Exception(data?['message'] ?? 'Failed to load remittance data.');
       }
     } catch (e) {
-      // The ApiClient's interceptor will provide a user-friendly error message.
-      throw Exception(e.toString());
+      // Strips out any redundant "Exception: " prefix for cleaner error messages
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
     }
   }
 
   /// Submits a remittance request to the backend.
-  Future<void> _submitRemittance(double amount, String reference) async {
+  Future<void> _submitRemittance(double amount, String reference, List<int> orderIds) async {
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid amount.'), backgroundColor: Colors.orange),
@@ -60,16 +60,23 @@ class _RemittanceScreenState extends State<RemittanceScreen> {
       return;
     }
 
+    // Add a check for order IDs
+    if (orderIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('There are no orders to remit.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
     try {
       final response = await _apiClient.postJson(
-        '/modules/rider/rider_remittance_api.php?action=request_remittance',
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-        },
+        '/modules/rider/rider_remittance_api.php', // Remove action from URL
+        headers: {'Authorization': 'Bearer ${widget.token}'},
         body: {
+          'action': 'submit_remittance', // Add correct action to the body
           'amount': amount,
           'reference_number': reference,
-          'payment_method': 'bank_transfer', // Or make this selectable
+          'order_ids': orderIds, // Send the list of order IDs
         },
       );
 
@@ -151,7 +158,7 @@ class _RemittanceScreenState extends State<RemittanceScreen> {
                 Card(
                   elevation: 4,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  color: AppColors.primary,
+                  color: AppColors.primary, // Ensure primary color is used
                   child: Padding(
                     padding: const EdgeInsets.all(24.0),
                     child: Column(
@@ -190,15 +197,36 @@ class _RemittanceScreenState extends State<RemittanceScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showRemittanceDialog(),
-        label: const Text('Remit to Admin'),
+        label: FutureBuilder<Map<String, dynamic>>(
+          future: _remittanceFuture,
+          builder: (context, snapshot) {
+            // Disable button if there are no orders to remit
+            final orders = List.from(snapshot.data?['orders'] ?? []);
+            return Text(orders.isEmpty ? 'No Orders to Remit' : 'Remit to Admin');
+          },
+        ),
         icon: const Icon(Icons.send),
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.primary, // Ensure primary color is used
       ),
     );
   }
 
   /// Shows a dialog for the rider to input remittance details.
-  void _showRemittanceDialog() {
+  void _showRemittanceDialog() async {
+    // First, ensure we have the latest data to get the order IDs from.
+    final data = await _remittanceFuture;
+    if (data == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load remittance data. Please refresh.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    final orders = List<Map<String, dynamic>>.from(data['orders'] ?? []);
+    final orderIds = orders.map((order) => int.parse(order['order_id'].toString())).toList();
+
+    if (orderIds.isEmpty) return; // Don't show dialog if there's nothing to remit
+
     final amountController = TextEditingController();
     final referenceController = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -223,8 +251,14 @@ class _RemittanceScreenState extends State<RemittanceScreen> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   validator: (value) {
                     if (value == null || value.isEmpty) return 'Amount is required';
-                    if (double.tryParse(value) == null) return 'Invalid number';
-                    if (double.parse(value) <= 0) return 'Amount must be positive';
+                    
+                    // Clean string: remove 'PHP', spaces, and commas
+                    final cleanedValue = value.replaceAll('PHP', '').replaceAll(',', '').trim();
+                    
+                    final parsed = double.tryParse(cleanedValue);
+                    if (parsed == null) return 'Invalid number';
+                    if (parsed <= 0) return 'Amount must be positive';
+                    
                     return null;
                   },
                 ),
@@ -245,7 +279,17 @@ class _RemittanceScreenState extends State<RemittanceScreen> {
             ElevatedButton(
               onPressed: () {
                 if (formKey.currentState!.validate()) {
-                  _submitRemittance(double.parse(amountController.text), referenceController.text);
+                  // Clean string before parsing to double
+                  final cleanedAmount = amountController.text
+                      .replaceAll('PHP', '')
+                      .replaceAll(',', '')
+                      .trim();
+                      
+                  _submitRemittance(
+                    double.parse(cleanedAmount),
+                    referenceController.text.trim(),
+                    orderIds, // Pass the collected order IDs
+                  );
                   Navigator.of(context).pop();
                 }
               },

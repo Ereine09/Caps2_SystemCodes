@@ -4,7 +4,7 @@ import '../state/auth_state.dart';
 import '../constants/colors.dart';
 import '../screens/rider_shipment_screen.dart';
 import '../screens/remittance_screen.dart'; // Import the new screen
-import '../screens/qr_scanner_screen.dart'; // Import the QR Scanner
+import '../ui/qr_scanner_screen.dart'; // Import the QR Scanner (Dio version)
 
 class RiderBottomNavBar extends StatelessWidget {
   const RiderBottomNavBar({super.key});
@@ -29,11 +29,12 @@ class RiderBottomNavBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _navItem(Icons.home_filled, 'Home', true),
-          GestureDetector(
+GestureDetector(
             onTap: () {
+              final token = context.read<AuthState>().token ?? '';
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const RiderShipmentScreen()),
+                MaterialPageRoute(builder: (context) => RiderShipmentScreen(token: token)),
               );
             },
             child: _navItem(Icons.local_shipping_outlined, 'Shipment', false)),

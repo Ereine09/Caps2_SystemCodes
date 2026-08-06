@@ -23,7 +23,7 @@ class ShipmentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     Color badgeBg = AppColors.statusTransit;
     Color badgeText = AppColors.statusTransitText;
-    int stepProgress = 2; 
+    int stepProgress = 2;
 
     final cleanStatus = statusLabel.toLowerCase();
     if (cleanStatus.contains('process') || cleanStatus.contains('pending')) {
@@ -33,6 +33,9 @@ class ShipmentCard extends StatelessWidget {
     } else if (cleanStatus.contains('deliver')) {
       badgeBg = AppColors.statusDelivered;
       badgeText = AppColors.statusDeliveredText;
+      stepProgress = 4;
+    } else if (cleanStatus.contains('out_for_delivery')) { // Added for 'out_for_delivery' status
+      badgeBg = AppColors.statusTransit;
       stepProgress = 4;
     }
 
@@ -81,22 +84,19 @@ class ShipmentCard extends StatelessWidget {
                 if (index % 2 == 0) {
                   int currentDot = (index ~/ 2) + 1;
                   bool isDone = currentDot <= stepProgress;
-                  return Container(
+                  return Container( // Use AppColors.accent for active dots
                     width: 14, height: 14,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: isDone ? AppColors.orange : Colors.grey[300],
+                      color: isDone ? AppColors.accent : Colors.grey[300],
                       border: Border.all(color: Colors.white, width: 2),
                     ),
                   );
                 } else {
                   int currentLine = (index ~/ 2) + 1;
                   bool isLineDone = currentLine < stepProgress;
-                  return Expanded(
-                    child: Container(
-                      height: 2,
-                      color: isLineDone ? AppColors.accentOrange : Colors.grey[300],
-                    ),
+                  return Expanded( // Use AppColors.accent for active lines
+                    child: Container(height: 2, color: isLineDone ? AppColors.accent : Colors.grey[300]),
                   );
                 }
               }),

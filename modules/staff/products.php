@@ -1,556 +1,753 @@
 <?php
+session_start();
 require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
 require_once __DIR__ . '/../../customer/includes/functions.php';
+require_once __DIR__ . '/../../app/helpers/messaging_helper.php';
 
-$token = getJWTFromCookie(); // This should use the staff cookie
-$payload = verifyJWT($token);
+// Ensure variants table exists
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS tbl_product_variants (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    size VARCHAR(100) NOT NULL,
+    price DECIMAL(10, 2) NOT NULL,
+    stock INT NOT NULL DEFAULT 0,
+    FOREIGN KEY (product_id) REFERENCES tbl_product_inventory(id) ON DELETE CASCADE,
+    UNIQUE KEY uniq_product_size (product_id, size)
+)");
 
-if (!$payload) {
+$token = getJWTFromCookie();
+if (!$token || !($payload = verifyJWT($token))) {
     clearJWTCookie();
     header("Location: " . BASE_URL . "/modules/auth/login.php");
     exit();
 }
 
-$user_role = strtolower(trim($payload['role'] ?? ''));
-if (!in_array($user_role, ['staff', 'admin'], true)) {
+$username = $payload['username'];
+$role = strtolower(trim($payload['role'] ?? 'staff'));
+
+if ($role !== 'admin' && $role !== 'staff') {
     header("Location: " . BASE_URL . "/modules/auth/login.php");
     exit();
 }
 
-$user_id = (int) ($payload['user_id'] ?? 0);
-$message = '';
-$error = '';
+// Configuration of Filter Groups (Base / Static)
+$filter_groups = [
+    'Product Category' => ['Dog Food', 'Cat Food', 'Chicken', 'Dog Essentials', 'Cat Essentials'],
+    'Lifestage'    => ['Adult (1 - 7)', 'Kitten'],
+    'Food Type'    => ['Dry Food', 'Treats', 'Wet Food'],
+    'Health Needs' => ['Indoor Cats', 'Sensitive Skin', 'Small Breeds'],
+    'Brand'        => ['FELIX', 'Fancy Feast', 'Friskies', 'Purina ONE®']
+];
 
-// Handle form submissions
+// Load dynamic custom categories from database and merge into filter_groups
+$custom_health = [];
+$custom_brands = [];
+$custom_lifestages = [];
+$result = $conn->query("SELECT group_name, category_value FROM tbl_custom_categories ORDER BY category_value ASC");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        if ($row['group_name'] === 'Health Needs') {
+            $custom_health[] = $row['category_value'];
+        } elseif ($row['group_name'] === 'Brand') {
+            $custom_brands[] = $row['category_value'];
+        } elseif ($row['group_name'] === 'Lifestage') {
+            $custom_lifestages[] = $row['category_value'];
+        }
+    }
+    $result->close();
+}
+
+// Merge custom categories into filter groups (avoiding duplicates)
+if (!empty($custom_health)) {
+    $filter_groups['Health Needs'] = array_unique(array_merge($filter_groups['Health Needs'], $custom_health));
+}
+if (!empty($custom_brands)) {
+    $filter_groups['Brand'] = array_unique(array_merge($filter_groups['Brand'], $custom_brands));
+}
+if (!empty($custom_lifestages)) {
+    $filter_groups['Lifestage'] = array_unique(array_merge($filter_groups['Lifestage'], $custom_lifestages));
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
-    
-    if ($action === 'add') {
-        $sku = trim($_POST['sku'] ?? '');
-        $name = trim($_POST['name'] ?? '');
-        $description = trim($_POST['description'] ?? '');
-        $price = floatval($_POST['price'] ?? 0);
-        $stock = intval($_POST['stock'] ?? 0);
-        $category = trim($_POST['category'] ?? 'General');
-        $image_url = trim($_POST['image_url'] ?? '');
+    $user_id = (int)$payload['user_id'];
+    $message = '';
+    $error = '';
+
+    if ($action === 'add' || $action === 'update') {
+        $sku = trim($_POST['sku']);
+        $name = trim($_POST['name']);
+        $description = trim($_POST['description']);
+        $price = (float)$_POST['price'];
+        $stock = (int)$_POST['stock'];
         
-        if ($sku && $name && $price > 0) {
-            $stmt = $conn->prepare("INSERT INTO tbl_product_inventory (sku, name, description, price, stock, category, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param('sssdiss', $sku, $name, $description, $price, $stock, $category, $image_url);
-            if ($stmt->execute()) {
-                $message = 'Product added successfully!';
-                
-                // Log the activity
-                $log_action = "Added New Product";
-                $log_details = "User added product: $name (SKU: $sku) with initial stock: $stock.";
-                $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, ?, ?)");
-                $log_stmt->bind_param('iss', $user_id, $log_action, $log_details);
-                $log_stmt->execute();
-                $log_stmt->close();
-            } else {
-                $error = 'Failed to add product. SKU might already exist.';
-            }
-            $stmt->close();
-        } else {
-            $error = 'Please fill in required fields (SKU, Name, Price).';
+        // Collect all selected values from dropdowns and custom inputs
+        $selected_cats = [];
+        if (!empty($_POST['product_category_input'])) $selected_cats[] = $_POST['product_category_input'];
+        if (!empty($_POST['lifestage_category']))    $selected_cats[] = $_POST['lifestage_category'];
+        if (!empty($_POST['lifestage_custom']))      $selected_cats[] = $_POST['lifestage_custom'];
+        if (!empty($_POST['food_type_category']))    $selected_cats[] = $_POST['food_type_category'];
+        if (!empty($_POST['health_needs_category'])) $selected_cats[] = $_POST['health_needs_category'];
+        if (!empty($_POST['health_needs_custom']))   $selected_cats[] = $_POST['health_needs_custom'];
+        if (!empty($_POST['brand_category']))        $selected_cats[] = $_POST['brand_category'];
+        if (!empty($_POST['brand_custom']))          $selected_cats[] = $_POST['brand_custom'];
+
+        $category = !empty($selected_cats) ? implode(', ', array_unique($selected_cats)) : 'General';
+        $image_url = trim($_POST['image_url']);
+
+        // Save any custom categories to the database for future dropdown/filter use
+        $custom_lifestage_val = trim($_POST['lifestage_custom'] ?? '');
+        $custom_health_val = trim($_POST['health_needs_custom'] ?? '');
+        $custom_brand_val = trim($_POST['brand_custom'] ?? '');
+        
+        if (!empty($custom_lifestage_val)) {
+            $ins = $conn->prepare("INSERT IGNORE INTO tbl_custom_categories (group_name, category_value) VALUES ('Lifestage', ?)");
+            $ins->bind_param('s', $custom_lifestage_val);
+            $ins->execute();
+            $ins->close();
         }
-    } elseif ($action === 'update') {
-        $id = intval($_POST['id'] ?? 0);
-        $sku = trim($_POST['sku'] ?? '');
-        $name = trim($_POST['name'] ?? '');
-        $description = trim($_POST['description'] ?? '');
-        $price = floatval($_POST['price'] ?? 0);
-        $stock = intval($_POST['stock'] ?? 0);
-        $category = trim($_POST['category'] ?? 'General');
-        $image_url = trim($_POST['image_url'] ?? '');
-        
-        if ($id > 0 && $sku && $name && $price > 0) {
-            // Fetch existing data to calculate stock differences for the log
-            $old_stmt = $conn->prepare("SELECT name, stock FROM tbl_product_inventory WHERE id = ?");
-            $old_stmt = $conn->prepare("SELECT * FROM tbl_product_inventory WHERE id = ?");
-            $old_stmt->bind_param('i', $id);
-            $old_stmt->execute();
-            $old_data = $old_stmt->get_result()->fetch_assoc();
-            $old_stmt->close();
+        if (!empty($custom_health_val)) {
+            $ins = $conn->prepare("INSERT IGNORE INTO tbl_custom_categories (group_name, category_value) VALUES ('Health Needs', ?)");
+            $ins->bind_param('s', $custom_health_val);
+            $ins->execute();
+            $ins->close();
+        }
+        if (!empty($custom_brand_val)) {
+            $ins = $conn->prepare("INSERT IGNORE INTO tbl_custom_categories (group_name, category_value) VALUES ('Brand', ?)");
+            $ins->bind_param('s', $custom_brand_val);
+            $ins->execute();
+            $ins->close();
+        }
 
-            $stmt = $conn->prepare("UPDATE tbl_product_inventory SET sku = ?, name = ?, description = ?, price = ?, stock = ?, category = ?, image_url = ?, updated_at = NOW() WHERE id = ?");
-            $stmt->bind_param('sssdissi', $sku, $name, $description, $price, $stock, $category, $image_url, $id);
-            if ($stmt->execute()) {
-                $message = 'Product updated successfully!';
-                
-                // --- Enhanced Activity Logging ---
-                $log_action = "Updated Product";
-                $changes = [];
-                if ($old_data) {
-                    if ($old_data['name'] !== $name) $changes[] = "Name from '{$old_data['name']}' to '$name'";
-                    if ($old_data['sku'] !== $sku) $changes[] = "SKU from '{$old_data['sku']}' to '$sku'";
-                    if ((float)$old_data['price'] !== $price) $changes[] = "Price from " . number_format($old_data['price'], 2) . " to " . number_format($price, 2);
-                    if ((int)$old_data['stock'] !== $stock) $changes[] = "Stock from {$old_data['stock']} to $stock";
-                    if ($old_data['category'] !== $category) $changes[] = "Category from '{$old_data['category']}' to '$category'";
+        try {
+            if ($action === 'add') {
+                // Log the activity for adding a new product
+                $stmt = $conn->prepare("INSERT INTO tbl_product_inventory (sku, name, description, price, stock, category, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("sssdiss", $sku, $name, $description, $price, $stock, $category, $image_url);
+                if ($stmt->execute()) {
+                    $message = 'Product added successfully!';
+                    $log_action = "Added New Product";
+                    $log_details = "User added product: $name (SKU: $sku) with initial stock: $stock.";
+                    $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, ?, ?)");
+                    $log_stmt->bind_param('iss', $user_id, $log_action, $log_details);
+                    $log_stmt->execute();
+                    $log_stmt->close();
+
+                    // Handle variants
+                    $product_id = $stmt->insert_id;
+                    if (isset($_POST['variant_size']) && is_array($_POST['variant_size'])) {
+                        $variant_stmt = $conn->prepare("INSERT INTO tbl_product_variants (product_id, size, price, stock) VALUES (?, ?, ?, ?)");
+                        foreach ($_POST['variant_size'] as $key => $size) {
+                            if (!empty($size)) {
+                                $v_price = (float)($_POST['variant_price'][$key] ?? 0);
+                                $v_stock = (int)($_POST['variant_stock'][$key] ?? 0);
+                                $variant_stmt->bind_param('isdi', $product_id, $size, $v_price, $v_stock);
+                                $variant_stmt->execute();
+                            }
+                        }
+                        $variant_stmt->close();
+                    }
                 }
-
-                $log_details = "User updated product: " . ($old_data['name'] ?? $name) . ". ";
-                $log_details .= empty($changes) ? "No changes detected." : "Changes: " . implode(', ', $changes) . ".";
-
-                $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, ?, ?)");
-                $log_stmt->bind_param('iss', $user_id, $log_action, $log_details);
-                $log_stmt->execute();
-                $log_stmt->close();
             } else {
-                $error = 'Failed to update product.';
+                $id = (int)($_POST['product_id'] ?? $_POST['id'] ?? 0);
+
+                // Fetch existing data to compare for the log
+                $old_stmt = $conn->prepare("SELECT * FROM tbl_product_inventory WHERE id = ?");
+                $old_stmt->bind_param('i', $id);
+                $old_stmt->execute();
+                $old_data = $old_stmt->get_result()->fetch_assoc();
+                $old_stmt->close();
+
+                $stmt = $conn->prepare("UPDATE tbl_product_inventory SET sku=?, name=?, description=?, price=?, stock=?, category=?, image_url=?, updated_at=NOW() WHERE id=?");
+                $stmt->bind_param("sssdissi", $sku, $name, $description, $price, $stock, $category, $image_url, $id);
+                if ($stmt->execute()) {
+                    $message = 'Product updated successfully!';
+
+                    // --- Enhanced Activity Logging ---
+                    $log_action = "Updated Product";
+                    $changes = [];
+                    if ($old_data) {
+                        if ($old_data['name'] !== $name) $changes[] = "Name from '{$old_data['name']}' to '$name'";
+                        if ($old_data['sku'] !== $sku) $changes[] = "SKU from '{$old_data['sku']}' to '$sku'";
+                        if ((float)$old_data['price'] != $price) $changes[] = "Price from " . number_format((float)$old_data['price'], 2) . " to " . number_format($price, 2);
+                        if ((int)$old_data['stock'] !== $stock) $changes[] = "Stock from {$old_data['stock']} to $stock";
+                        if ($old_data['category'] !== $category) $changes[] = "Category from '{$old_data['category']}' to '$category'";
+                    }
+
+                    $log_details = "User updated product: " . ($old_data['name'] ?? $name) . ". ";
+                    $log_details .= empty($changes) ? "No changes detected." : "Changes: " . implode(', ', $changes) . ".";
+
+                    $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, ?, ?)");
+                    $log_stmt->bind_param('iss', $user_id, $log_action, $log_details);
+                    $log_stmt->execute();
+                    $log_stmt->close();
+
+                    // --- UPDATE/ADD/DELETE VARIANTS ---
+                    $conn->query("DELETE FROM tbl_product_variants WHERE product_id = $id"); // Simple approach: clear and re-insert
+                    if (isset($_POST['variant_size']) && is_array($_POST['variant_size'])) {
+                        $variant_stmt = $conn->prepare("INSERT INTO tbl_product_variants (product_id, size, price, stock) VALUES (?, ?, ?, ?)");
+                        foreach ($_POST['variant_size'] as $key => $size) {
+                            if (!empty($size)) {
+                                $v_price = (float)($_POST['variant_price'][$key] ?? 0);
+                                $v_stock = (int)($_POST['variant_stock'][$key] ?? 0);
+                                $variant_stmt->bind_param('isdi', $id, $size, $v_price, $v_stock);
+                                $variant_stmt->execute();
+                            }
+                        }
+                        $variant_stmt->close();
+                    }
+                    // In a more complex system, you would compare existing variants and update/insert/delete individually
+                    // to preserve variant IDs, but for this scope, re-inserting is simpler.
+
+
+                }
             }
-            $stmt->close();
-        } else {
-            $error = 'Invalid product data.';
+            $_SESSION['message'] = $message;
+            $_SESSION['message_type'] = "success";
+            header("Location: products.php");
+            exit();
+        } catch (mysqli_sql_exception $e) {
+            if ($e->getCode() === 1062) {
+                $_SESSION['message'] = "The SKU '$sku' is already used. Please provide a unique SKU.";
+            } else {
+                $_SESSION['message'] = "Database Error: " . $e->getMessage();
+            }
+            $_SESSION['message_type'] = "error";
         }
     } elseif ($action === 'delete') {
-        $id = intval($_POST['id'] ?? 0);
-        if ($id > 0) {
-            // Get product name before deletion for the log
-            $name_stmt = $conn->prepare("SELECT name FROM tbl_product_inventory WHERE id = ?");
-            $name_stmt->bind_param('i', $id);
-            $name_stmt->execute();
-            $name_data = $name_stmt->get_result()->fetch_assoc();
-            $name_stmt->close();
+        $id = (int)($_POST['product_id'] ?? $_POST['id'] ?? 0);
 
-            $stmt = $conn->prepare("DELETE FROM tbl_product_inventory WHERE id = ?");
-            $stmt->bind_param('i', $id);
-            if ($stmt->execute()) {
-                $message = 'Product deleted successfully!';
-                
-                // Log the activity
-                $log_action = "Deleted Product";
-                $log_details = "User deleted product: " . ($name_data['name'] ?? 'ID: '.$id);
-                $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, ?, ?)");
-                $log_stmt->bind_param('iss', $user_id, $log_action, $log_details);
-                $log_stmt->execute();
-                $log_stmt->close();
-            } else {
-                $error = 'Failed to delete product. It might be in use.';
-            }
-            $stmt->close();
+        // Get product name before deletion for the log
+        $name_stmt = $conn->prepare("SELECT name FROM tbl_product_inventory WHERE id = ?");
+        $name_stmt->bind_param('i', $id);
+        $name_stmt->execute();
+        $name_data = $name_stmt->get_result()->fetch_assoc();
+        $name_stmt->close();
+
+        $stmt = $conn->prepare("DELETE FROM tbl_product_inventory WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        if ($stmt->execute()) {
+            $_SESSION['message'] = "Product deleted successfully.";
+            $_SESSION['message_type'] = "success";
+            $log_action = "Deleted Product";
+            $log_details = "User deleted product: " . ($name_data['name'] ?? 'ID: '.$id);
+            $log_stmt = $conn->prepare("INSERT INTO activity_logs (user_id, action, details) VALUES (?, ?, ?)");
+            $log_stmt->bind_param('iss', $user_id, $log_action, $log_details);
+            $log_stmt->execute();
+            $log_stmt->close();
         }
+        header("Location: products.php");
+        exit();
     }
 }
 
-// Fetch pending orders count for the sidebar badge
-$pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS count FROM tbl_orders WHERE order_status = 'pending'"))['count'] ?? 0;
+// Fetch products logic
+$selected_filters = $_GET['categories'] ?? [];
+$search = trim($_GET['search'] ?? '');
 
-// Get all products
-$products = get_available_products();
-$categories = get_all_categories();
+// Get all products to calculate counts (similar to customer portal)
+$all_inventory = get_available_products();
+$category_counts = [];
+foreach ($all_inventory as $p) {
+    $product_categories = array_map('trim', explode(',', $p['category'] ?? 'General'));
+    foreach ($product_categories as $cat) {
+        if (!isset($category_counts[$cat])) $category_counts[$cat] = 0;
+        $category_counts[$cat]++;
+    }
+}
+
+// Filter products based on selected categories
+if (!empty($selected_filters)) {
+    $products = array_filter($all_inventory, function($p) use ($selected_filters) {
+        $product_categories = array_map('trim', explode(',', $p['category'] ?? 'General'));
+        return !empty(array_intersect($selected_filters, $product_categories));
+    });
+} else {
+    $products = $all_inventory;
+}
+
+if ($search !== '') {
+    $products = array_filter($products, function($p) use ($search) {
+        return (stripos($p['name'], $search) !== false) || (stripos($p['sku'] ?? '', $search) !== false);
+    });
+}
+
+// Calculate Inventory Summary Stats
+$out_of_stock_count = 0;
+foreach ($all_inventory as $item) {
+    if (($item['stock'] ?? 0) <= 0) {
+        $out_of_stock_count++;
+    }
+}
+$total_products = count($all_inventory);
+$pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS count FROM tbl_orders WHERE order_status = 'pending'"))['count'] ?? 0;
+$user_id = (int)$payload['user_id'];
+$unread_count = get_unread_count_staff($user_id);
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Product Management - TOMORO</title>
-    <link rel="stylesheet" href="../../assets/css/admin_style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <title>Product Management - DPS Admin</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="<?php echo BASE_URL; ?>/assets/css/admin_style.css"> 
     <style>
-        .product-management {
-            padding: 24px;
+        .admin-shop-container { display: flex; gap: 20px; padding: 20px; }
+        .admin-filters { width: 250px; background: #fff; padding: 20px; border-radius: 10px; border: 1px solid #ddd; height: fit-content; }
+        .product-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
+        .product-card { background: white; border-radius: 8px; border: 1px solid #eee; overflow: hidden; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+        .product-image-container { height: 150px; display: flex; align-items: center; justify-content: center; background: #fdfdfd; }
+        .product-image-container img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .product-info { padding: 10px; display: flex; flex-direction: column; flex-grow: 1; }
+        .product-actions { margin-top: auto; display: flex; gap: 5px; padding-top: 10px; }
+        .product-actions button { flex: 1; cursor: pointer; padding: 8px; border-radius: 4px; border: 1px solid #ddd; background: #fff; }
+        .stock-badge { 
+            display: inline-block; 
+            padding: 2px 8px; 
+            border-radius: 12px; 
+            font-size: 0.75rem; 
+            font-weight: bold; 
         }
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-        }
-        .page-header h1 {
-            color: #1e293b;
-            font-size: 1.8rem;
-        }
-        .btn {
-            padding: 10px 20px;
-            border-radius: 10px;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: 0.3s;
-        }
-        .btn-primary {
-            background: #6366f1;
-            color: white;
-        }
-        .btn-primary:hover {
-            background: #4f46e5;
-        }
-        .btn-success {
-            background: #10b981;
-            color: white;
-        }
-        .btn-danger {
-            background: #ef4444;
-            color: white;
-        }
-        .btn-sm {
-            padding: 6px 12px;
-            font-size: 0.85rem;
-        }
-        .alert {
-            padding: 14px 18px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-        .alert-success {
-            background: #d1fae5;
-            color: #065f46;
-            border: 1px solid #a7f3d0;
-        }
-        .alert-error {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fecaca;
-        }
-        .product-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 24px;
-        }
-        .product-card {
-            background: white;
-            border-radius: 14px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            overflow: hidden;
-            border: 1px solid #e2e8f0;
-        }
-        .product-image {
-            width: 100%;
-            height: 180px;
-            object-fit: contain;
-            background: #f8fafc;
-        }
-        .product-details {
-            padding: 18px;
-        }
-        .product-details h3 {
-            margin: 0 0 8px;
-            color: #1e293b;
-            font-size: 1.1rem;
-        }
-        .product-sku {
-            font-size: 0.85rem;
-            color: #64748b;
-            margin-bottom: 8px;
-        }
-        .product-description {
-            color: #475569;
-            font-size: 0.95rem;
-            margin-bottom: 12px;
-            line-height: 1.5;
-        }
-        .product-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-        .product-price {
-            font-size: 1.3rem;
-            font-weight: 800;
-            color: #312e81;
-        }
-        .product-stock {
-            background: #eef2ff;
-            color: #3730a3;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-        .product-category {
-            display: inline-block;
-            background: #f0fdf4;
-            color: #166534;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-bottom: 12px;
-        }
-        .product-actions {
-            display: flex;
-            gap: 8px;
-            padding-top: 12px;
-            border-top: 1px solid #e2e8f0;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-        .modal.active {
-            display: flex;
-        }
-        .modal-content {
-            background: white;
-            border-radius: 16px;
-            padding: 28px;
-            width: 90%;
-            max-width: 500px;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .modal-header h2 {
-            margin: 0;
-            color: #1e293b;
-        }
-        .modal-close {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: #64748b;
-        }
-        .form-group {
-            margin-bottom: 16px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 6px;
-            font-weight: 600;
-            color: #334155;
-        }
-        .form-group input,
-        .form-group textarea,
-        .form-group select {
-            width: 100%;
-            padding: 12px 14px;
-            border: 1px solid #cbd5e1;
-            border-radius: 10px;
-            font-size: 0.95rem;
-        }
-        .form-group textarea {
-            min-height: 80px;
-            resize: vertical;
-        }
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
+        .stock-in { background: #dcfce7; color: #166534; }
+        .stock-out { background: #fee2e2; color: #991b1b; }
+        .inventory-summary { display: flex; gap: 20px; margin-bottom: 25px; }
+        .variants-container { margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px; }
+        .variant-row { display: flex; gap: 10px; margin-bottom: 8px; }
+        .variant-row input { flex: 1; }
+        #add-variant-btn { background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe; font-size: 0.8rem; font-weight: bold; }
+        .btn-remove-variant { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 0 8px; cursor: pointer; }
+
+        .summary-card { background: white; padding: 15px 20px; border-radius: 12px; flex: 1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #eee; display: flex; align-items: center; gap: 15px; }
+        .summary-icon { width: 45px; height: 45px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
+        .icon-blue { background: #eef2ff; color: #6366f1; }
+        .icon-red { background: #fff1f2; color: #ef4444; }
+        .product-actions .btn-delete { color: red; background: #fff5f5; border-color: #feb2b2; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 600px; max-width: 95%; max-height: 90vh; overflow-y: auto; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.85rem; color: #444; }
+        .form-group select, .form-group input, .form-group textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 5px; }
+        .dropdown-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #eee; }
+        
+        .search-container { position: relative; width: 300px; }
+        .search-container input { width: 100%; padding: 10px 35px 10px 15px; border-radius: 20px; border: 1px solid #ddd; outline: none; }
+        .search-container i { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #888; }
     </style>
 </head>
 <body>
+
     <div class="sidebar">
         <div class="sidebar-brand" style="text-align: center; padding: 20px 15px;">
             <img src="<?php echo SYSTEM_LOGO_URL; ?>" alt="Logo" style="max-width: 160px; max-height: 80px; display: block; margin: 0 auto 10px; border-radius: 5px;">
             <h2 style="color: white; font-size: 1rem; margin: 0; line-height: 1.2;"><?php echo htmlspecialchars(SYSTEM_NAME); ?></h2>
         </div>
         <ul class="nav-links" style="list-style: none; padding: 0;">
-            <li><a href="<?php echo BASE_URL; ?>/modules/staff/dashboard.php" <?php echo basename($_SERVER['PHP_SELF']) === 'dashboard.php' ? 'class="active"' : ''; ?>><i class="fas fa-home"></i> Dashboard</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/staff/orders.php" <?php echo basename($_SERVER['PHP_SELF']) === 'orders.php' ? 'class="active"' : ''; ?>>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/dashboard.php" <?php echo basename($_SERVER['PHP_SELF']) === 'dashboard.php' ? 'class="active"' : ''; ?>><i class="fas fa-home"></i> Dashboard</a></li>
+            <?php if ($role === 'admin'): ?>
+                <li><a href="<?php echo BASE_URL; ?>/modules/admin/staff_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'staff_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-users-cog"></i> Staff Management</a></li>
+                <li><a href="<?php echo BASE_URL; ?>/modules/admin/activity_logs.php" <?php echo basename($_SERVER['PHP_SELF']) === 'activity_logs.php' ? 'class="active"' : ''; ?>><i class="fas fa-history"></i> Activity Logs</a></li>
+            <?php endif; ?>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/manage_rewards.php" <?php echo basename($_SERVER['PHP_SELF']) === 'manage_rewards.php' ? 'class="active"' : ''; ?>><i class="fas fa-boxes"></i> Manage Rewards</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/products.php" <?php echo basename($_SERVER['PHP_SELF']) === 'products.php' ? 'class="active"' : ''; ?>><i class="fas fa-store"></i> Products</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/orders.php" <?php echo basename($_SERVER['PHP_SELF']) === 'orders.php' ? 'class="active"' : ''; ?>>
                 <i class="fas fa-shopping-cart"></i> Orders
                 <?php if ($pending_orders_count > 0): ?>
                     <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo $pending_orders_count; ?></span>
                 <?php endif; ?>
             </a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/staff/products.php" <?php echo basename($_SERVER['PHP_SELF']) === 'products.php' ? 'class="active"' : ''; ?>><i class="fas fa-store"></i> Products</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/admin/manage_rewards.php" <?php echo basename($_SERVER['PHP_SELF']) === 'manage_rewards.php' ? 'class="active"' : ''; ?>><i class="fas fa-boxes"></i> Manage Rewards</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/admin/messages.php" <?php echo basename($_SERVER['PHP_SELF']) === 'messages.php' ? 'class="active"' : ''; ?>><i class="fas fa-comment-dots"></i> Messages</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/messages.php" <?php echo basename($_SERVER['PHP_SELF']) === 'messages.php' ? 'class="active"' : ''; ?>>
+                <i class="fas fa-comment-dots"></i> Messages
+                <?php if ($unread_count > 0): ?>
+                    <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo (int)$unread_count; ?></span>
+                <?php endif; ?>
+            </a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>       
+<li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance</a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'loyalty_points.php') ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'reward_redemption.php') ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>
-            
-            <?php if ($user_role === 'admin'): ?>
-                <li><a href="<?php echo BASE_URL; ?>/modules/admin/staff_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'staff_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-users-cog"></i> Staff Management</a></li>
-                <li><a href="<?php echo BASE_URL; ?>/modules/admin/activity_logs.php" <?php echo basename($_SERVER['PHP_SELF']) === 'activity_logs.php' ? 'class="active"' : ''; ?>><i class="fas fa-history"></i> Activity Logs</a></li>
+            <?php if ($role === 'admin'): ?>
                 <li><a href="<?php echo BASE_URL; ?>/modules/admin/analytics.php" <?php echo basename($_SERVER['PHP_SELF']) === 'analytics.php' ? 'class="active"' : ''; ?>><i class="fas fa-chart-line"></i> Analytics & Reports</a></li>
-                <li><a href="<?php echo BASE_URL; ?>/modules/admin/settings.php" <?php echo basename($_SERVER['PHP_SELF']) === 'settings.php' ? 'class="active"' : ''; ?>><i class="fas fa-cogs"></i> System Settings</a></li>
             <?php endif; ?>
         </ul>
         <a href="<?php echo BASE_URL; ?>/modules/auth/logout.php" class="logout-link" style="position: absolute; bottom: 20px; left: 20px; text-decoration: none;">
             <i class="fas fa-sign-out-alt"></i> Logout
         </a>
     </div>
-    
-    <main class="admin-content">
-        <div class="product-management">
-            <div class="page-header">
-                <h1><i class="fas fa-boxes"></i> Product Management</h1>
-                <button class="btn btn-primary" onclick="openModal('add')">
-                    <i class="fas fa-plus"></i> Add Product
-                </button>
+
+    <!-- Main Content -->
+    <div class="main-content" style="margin-left: 260px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h1>Product Management</h1>
+            <div class="search-container">
+                <form method="GET">
+                    <input type="text" name="search" placeholder="Search SKU or Name..." value="<?php echo htmlspecialchars($search); ?>">
+                    <i class="fas fa-search"></i>
+                </form>
             </div>
-            
-            <?php if ($message): ?>
-                <div class="alert alert-success"><?php echo htmlspecialchars($message); ?></div>
-            <?php endif; ?>
-            
-            <?php if ($error): ?>
-                <div class="alert alert-error"><?php echo htmlspecialchars($error); ?></div>
-            <?php endif; ?>
-            
+        </div>
+
+        <?php if (isset($_SESSION['message'])): ?>
+            <div style="background: <?php echo $_SESSION['message_type'] === 'success' ? '#eafaf1' : '#fff5f5'; ?>; color: <?php echo $_SESSION['message_type'] === 'success' ? '#27ae60' : '#e74c3c'; ?>; padding: 15px; border-radius: 8px; border-left: 5px solid <?php echo $_SESSION['message_type'] === 'success' ? '#27ae60' : '#e74c3c'; ?>; margin-bottom: 20px; font-weight: 600;" id="status-alert">
+                <i class="fas <?php echo $_SESSION['message_type'] === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'; ?>"></i>
+                <?php echo htmlspecialchars($_SESSION['message']); ?>
+                <?php unset($_SESSION['message']); unset($_SESSION['message_type']); ?>
+            </div>
+        <?php endif; ?>
+
+        <!-- Inventory Overview -->
+        <div class="inventory-summary">
+            <div class="summary-card">
+                <div class="summary-icon icon-blue"><i class="fas fa-boxes"></i></div>
+                <div>
+                    <div style="font-size: 0.75rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Total Products</div>
+                    <div style="font-size: 1.25rem; font-weight: 800; color: #1e293b;"><?php echo $total_products; ?></div>
+                </div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-icon icon-red"><i class="fas fa-exclamation-triangle"></i></div>
+                <div>
+                    <div style="font-size: 0.75rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Out of Stock</div>
+                    <div style="font-size: 1.25rem; font-weight: 800; color: #ef4444;"><?php echo $out_of_stock_count; ?></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-box" style="margin-bottom: 30px; border-left: 5px solid #4a3e94; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            <h2 style="margin-top: 0; color: #4a3e94; font-size: 1.2rem;"><i class="fas fa-plus-circle"></i> Add New Product</h2>
+            <form method="POST">
+                <input type="hidden" name="action" value="add">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-top: 15px;">
+                    <input type="text" name="sku" placeholder="SKU" required style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                    <input type="text" name="name" placeholder="Product Name" required style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                    <input type="number" step="0.01" name="price" placeholder="Price (PHP)" required style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                    <input type="number" name="stock" placeholder="Initial Stock" required style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                    
+                    <select name="product_category_input" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        <option value="">Product Category</option>
+                        <?php foreach($filter_groups['Product Category'] as $o) echo "<option value='$o'>$o</option>"; ?>
+                    </select>
+                    <select name="lifestage_category" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        <option value="">Lifestage</option>
+                        <?php foreach($filter_groups['Lifestage'] as $o) echo "<option value='$o'>$o</option>"; ?>
+                    </select>
+                    <input type="text" name="lifestage_custom" placeholder="Or type & save custom Lifestage" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                    <select name="food_type_category" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        <option value="">Food Type</option>
+                        <?php foreach($filter_groups['Food Type'] as $o) echo "<option value='$o'>$o</option>"; ?>
+                    </select>
+                    <select name="health_needs_category" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        <option value="">Health Needs</option>
+                        <?php foreach($filter_groups['Health Needs'] as $o) echo "<option value='$o'>$o</option>"; ?>
+                    </select>
+                    <input type="text" name="health_needs_custom" placeholder="Or type & save custom Health Need" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                    <select name="brand_category" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                        <option value="">Brand</option>
+                        <?php foreach($filter_groups['Brand'] as $o) echo "<option value='$o'>$o</option>"; ?>
+                    </select>
+                    <input type="text" name="brand_custom" placeholder="Or type & save custom Brand" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+
+                    <input type="text" name="image_url" placeholder="Image URL" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                    <textarea name="description" placeholder="Product Description..." style="grid-column: 1 / -1; padding: 10px; border-radius: 5px; border: 1px solid #ddd;"></textarea>
+                    
+                    <div style="grid-column: 1 / -1; text-align: right;">
+                        <button type="submit" style="background: #4a3e94; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold;">
+                            Save New Product
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="admin-shop-container">
+            <!-- Sidebar Filters -->
+            <aside class="admin-filters">
+                <h3>Filters</h3>
+                <form id="filter-form" method="GET">
+                    <?php foreach($filter_groups as $title => $opts): ?>
+                        <div style="margin-bottom:10px;">
+                            <strong style="font-size: 0.85rem; color: #4a3e94;"><?php echo $title; ?></strong><br>
+                            <?php foreach($opts as $o): ?>
+                                <label style="display:block; font-size:0.8rem; cursor:pointer; margin-bottom: 2px;">
+                                    <input type="checkbox" name="categories[]" value="<?php echo htmlspecialchars($o); ?>" 
+                                    <?php echo in_array($o, $selected_filters) ? 'checked' : ''; ?> 
+                                    onchange="this.form.submit()"> <?php echo htmlspecialchars($o); ?>
+                                    <span style="color:#64748b;">(<?php echo $category_counts[$o] ?? 0; ?>)</span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endforeach; ?>
+                    <a href="products.php" style="color:red; font-size:0.8rem;">Clear Filters</a>
+                </form>
+            </aside>
+
+            <!-- Product Display -->
             <div class="product-grid">
-                <?php foreach ($products as $product): ?>
+                <?php foreach($products as $p): ?>
                     <div class="product-card">
-                        <?php if ($product['image_url']): ?>
-                            <img src="<?php echo htmlspecialchars($product['image_url']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="product-image">
-                        <?php else: ?>
-                            <div class="product-image" style="display:flex;align-items:center;justify-content:center;color:#94a3b8;">
-                                <i class="fas fa-image fa-3x"></i>
-                            </div>
-                        <?php endif; ?>
-                        <div class="product-details">
-                            <span class="product-sku"><?php echo htmlspecialchars($product['sku']); ?></span>
-                            <h3><?php echo htmlspecialchars($product['name']); ?></h3>
-                            <span class="product-category"><?php echo htmlspecialchars($product['category'] ?? 'General'); ?></span>
-                            <p class="product-description"><?php echo htmlspecialchars($product['description'] ?? ''); ?></p>
-                            <div class="product-meta">
-                                <span class="product-price">PHP <?php echo number_format($product['price'], 2); ?></span>
-                                <span class="product-stock">Stock: <?php echo intval($product['stock']); ?></span>
+                        <div class="product-image-container">
+                            <img src="<?php echo $p['image_url']; ?>" onerror="this.src='https://via.placeholder.com/150'">
+                        </div>
+                        <div class="product-info">
+                            <small style="color:#888;"><?php echo $p['category']; ?></small>
+                            <h4 style="margin:5px 0;"><?php echo $p['name']; ?></h4>
+                            <strong style="color:#4a3e94;">PHP <?php echo number_format($p['price'], 2); ?></strong>
+                            <div style="margin-top: 8px;">
+                                <?php if (($p['stock'] ?? 0) <= 0): ?>
+                                    <span class="stock-badge stock-out"><i class="fas fa-times-circle"></i> Out of Stock</span>
+                                <?php else: ?>
+                                    <span class="stock-badge stock-in"><i class="fas fa-check-circle"></i> Stock: <?php echo number_format($p['stock']); ?></span>
+                                <?php endif; ?>
                             </div>
                             <div class="product-actions">
-                                <button class="btn btn-success btn-sm" onclick="openModal('edit', <?php echo $product['id']; ?>, '<?php echo htmlspecialchars(json_encode($product)); ?>')">
-                                    <i class="fas fa-edit"></i> Edit
-                                </button>
-                                <button class="btn btn-danger btn-sm" onclick="deleteProduct(<?php echo $product['id']; ?>)">
-                                    <i class="fas fa-trash"></i> Delete
-                                </button>
+                                <button onclick='openModal("edit", <?php echo $p["id"]; ?>, <?php echo htmlspecialchars(json_encode($p), ENT_QUOTES, "UTF-8"); ?>)'>Edit</button>
+                                <button onclick="deleteProduct(<?php echo $p['id']; ?>)" class="btn-delete">Delete</button>
                             </div>
                         </div>
                     </div>
                 <?php endforeach; ?>
-                
-                <?php if (empty($products)): ?>
-                    <p style="grid-column: 1/-1; text-align: center; color: #64748b; padding: 40px;">
-                        No products found. Add your first product!
-                    </p>
-                <?php endif; ?>
             </div>
         </div>
-    </main>
-    
-    <!-- Add/Edit Modal -->
-    <div class="modal" id="productModal">
+    </div>
+
+    <!-- ADD/EDIT MODAL -->
+    <div id="productModal" class="modal">
         <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modalTitle">Add Product</h2>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
-            </div>
-            <form method="POST" id="productForm" action="<?php echo BASE_URL; ?>/modules/admin/products.php">
+            <h2 id="modalTitle">Add Product</h2>
+            <form method="POST" id="productForm">
                 <input type="hidden" name="action" id="formAction" value="add">
-                <input type="hidden" name="id" id="productId" value="">
+                <input type="hidden" name="product_id" id="productId">
                 
                 <div class="form-group">
-                    <label for="sku">SKU *</label>
-                    <input type="text" id="sku" name="sku" required placeholder="e.g., TOMORO-DOG-01">
+                    <label>SKU</label>
+                    <input type="text" name="sku" id="sku" required>
                 </div>
-                
                 <div class="form-group">
-                    <label for="name">Product Name *</label>
-                    <input type="text" id="name" name="name" required placeholder="e.g., Premium Dog Food">
+                    <label>Product Name</label>
+                    <input type="text" name="name" id="name" required>
                 </div>
-                
-                <div class="form-group">
-                    <label for="description">Description</label>
-                    <textarea id="description" name="description" placeholder="Product description..."></textarea>
-                </div>
-                
-                <div class="form-row">
+
+                <!-- CATEGORY DROPDOWNS (Separated like Lifestage) -->
+                <label style="font-size: 0.85rem; font-weight: bold; color: #4a3e94;">Product Categories</label>
+                <div class="dropdown-grid">
                     <div class="form-group">
-                        <label for="price">Price (PHP) *</label>
-                        <input type="number" id="price" name="price" step="0.01" min="0" required placeholder="0.00">
+                        <label>Main Category</label>
+                        <select name="product_category_input" id="cat_product">
+                            <option value="">None</option>
+                            <?php foreach($filter_groups['Product Category'] as $o) echo "<option value='$o'>$o</option>"; ?>
+                        </select>
                     </div>
                     <div class="form-group">
-                        <label for="stock">Stock</label>
-                        <input type="number" id="stock" name="stock" min="0" value="0" placeholder="0">
+                        <label>Lifestage</label>
+                        <select name="lifestage_category" id="cat_lifestage">
+                            <option value="">None</option>
+                            <?php foreach($filter_groups['Lifestage'] as $o) echo "<option value='$o'>$o</option>"; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Custom Lifestage</label>
+                        <input type="text" name="lifestage_custom" id="cat_lifestage_custom" placeholder="Type custom lifestage...">
+                    </div>
+                    <div class="form-group">
+                        <label>Food Type</label>
+                        <select name="food_type_category" id="cat_foodtype">
+                            <option value="">None</option>
+                            <?php foreach($filter_groups['Food Type'] as $o) echo "<option value='$o'>$o</option>"; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Health Needs</label>
+                        <select name="health_needs_category" id="cat_health">
+                            <option value="">None</option>
+                            <?php foreach($filter_groups['Health Needs'] as $o) echo "<option value='$o'>$o</option>"; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Custom Health Need</label>
+                        <input type="text" name="health_needs_custom" id="cat_health_custom" placeholder="Type custom health need...">
+                    </div>
+                    <div class="form-group">
+                        <label>Brand</label>
+                        <select name="brand_category" id="cat_brand">
+                            <option value="">None</option>
+                            <?php foreach($filter_groups['Brand'] as $o) echo "<option value='$o'>$o</option>"; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Custom Brand</label>
+                        <input type="text" name="brand_custom" id="cat_brand_custom" placeholder="Type custom brand...">
                     </div>
                 </div>
-                
+
                 <div class="form-group">
-                    <label for="category">Category</label>
-                    <select id="category" name="category">
-                        <option value="Dog Essentials">Dog Essentials</option>
-                        <option value="Cat Essentials">Cat Essentials</option>
-                        <option value="Pet Essentials">Pet Essentials</option>
-                        <option value="General">General</option>
-                    </select>
+                    <label>Description</label>
+                    <textarea name="description" id="description"></textarea>
                 </div>
-                
+
+                <!-- Variants Section -->
+                <div class="variants-container">
+                    <label style="font-weight: bold; color: #4a3e94;">Sizes & Variants</label>
+                    <div id="variants-list">
+                        <!-- Variant rows will be injected here by JS -->
+                    </div>
+                    <button type="button" id="add-variant-btn" onclick="addVariantRow()">+ Add Size</button>
+                    <p style="font-size: 0.75rem; color: #666;">
+                        Add different sizes (e.g., 340G, 1.5KG) with their own price and stock.
+                        The 'Stock' and 'Price' fields above will be used if no variants are added.
+                    </p>
+                </div>
+
+
+                <div style="display:flex; gap:10px;">
+                    <div class="form-group" style="flex:1;">
+                        <label>Price</label>
+                        <input type="number" step="0.01" name="price" id="price" required>
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label>Stock</label>
+                        <input type="number" name="stock" id="stock" required>
+                    </div>
+                </div>
+
                 <div class="form-group">
-                    <label for="image_url">Image URL</label>
-                    <input type="text" id="image_url" name="image_url" placeholder="/assets/img/product.png">
+                    <label>Image URL</label>
+                    <input type="text" name="image_url" id="image_url">
                 </div>
-                
-                <button type="submit" class="btn btn-primary" style="width: 100%;">
-                    <i class="fas fa-save"></i> Save Product
-                </button>
+
+                <div style="display:flex; justify-content: flex-end; gap: 10px; margin-top:10px;">
+                    <button type="button" onclick="closeModal()">Cancel</button>
+                    <button type="submit" style="background:#4a3e94; color:white; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">Save Product</button>
+                </div>
             </form>
         </div>
     </div>
-    
-    <!-- Delete Form -->
-    <form method="POST" id="deleteForm" style="display: none;" action="<?php echo BASE_URL; ?>/modules/admin/products.php">
+
+    <form id="deleteForm" method="POST" style="display:none;">
         <input type="hidden" name="action" value="delete">
-        <input type="hidden" name="id" id="deleteId" value="">
+        <input type="hidden" name="id" id="deleteId">
     </form>
-    
+
     <script>
-        function openModal(mode, id = null, productData = null) {
-            const modal = document.getElementById('productModal');
-            const form = document.getElementById('productForm');
-            const title = document.getElementById('modalTitle');
-            const action = document.getElementById('formAction');
-            
-            if (mode === 'add') {
-                title.textContent = 'Add Product';
-                action.value = 'add';
-                form.reset();
-                document.getElementById('productId').value = '';
-            } else if (mode === 'edit' && productData) {
-                title.textContent = 'Edit Product';
-                action.value = 'update';
-                const product = typeof productData === 'string' ? JSON.parse(productData) : productData;
-                document.getElementById('productId').value = product.id;
-                document.getElementById('sku').value = product.sku || '';
-                document.getElementById('name').value = product.name || '';
-                document.getElementById('description').value = product.description || '';
-                document.getElementById('price').value = product.price || '';
-                document.getElementById('stock').value = product.stock || '';
-                document.getElementById('category').value = product.category || 'General';
-                document.getElementById('image_url').value = product.image_url || '';
+        const filterGroups = <?php echo json_encode($filter_groups); ?>;
+        const allProductsWithVariants = <?php
+            $products_with_variants = [];
+            foreach ($products as $p) {
+                $p['variants'] = get_product_variants($p['id']);
+                $products_with_variants[] = $p;
             }
-            
-            modal.classList.add('active');
+            echo json_encode($products_with_variants);
+        ?>;
+
+        function addVariantRow(size = '', price = '', stock = '') {
+            const list = document.getElementById('variants-list');
+            const row = document.createElement('div');
+            row.className = 'variant-row';
+            row.innerHTML = `
+                <input type="text" name="variant_size[]" placeholder="Size (e.g., 1.5KG)" value="${size}">
+                <input type="number" step="0.01" name="variant_price[]" placeholder="Price" value="${price}">
+                <input type="number" name="variant_stock[]" placeholder="Stock" value="${stock}">
+                <button type="button" class="btn-remove-variant" onclick="this.parentElement.remove()">×</button>
+            `;
+            list.appendChild(row);
         }
-        
+
+        function clearVariants() {
+            document.getElementById('variants-list').innerHTML = '';
+        }
+
+
+        function openModal(mode, id = null, product = null) {
+            const form = document.getElementById('productForm');
+            form.reset();
+            
+            if(mode === 'add') {
+                document.getElementById('modalTitle').innerText = "Add Product";
+                document.getElementById('formAction').value = "add";
+            } else {
+                const fullProductData = allProductsWithVariants.find(p => p.id == id);
+                if (!fullProductData) {
+                    alert('Product data not found!');
+                    return;
+                }
+                product = fullProductData;
+                document.getElementById('modalTitle').innerText = "Edit Product";
+                document.getElementById('formAction').value = "update";
+                document.getElementById('productId').value = product.id;
+                document.getElementById('sku').value = product.sku;
+                document.getElementById('name').value = product.name;
+                document.getElementById('description').value = product.description;
+                document.getElementById('price').value = product.price;
+                document.getElementById('stock').value = product.stock;
+                document.getElementById('image_url').value = product.image_url;
+
+                // Populate variants
+                clearVariants();
+                if (product.variants && product.variants.length > 0) {
+                    product.variants.forEach(v => addVariantRow(v.size, v.price, v.stock));
+                }
+
+                // Handle mapping the comma-separated string back to dropdowns
+                if(product.category) {
+                    const cats = product.category.split(',').map(s => s.trim());
+                    
+                    // Helper to auto-select dropdowns, and put unmatched items in custom fields
+                    Object.keys(filterGroups).forEach(groupKey => {
+                        const selectId = groupKey === 'Product Category' ? 'cat_product' :
+                                         groupKey === 'Lifestage' ? 'cat_lifestage' : 
+                                         groupKey === 'Food Type' ? 'cat_foodtype' :
+                                         groupKey === 'Health Needs' ? 'cat_health' : 
+                                         groupKey === 'Brand' ? 'cat_brand' : null;
+                        
+                        const selectElement = selectId ? document.getElementById(selectId) : null;
+                        const match = cats.find(c => filterGroups[groupKey].includes(c));
+                        if(match && selectElement) selectElement.value = match;
+                        
+                        // If no match found in dropdown, put it in the corresponding custom field
+                        if (!match && groupKey === 'Lifestage') {
+                            const customVal = cats.find(c => !filterGroups[groupKey].includes(c));
+                            if (customVal) {
+                                document.getElementById('cat_lifestage_custom').value = customVal;
+                            }
+                        }
+                        if (!match && groupKey === 'Health Needs') {
+                            const customVal = cats.find(c => !filterGroups[groupKey].includes(c));
+                            if (customVal) {
+                                document.getElementById('cat_health_custom').value = customVal;
+                            }
+                        }
+                        if (!match && groupKey === 'Brand') {
+                            const customVal = cats.find(c => !filterGroups[groupKey].includes(c));
+                            if (customVal) {
+                                document.getElementById('cat_brand_custom').value = customVal;
+                            }
+                        }
+                    });
+                }
+            }
+            document.getElementById('productModal').classList.add('active');
+        }
+
         function closeModal() {
             document.getElementById('productModal').classList.remove('active');
+            clearVariants();
         }
-        
+
         function deleteProduct(id) {
-            if (confirm('Are you sure you want to delete this product?')) {
+            if(confirm("Delete this product?")) {
                 document.getElementById('deleteId').value = id;
                 document.getElementById('deleteForm').submit();
             }
         }
-        
-        // Close modal when clicking outside
-        document.getElementById('productModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeModal();
-            }
-        });
+
+        // Auto-hide alert after 3 seconds
+        setTimeout(() => {
+            const alert = document.getElementById('status-alert');
+            if (alert) alert.style.opacity = '0';
+            setTimeout(() => { if(alert) alert.style.display = 'none'; }, 500);
+        }, 3000);
     </script>
 </body>
 </html>

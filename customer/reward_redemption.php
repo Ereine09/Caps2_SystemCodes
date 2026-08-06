@@ -68,8 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_id'])) {
         mysqli_stmt_close($voucher_stmt);
 
         // Record the redemption, explicitly writing the default 'Active' status state 
-        $redemption_stmt = mysqli_prepare($conn, "INSERT INTO reward_redemptions (customer_id, user_id, reward_code, reward_name, points_used, card_number, expiry_date, status) VALUES (?, NULL, ?, ?, ?, ?, ?, 'Active')"); // The 'NULL' and ''Active' are literals, not bound parameters.
-        mysqli_stmt_bind_param($redemption_stmt, 'isdsss', $customer['id'], $reward_code, $reward_name, $reward['points'], $voucher_code, $expiry_date);
+        $redemption_stmt = mysqli_prepare($conn, "INSERT INTO reward_redemptions (customer_id, user_id, reward_code, reward_name, points_used, card_number, expiry_date, status) VALUES (?, NULL, ?, ?, ?, ?, ?, 'Active')");
+        mysqli_stmt_bind_param($redemption_stmt, 'issdss', $customer['id'], $reward_code, $reward_name, $reward['points'], $voucher_code, $expiry_date);
         mysqli_stmt_execute($redemption_stmt);
         mysqli_stmt_close($redemption_stmt);
         // --- End New Logic ---

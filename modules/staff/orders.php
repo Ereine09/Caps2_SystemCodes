@@ -88,7 +88,7 @@ if (!$payload) {
 }
 
 $role = strtolower(trim($payload['role'] ?? ''));
-if ($role !== 'admin' && $role !== 'staff') {
+if ($role === 'admin') {
     header('Location: ' . BASE_URL . '/modules/auth/login.php');
     exit();
 }
@@ -131,57 +131,10 @@ $unread_count = get_unread_count_staff($user_id);
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>/assets/css/admin_style.css">
     <style>
         .table-box table { width: 100%; border-collapse: collapse; }
-        .table-box th, .table-box td { border: 1px solid #eee; padding: 12px 10px; text-align: left; }
-        .table-box th { background: #f8f9fa; }
-        .status-pill { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; border-radius: 999px; font-size: 0.8rem; color: white; font-weight: 700; }
-        .status-pending { background: #f39c12; }
-        .status-confirmed, .status-processing, .status-ready_for_pickup { background: #3498db; }
-        .status-to_ship, .status-to_receive { background: #16a085; }
-        .status-reviews { background: #f1c40f; color: #333; }
-        .status-out_for_delivery { background: #8e44ad; }
-        .status-completed { background: #27ae60; }
-        .status-cancelled { background: #c0392b; }
     </style>
 </head>
 <body>
-    <div class="sidebar">
-        <div class="sidebar-brand" style="text-align: center; padding: 20px 15px;">
-            <img src="<?php echo SYSTEM_LOGO_URL; ?>" alt="Logo" style="max-width: 160px; max-height: 80px; display: block; margin: 0 auto 10px; border-radius: 5px;">
-            <h2 style="color: white; font-size: 1rem; margin: 0; line-height: 1.2;"><?php echo htmlspecialchars(SYSTEM_NAME); ?></h2>
-        </div>
-        <ul class="nav-links" style="list-style: none; padding: 0;">
-            <li><a href="<?php echo BASE_URL; ?>/modules/<?php echo ($role === 'admin' ? 'admin' : 'staff'); ?>/dashboard.php" <?php echo basename($_SERVER['PHP_SELF']) === 'dashboard.php' ? 'class="active"' : ''; ?>><i class="fas fa-home"></i> Dashboard</a></li>            
-            
-            <?php if ($role === 'admin'): ?>
-                <li><a href="<?php echo BASE_URL; ?>/modules/admin/staff_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'staff_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-users-cog"></i> Staff Management</a></li>
-                <li><a href="<?php echo BASE_URL; ?>/modules/admin/activity_logs.php" <?php echo basename($_SERVER['PHP_SELF']) === 'activity_logs.php' ? 'class="active"' : ''; ?>><i class="fas fa-history"></i> Activity Logs</a></li>
-            <?php endif; ?>
-            
-            <li><a href="<?php echo BASE_URL; ?>/modules/admin/manage_rewards.php" <?php echo basename($_SERVER['PHP_SELF']) === 'manage_rewards.php' ? 'class="active"' : ''; ?>><i class="fas fa-boxes"></i> Manage Rewards</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/<?php echo ($role === 'admin' ? 'admin' : 'staff'); ?>/products.php" <?php echo basename($_SERVER['PHP_SELF']) === 'products.php' ? 'class="active"' : ''; ?>><i class="fas fa-store"></i> Products</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/<?php echo ($role === 'admin' ? 'admin' : 'staff'); ?>/orders.php" <?php echo basename($_SERVER['PHP_SELF']) === 'orders.php' ? 'class="active"' : ''; ?>>
-                <i class="fas fa-shopping-cart"></i> Orders
-                <?php if ($order_summary['pending_orders'] > 0): ?>
-                    <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo $order_summary['pending_orders']; ?></span>
-                <?php endif; ?>
-            </a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/admin/messages.php" <?php echo basename($_SERVER['PHP_SELF']) === 'messages.php' ? 'class="active"' : ''; ?>>
-                <i class="fas fa-comment-dots"></i> Messages
-                <?php if ($unread_count > 0): ?>
-                    <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo (int)$unread_count; ?></span>
-                <?php endif; ?>
-            </a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'loyalty_points.php') ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'reward_redemption.php') ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>
-            
-            <?php if ($role === 'admin'): ?>
-                <li><a href="<?php echo BASE_URL; ?>/modules/admin/analytics.php" <?php echo basename($_SERVER['PHP_SELF']) === 'analytics.php' ? 'class="active"' : ''; ?>><i class="fas fa-chart-line"></i> Analytics & Reports</a></li>
-            <?php endif; ?>
-        </ul>
-        <a href="<?php echo BASE_URL; ?>/modules/auth/logout.php" class="logout-link" style="position: absolute; bottom: 20px; left: 20px; text-decoration: none;">
-            <i class="fas fa-sign-out-alt"></i> Logout
-        </a>
-    </div>
+    <?php include __DIR__ . '/sidebar.php'; ?>
 
     <div class="main-content">
         <div class="welcome-header" style="margin-bottom: 30px;">

@@ -91,400 +91,58 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>/assets/css/admin_style.css">
     <style>
-        :root {
-            --chat-primary: #4a3e94;
-            --chat-primary-hover: #3b3178;
-            --chat-bg: #f8fafc;
-            --bubble-sent: #4a3e94;
-            --bubble-received: #ffffff;
-            --text-dark: #1e293b;
-            --text-muted: #64748b;
-            --border-color: #e2e8f0;
-        }
-
-        body {
-            background-color: #f1f5f9;
-            overflow-x: hidden;
-        }
-
-        /* Messaging Grid Layout */
-        .messages-wrapper {
-            display: grid;
-            grid-template-columns: 320px 1fr;
-            height: calc(100vh - 120px);
-            min-height: 520px;
-            background: #ffffff;
-            border-radius: 16px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-            border: 1px solid var(--border-color);
-            overflow: hidden;
-            width: 100%;
-            box-sizing: border-box;
-        }
-
-        /* Left Conversations Sidebar */
-        .customers-list {
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            background: #ffffff;
-            overflow: hidden;
-        }
-
-        .customers-list-header {
-            padding: 18px 20px;
-            font-size: 1.05rem;
-            font-weight: 700;
-            color: var(--text-dark);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: #ffffff;
-        }
-
-        .sidebar-total-unread {
-            background: #ef4444;
-            color: #ffffff;
-            font-size: 0.75rem;
-            padding: 2px 8px;
-            border-radius: 999px;
-            font-weight: 700;
-        }
-
-        #conversations-list {
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .customer-item {
-            padding: 14px 18px;
-            border-bottom: 1px solid #f1f5f9;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .customer-item:hover {
-            background: #f8fafc;
-        }
-
-        .customer-item.active {
-            background: #f1f5f9;
-            border-left: 4px solid var(--chat-primary);
-        }
-
-        .customer-name {
-            font-weight: 600;
-            color: var(--text-dark);
-            font-size: 0.95rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .customer-email {
-            font-size: 0.82rem;
-            color: var(--text-muted);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .customer-unread {
-            position: absolute;
-            top: 14px;
-            right: 18px;
-            background: #ef4444;
-            color: white;
-            font-size: 0.7rem;
-            font-weight: 700;
-            padding: 2px 7px;
-            border-radius: 999px;
-        }
-
-        .customer-last-msg {
-            font-size: 0.75rem;
-            color: #94a3b8;
-            margin-top: 2px;
-        }
-
-        .empty-list {
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--text-muted);
-        }
-
-        /* Right Conversation Area */
-        .conversation-area {
-            display: flex;
-            flex-direction: column;
-            background: var(--chat-bg);
-            height: 100%;
-            overflow: hidden;
-        }
-
-        .conversation-header {
-            padding: 16px 24px;
-            background: #ffffff;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-
-        .mobile-back-btn {
-            display: none;
-            color: var(--chat-primary);
-            font-size: 1.1rem;
-            text-decoration: none;
-            padding: 6px 10px;
-            border-radius: 8px;
-            background: #f1f5f9;
-            margin-right: 4px;
-        }
-
-        .conversation-header h3 {
-            margin: 0;
-            font-size: 1.05rem;
-            color: var(--text-dark);
-        }
-
-        .conversation-header p {
-            margin: 2px 0 0 0;
-            font-size: 0.82rem;
-            color: var(--text-muted);
-        }
-
-        .conversation-messages {
-            flex: 1;
-            padding: 20px 24px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        /* Message Bubbles */
         .message {
             display: flex;
             flex-direction: column;
             width: fit-content;
-            max-width: 72%;
+            max-width: 80%;
+            margin-bottom: 4px;
         }
-
         .message.sent {
             align-self: flex-end;
             align-items: flex-end;
         }
-
         .message.received {
             align-self: flex-start;
             align-items: flex-start;
         }
-
         .message-sender {
-            font-size: 0.78rem;
-            font-weight: 700;
-            color: var(--chat-primary);
-            margin-bottom: 4px;
-            padding: 0 4px;
+            font-size: 0.8rem;
+            font-weight: 1000;
+            color: #4a3e94 !important;
+            margin-bottom: 2px;
+            padding: 0 5px;
         }
-
         .message-content {
-            padding: 12px 18px;
+            padding: 10px 16px;
             border-radius: 18px;
-            font-size: 0.92rem;
-            line-height: 1.45;
+            font-size: 0.95rem;
+            line-height: 1.3;
+            max-width: 100%;
             word-wrap: break-word;
-            word-break: break-word;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
-
         .message.sent .message-content {
-            background: var(--bubble-sent);
-            color: #ffffff;
+            background: #4a3e94;
+            color: white;
             border-bottom-right-radius: 4px;
         }
-
         .message.received .message-content {
-            background: var(--bubble-received);
-            color: var(--text-dark);
-            border: 1px solid var(--border-color);
+            background: #e4e6eb;
+            color: #050505;
             border-bottom-left-radius: 4px;
         }
-
         .message-time {
-            font-size: 0.68rem;
-            color: #94a3b8;
-            margin-top: 4px;
-            padding: 0 6px;
+            font-size: 0.65rem;
+            color: #bcc0c4;
+            margin-top: 0px;
+            padding: 0 10px;
         }
-
         .seen-status {
-            font-size: 0.68rem;
-            color: var(--chat-primary);
-            margin-top: 2px;
-            padding: 0 6px;
-            font-weight: 700;
-        }
-
-        .no-conversation {
-            margin: auto;
-            text-align: center;
-            color: var(--text-muted);
-            padding: 20px;
-        }
-
-        .no-conversation i {
-            font-size: 3rem;
-            color: #cbd5e1;
-            margin-bottom: 12px;
-        }
-
-        /* Input Area */
-        .conversation-input {
-            padding: 16px 24px;
-            background: #ffffff;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .input-group {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .input-group textarea {
-            flex: 1;
-            height: 44px;
-            padding: 11px 16px;
-            border: 1px solid var(--border-color);
-            border-radius: 22px;
-            resize: none;
-            outline: none;
-            font-family: inherit;
-            font-size: 0.92rem;
-            background: #f8fafc;
-            transition: all 0.2s ease;
-            box-sizing: border-box;
-        }
-
-        .input-group textarea:focus {
-            background: #ffffff;
-            border-color: var(--chat-primary);
-            box-shadow: 0 0 0 3px rgba(74, 62, 148, 0.1);
-        }
-
-        .input-group button {
-            background: var(--chat-primary);
-            color: #ffffff;
-            border: none;
-            padding: 0 22px;
-            height: 44px;
-            border-radius: 22px;
+            font-size: 0.65rem;
+            color: #8e8e8e;
+            margin-top: 0px;
+            padding: 0 10px;
             font-weight: 600;
-            font-size: 0.9rem;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: background 0.2s ease;
-            flex-shrink: 0;
-        }
-
-        .input-group button:hover {
-            background: var(--chat-primary-hover);
-        }
-
-        .alert {
-            padding: 12px 18px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        .alert.success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
-        .alert.error { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
-
-        /* ========================================================= */
-        /* RESPONSIVE MEDIA QUERIES (Tablets and Mobile Devices)      */
-        /* ========================================================= */
-
-        @media (max-width: 850px) {
-            .messages-wrapper {
-                grid-template-columns: 1fr;
-                height: calc(100vh - 140px);
-                min-height: 480px;
-                border-radius: 12px;
-            }
-
-            /* On Mobile: Toggle between Sidebar list and Chat Area */
-            <?php if ($selected_customer_id > 0): ?>
-                .customers-list {
-                    display: none; /* Hide sidebar when a chat is open */
-                }
-                .conversation-area {
-                    display: flex; /* Show chat area */
-                }
-                .mobile-back-btn {
-                    display: inline-flex; /* Show back button */
-                }
-            <?php else: ?>
-                .customers-list {
-                    display: flex;
-                    width: 100%;
-                }
-                .conversation-area {
-                    display: none; /* Hide empty chat view when no chat selected */
-                }
-            <?php endif; ?>
-
-            .conversation-header {
-                padding: 12px 16px;
-            }
-
-            .conversation-messages {
-                padding: 14px;
-            }
-
-            .message {
-                max-width: 88%;
-            }
-
-            .message-content {
-                padding: 10px 14px;
-                font-size: 0.9rem;
-            }
-
-            .conversation-input {
-                padding: 12px 16px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .messages-wrapper {
-                height: calc(100vh - 110px);
-            }
-
-            .input-group {
-                gap: 8px;
-            }
-
-            .input-group textarea {
-                padding: 10px 14px;
-                font-size: 0.88rem;
-            }
-
-            .input-group button {
-                padding: 0 16px;
-                font-size: 0.85rem;
-            }
-
-            .input-group button span {
-                display: none; /* Hide text, keep paper plane icon on tiny screens */
-            }
         }
     </style>
 </head>
@@ -508,8 +166,6 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
                     <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo $pending_orders_count; ?></span>
                 <?php endif; ?>
             </a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/admin/delivery.php" class="<?php echo basename($_SERVER['PHP_SELF']) === 'delivery.php' ? 'active' : ''; ?>"><i class="fas fa-truck"></i> Delivery</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/admin/about.php" <?php echo basename($_SERVER['PHP_SELF']) === 'about.php' ? 'class="active"' : ''; ?>><i class="fas fa-info-circle"></i> About Us</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/messages.php" <?php echo basename($_SERVER['PHP_SELF']) === 'messages.php' ? 'class="active"' : ''; ?>>
                 <i class="fas fa-comment-dots"></i> Messages
                 <?php if ($unread_count > 0): ?>
@@ -517,8 +173,7 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
                 <?php endif; ?>
             </a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
+<li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance</a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'loyalty_points.php') ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'reward_redemption.php') ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>
             <?php if ($user_role === 'admin'): ?>
@@ -529,10 +184,9 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
             <i class="fas fa-sign-out-alt"></i> Logout
         </a>
     </div>
-
     <div class="main-content">
-        <div class="page-title" style="margin-bottom: 20px;">
-            <h1 style="margin: 0; font-size: 1.5rem; color: #1e293b;"><i class="fas fa-comments" style="color: var(--chat-primary);"></i> Messaging System</h1>
+        <div class="page-title" style="margin-bottom: 25px;">
+            <h1>Messaging System</h1>
         </div>
     
         <?php if (isset($_SESSION['message'])): ?>
@@ -546,34 +200,28 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
         <?php endif; ?> 
     
         <div class="messages-wrapper">
-            <!-- Customers List Sidebar -->
+            <!-- Customers List -->
             <div class="customers-list" id="customers-sidebar">
                 <div class="customers-list-header" id="sidebar-header">
-                    <span><i class="fas fa-inbox" style="margin-right: 8px;"></i> Conversations</span>
-                    <?php if ($unread_count > 0): ?>
-                        <span class='sidebar-total-unread'><?php echo $unread_count; ?> new</span>
-                    <?php endif; ?>
+                    📬 Conversations <?php if ($unread_count > 0) echo "<span class='sidebar-total-unread'>(" . $unread_count . ")</span>"; ?>
                 </div>
                 
                 <div id="conversations-list">
                 <?php if (empty($customers_with_messages)): ?>
                     <div class="empty-list">
-                        <i class="fas fa-comment-slash" style="font-size: 2rem; color: #cbd5e1; margin-bottom: 10px;"></i>
-                        <p style="margin: 0;">No active conversations</p>
+                        <p>No conversations yet</p>
                     </div>
                 <?php else: ?>
                     <?php foreach ($customers_with_messages as $customer): ?>
                         <div class="customer-item <?php echo ($customer['id'] == $selected_customer_id) ? 'active' : ''; ?>" 
                              onclick="location.href='?customer_id=<?php echo $customer['id']; ?>'">
-                            <div class="customer-name">
-                                <span><?php echo htmlspecialchars($customer['name']); ?></span>
-                            </div>
+                            <div class="customer-name"><?php echo htmlspecialchars($customer['name']); ?></div>
                             <div class="customer-email"><?php echo htmlspecialchars($customer['email']); ?></div>
                             <?php if ($customer['unread_count'] > 0): ?>
-                                <span class="customer-unread"><?php echo $customer['unread_count']; ?></span>
+                                <span class="customer-unread"><?php echo $customer['unread_count']; ?> new</span>
                             <?php endif; ?>
                             <div class="customer-last-msg">
-                                <i class="far fa-clock"></i> <?php echo date('M d, H:i', strtotime($customer['last_message_time'])); ?>
+                                <?php echo date('M d, H:i', strtotime($customer['last_message_time'])); ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -585,24 +233,18 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
             <div class="conversation-area">
                 <?php if ($selected_customer): ?>
                     <div class="conversation-header">
-                        <a href="messages.php" class="mobile-back-btn" title="Back to customer list">
-                            <i class="fas fa-arrow-left"></i>
-                        </a>
-                        <div style="width: 40px; height: 40px; border-radius: 50%; background: #e0e7ff; color: var(--chat-primary); display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">
-                            <?php echo strtoupper(substr($selected_customer['name'], 0, 2)); ?>
-                        </div>
                         <div>
                             <h3><?php echo htmlspecialchars($selected_customer['name']); ?></h3>
                             <p><?php echo htmlspecialchars($selected_customer['email']); ?></p>
                         </div>
                     </div>
     
-                    <div class="conversation-messages" id="conversation-messages">
+                    <div class="conversation-messages" id="conversation-messages" style="display: flex; flex-direction: column;">
                         <?php 
                         $last_seen_msg_id = null;
                         if (!empty($conversation)) {
                             foreach ($conversation as $msg) {
-                                if (in_array($msg['sender_type'], ['admin', 'staff']) && $msg['is_read'] == 1) {
+                                if (in_array($msg['sender_type'], ['staff']) && $msg['is_read'] == 1) {
                                     $last_seen_msg_id = $msg['id'];
                                 }
                             }
@@ -610,18 +252,17 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
                         
                         if (empty($conversation)): ?>
                             <div class="no-conversation">
-                                <i class="fas fa-paper-plane"></i>
-                                <p>No messages yet. Start the conversation below!</p>
+                                <p>No messages yet. Start the conversation!</p>
                             </div>
                         <?php else: ?>
                             <?php foreach ($conversation as $msg): 
-                                $is_sent = in_array($msg['sender_type'], ['admin', 'staff']);
+                                $is_sent = in_array($msg['sender_type'], ['staff']);
                             ?>
                                 <div class="message <?php echo $is_sent ? 'sent' : 'received'; ?>">
                                     <div class="message-sender">
                                         <?php echo htmlspecialchars($msg['sender_name']); ?>
-                                        <?php if ($is_sent): ?>
-                                            <i class="fas fa-user-shield" style="color: var(--chat-primary); margin-left: 4px;" title="Verified Staff"></i>
+                                        <?php if (in_array($msg['sender_type'], ['staff'])): ?>
+                                            <i class="fas fa-user-shield" style="color: #4a3e94; margin-left: 5px;" title="Verified Staff"></i>
                                         <?php endif; ?>
                                     </div>
                                     <div class="message-content">
@@ -631,7 +272,7 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
                                         <?php echo date('M d, H:i', strtotime($msg['created_at'])); ?>
                                     </div>
                                     <?php if ($is_sent && $msg['id'] === $last_seen_msg_id): ?>
-                                        <div class="seen-status"><i class="fas fa-check-double"></i> Seen</div>
+                                        <div class="seen-status">Seen</div>
                                     <?php endif; ?>
                                 </div>
                             <?php endforeach; ?>
@@ -644,15 +285,13 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
                         <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
                         <input type="hidden" name="sender_type" value="<?php echo $user_role; ?>">
                         <div class="input-group">
-                            <textarea name="message" id="message-input" placeholder="Type your message here..." required></textarea>
-                            <button type="submit"><i class="fas fa-paper-plane"></i> <span>Send</span></button>
+                            <textarea name="message" id="message-input" placeholder="Type your message..." required></textarea>
+                            <button type="submit">Send</button>
                         </div>
                     </form>
                 <?php else: ?>
                     <div class="no-conversation">
-                        <i class="fas fa-comments"></i>
-                        <h3>Your Messages</h3>
-                        <p>Select a customer from the left list to view and reply to conversations.</p>
+                        <p>Select a customer to start messaging</p>
                     </div>
                 <?php endif; ?>
             </div>
@@ -692,28 +331,29 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
         function renderMessages(messages) {
             let lastSeenId = null;
             messages.forEach(msg => {
-                if (['admin', 'staff'].includes(msg.sender_type) && msg.is_read === 1) {
+                if (['staff'].includes(msg.sender_type) && msg.is_read === 1) {
                     lastSeenId = msg.id;
                 }
             });
+
 
             const html = messages.map(msg => {
                 if (msg.sender_type === 'system') {
                     return `
                         <div class="system-message" style="width: 100%; text-align: center; margin: 15px 0; font-size: 0.8rem; color: #8e8e8e; font-weight: 600;">
-                            <span style="background: #e2e8f0; padding: 5px 15px; border-radius: 12px; color: #475569;">${escapeHtml(msg.message)}</span>
+                            <span style="background: #f0f2f5; padding: 5px 15px; border-radius: 12px;">${escapeHtml(msg.message)}</span>
                         </div>
                     `;
                 }
 
-                const isSent = ['admin', 'staff'].includes(msg.sender_type);
-                const seenStatus = (isSent && msg.id === lastSeenId) ? '<div class="seen-status"><i class="fas fa-check-double"></i> Seen</div>' : '';
+                const isSent = ['staff'].includes(msg.sender_type);
+                const seenStatus = (isSent && msg.id === lastSeenId) ? '<div class="seen-status">Seen</div>' : '';
                 const time = new Date(msg.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '');
                 
                 return `
                     <div class="message ${isSent ? 'sent' : 'received'}">
                         <div class="message-sender">${escapeHtml(msg.sender_name)}
-                            ${isSent ? '<i class="fas fa-user-shield" style="color: var(--chat-primary); margin-left: 4px;" title="Verified Staff"></i>' : ''}</div>
+                            ${isSent ? '<i class="fas fa-user-shield" style="color: #4a3e94; margin-left: 5px;" title="Verified Staff"></i>' : ''}</div>
                         <div class="message-content">${escapeHtml(msg.message).replace(/\n/g, '<br>')}</div>
                         <div class="message-time">${time}</div>
                         ${seenStatus}
@@ -746,6 +386,8 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
             // WebSocket realtime updates (admin)
             setupWs();
 
+
+
             // Handle AJAX form submission to prevent reload on send
             const chatForm = document.getElementById('chat-form');
             if (chatForm) {
@@ -765,7 +407,7 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
                         });
                         const result = await response.json();
                         if (result.success) {
-                            // Trigger WS broadcast so other clients can refresh
+                            // Trigger WS broadcast so other clients can refresh (and the WS server can push an event back)
                             try {
                                 if (ws && ws.readyState === WebSocket.OPEN) {
                                     ws.send(JSON.stringify({
@@ -779,6 +421,7 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
                             }
                             fetchMessages(); // Force refresh to show new message
                         } else {
+
                             msgInput.value = originalText;
                             alert("Failed to send: " + result.message);
                         }
@@ -818,7 +461,13 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
                     if (!data || !data.type) return;
 
                     if (data.type === 'new_message' && data.customer_id == selectedCustomerId) {
+                        // Force refresh from REST so UI stays consistent
                         fetchMessages();
+                    }
+
+                    if (data.type === 'typing' && data.customer_id == selectedCustomerId) {
+                        // Optional: show typing UI (not required to work)
+                        // console.log('Typing', data.is_typing);
                     }
                 } catch (err) {
                     console.error(err);
@@ -828,3 +477,4 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
     </script>
 </body>
 </html>
+

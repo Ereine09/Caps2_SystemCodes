@@ -12,6 +12,8 @@ class Order {
   final String customerName;
   final String? customerPhone;
   final String? customerEmail;
+  final DateTime? createdAt;
+  final String itemsSummary;
   final List<OrderItem> items;
 
   Order({
@@ -26,6 +28,8 @@ class Order {
     required this.customerName,
     this.customerPhone,
     this.customerEmail,
+    this.createdAt,
+    this.itemsSummary = '',
     this.items = const [],
   });
 
@@ -33,22 +37,38 @@ class Order {
     List<OrderItem> orderItems = [];
     if (json['items'] != null && json['items'] is List) {
       orderItems = (json['items'] as List)
-          .map((itemJson) => OrderItem.fromJson(itemJson))
+          .map((itemJson) => OrderItem.fromJson(Map<String, dynamic>.from(itemJson)))
           .toList();
     }
 
+    // The rider_orders_api returns `address`; customer/rider_api returns
+    // `delivery_address`. Support both.
+    final rawAddress = json['delivery_address'] ?? json['address'] ?? 'No address provided';
+
+    // The backend may return order id under `order_id` (assignments list) or
+    // `id` (order details). Support both.
+    final rawId = int.tryParse(json['order_id']?.toString() ?? json['id']?.toString() ?? '') ?? 0;
+
+    DateTime? createdAt;
+    final rawDate = json['created_at']?.toString();
+    if (rawDate != null && rawDate.isNotEmpty) {
+      createdAt = DateTime.tryParse(rawDate);
+    }
+
     return Order(
-      id: int.tryParse(json['id'].toString()) ?? 0,
+      id: rawId,
       orderNumber: json['order_number'] ?? 'N/A',
       orderStatus: json['order_status'] ?? 'unknown',
       fulfillmentType: json['fulfillment_type'] ?? 'delivery',
       total: double.tryParse(json['total'].toString()) ?? 0.0,
-      deliveryAddress: json['delivery_address'] ?? 'No address provided',
-      deliveryPhone: json['delivery_phone'],
+      deliveryAddress: rawAddress,
+      deliveryPhone: json['delivery_phone']?.toString() ?? json['phone']?.toString(),
       paymentMethod: json['payment_method'] ?? 'cod',
       customerName: json['customer_name'] ?? 'Unknown Customer',
-      customerPhone: json['customer_phone'],
-      customerEmail: json['customer_email'],
+      customerPhone: json['customer_phone']?.toString(),
+      customerEmail: json['customer_email']?.toString(),
+      createdAt: createdAt,
+      itemsSummary: json['items_summary']?.toString() ?? '',
       items: orderItems,
     );
   }

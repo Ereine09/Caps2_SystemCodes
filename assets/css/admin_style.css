@@ -12,6 +12,17 @@ body {
     min-height: 100vh;
 }
 
+body {
+    overflow-x: hidden;
+}
+    .sidebar::-webkit-scrollbar {
+    display: none;
+}
+    .sidebar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
 /* SIDEBAR DESIGN */
 .sidebar {
     width: 260px;

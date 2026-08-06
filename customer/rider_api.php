@@ -9,11 +9,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     exit();
 }
 
-
 require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
-require_once __DIR__ . '/../../app/helpers/db_schema_helper.php'; // New helper for schema management
-
+require_once __DIR__ . '/../../app/helpers/db_schema_helper.php';
 
 $response = [
     'success' => false,
@@ -21,27 +19,12 @@ $response = [
     'data' => null
 ];
 
-// try {
-//     // Ensure database schema is ready for rider features
-//     ensureRiderSchema($conn);
-
-    // --- Rider Authentication (Future Enhancement) ---
-    // For now, we'll proceed without strict JWT checks for this new module.
-    // In a real scenario, you'd verify a rider-specific JWT.
-    // $token = getJWTFromCookie();
-    // $payload = verifyJWT($token);
-    // if (!$payload || $payload['role'] !== 'rider') {
-    //     throw new Exception('Unauthorized Rider');
-    // }
-//     $rider_user_id = (int)$payload['user_id'];
-
+try {
     $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
     switch ($action) {
         case 'get_deliveries':
-            // This would fetch deliveries assigned to a specific rider
-            // For now, let's fetch all deliverable orders as a placeholder
-            $rider_id = (int)($_GET['rider_id'] ?? 0); // This would come from JWT
+            $rider_id = (int)($_GET['rider_id'] ?? 0);
 
             $query = "
                 SELECT 
@@ -54,13 +37,14 @@ $response = [
                 LEFT JOIN tbl_order_items oi ON o.id = oi.order_id
                 WHERE o.fulfillment_type = 'delivery' 
                 AND o.order_status NOT IN ('completed', 'cancelled', 'pending')
-                -- AND o.rider_id = ? -- Uncomment when rider assignment is implemented
                 GROUP BY o.id, o.order_number, o.order_status, o.fulfillment_type, o.total, o.delivery_address, o.delivery_phone, o.payment_method, c.name, c.phone
                 ORDER BY o.created_at DESC
             ";
             
             $stmt = $conn->prepare($query);
-            // $stmt->bind_param('i', $rider_id); // Uncomment for specific rider
+            if (!$stmt) {
+                throw new Exception('Query prepare failed: ' . $conn->error);
+            }
             $stmt->execute();
             $result = $stmt->get_result();
             $deliveries = $result->fetch_all(MYSQLI_ASSOC);
@@ -74,7 +58,6 @@ $response = [
             $order_id = (int)($_GET['order_id'] ?? 0);
             if ($order_id <= 0) throw new Exception('Invalid Order ID');
 
-            // Fetch order details
             $order_query = "
                 SELECT 
                     o.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone
@@ -90,7 +73,6 @@ $response = [
 
             if (!$order_details) throw new Exception('Order not found.');
 
-            // Fetch order items
             $items_stmt = $conn->prepare("SELECT * FROM tbl_order_items WHERE order_id = ?");
             $items_stmt->bind_param('i', $order_id);
             $items_stmt->execute();
@@ -105,7 +87,7 @@ $response = [
 
         case 'update_delivery_status':
             $order_id = (int)($_POST['order_id'] ?? 0);
-            $rider_id = (int)($_POST['rider_id'] ?? 0); // This would come from JWT
+            $rider_id = (int)($_POST['rider_id'] ?? 0);
             $new_status = trim($_POST['status'] ?? '');
             $notes = trim($_POST['notes'] ?? '');
             $proof_image_url = null;
@@ -117,13 +99,12 @@ $response = [
 
             $conn->begin_transaction();
             try {
-                // 1. Update the main order status in tbl_orders
                 $order_status_map = [
                     'accepted' => 'confirmed',
                     'picked_up' => 'processing',
                     'out_for_delivery' => 'out_for_delivery',
                     'delivered' => 'completed',
-                    'failed_delivery' => 'cancelled' // Or a new 'failed' status
+                    'failed_delivery' => 'cancelled'
                 ];
                 $mapped_status = $order_status_map[$new_status];
 
@@ -132,7 +113,6 @@ $response = [
                 $update_order_stmt->execute();
                 $update_order_stmt->close();
 
-                // Handle proof of delivery upload if status is 'delivered'
                 if ($new_status === 'delivered' && isset($_FILES['proof_image'])) {
                     $file = $_FILES['proof_image'];
                     if ($file['error'] === UPLOAD_ERR_OK) {
@@ -150,14 +130,13 @@ $response = [
                         $destination = $upload_dir . $filename;
 
                         if (move_uploaded_file($file['tmp_name'], $destination)) {
-                            $proof_image_url = '/uploads/pod/' . $filename; // Relative URL to store in DB
+                            $proof_image_url = '/uploads/pod/' . $filename;
                         } else {
                             throw new Exception('Failed to save proof of delivery image.');
                         }
                     }
                 }
 
-                // 2. Log this event in the delivery_tracking table
                 $log_stmt = $conn->prepare(
                     "INSERT INTO delivery_tracking (order_id, rider_id, status, notes, proof_image_url) VALUES (?, ?, ?, ?, ?)"
                 );
@@ -175,30 +154,14 @@ $response = [
             }
             break;
 
-        case 'toggle_duty_status':
-            $rider_id = (int)($_POST['rider_id'] ?? 0); // This would come from JWT
-            $is_on_duty = (int)($_POST['is_on_duty'] ?? 0);
-
-            if ($rider_id <= 0) throw new Exception('Invalid Rider ID.');
-
-            $stmt = $conn->prepare("UPDATE riders SET is_on_duty = ? WHERE id = ?");
-            $stmt->bind_param('ii', $is_on_duty, $rider_id);
-            $stmt->execute();
-            $stmt->close();
-
-            $response['success'] = true;
-            $response['message'] = 'Duty status updated.';
-            break;
-
         case 'verify_delivery_qr':
-            $rider_id = (int)($_POST['rider_id'] ?? 0); // This would come from JWT
+            $rider_id = (int)($_POST['rider_id'] ?? 0);
             $qr_token = trim($_POST['qr_token'] ?? '');
 
             if ($rider_id <= 0 || empty($qr_token)) {
                 throw new Exception('Invalid rider or QR token.');
             }
 
-            // The QR data is expected to be a JSON string: {"delivery_id": X, "token": "..."}
             $qr_data = json_decode($qr_token, true);
             if (!$qr_data || !isset($qr_data['delivery_id']) || !isset($qr_data['token'])) {
                 throw new Exception('Invalid QR code format.');
@@ -207,11 +170,9 @@ $response = [
             $delivery_details_id = (int)$qr_data['delivery_id'];
             $token_from_qr = $qr_data['token'];
 
-            // Fetch the delivery details from the database to verify the token
-            // CORRECTED: Use tbl_delivery, not delivery_details
             $stmt = $conn->prepare(
-                "SELECT dd.order_id, dd.qr_confirmation_token, o.order_status 
-                 FROM tbl_delivery dd
+                "SELECT dd.order_id, dd.qr_confirmation_token, o.order_status
+                 FROM tbl_deliveries dd
                  JOIN tbl_orders o ON dd.order_id = o.id
                  WHERE dd.id = ?"
             );
@@ -232,22 +193,18 @@ $response = [
                 throw new Exception('Order is not yet out for delivery.');
             }
 
-            // Securely compare tokens
             if (!hash_equals((string)$delivery_info['qr_confirmation_token'], $token_from_qr)) {
                 throw new Exception('QR Code is invalid or does not match the order.');
             }
 
-            // --- Backend-Managed Status Update ---
             $conn->begin_transaction();
             try {
-                // Update order status to completed
                 $update_order_stmt = $conn->prepare("UPDATE tbl_orders SET order_status = 'completed' WHERE id = ?");
                 $update_order_stmt->bind_param('i', $delivery_info['order_id']);
                 $update_order_stmt->execute();
                 $update_order_stmt->close();
 
-                // Update delivery status to delivered
-                $update_delivery_stmt = $conn->prepare("UPDATE tbl_delivery SET status = 'delivered', delivered_at = NOW() WHERE id = ?");
+                $update_delivery_stmt = $conn->prepare("UPDATE tbl_deliveries SET delivery_status = 'delivered', delivered_at = NOW() WHERE delivery_id = ?");
                 $update_delivery_stmt->bind_param('i', $delivery_details_id);
                 $update_delivery_stmt->execute();
                 $update_delivery_stmt->close();
@@ -266,12 +223,12 @@ $response = [
         default:
             throw new Exception('Invalid API action');
     }
-//
-// } catch (Exception $e) {
-//     $response['success'] = false;
-//     $response['message'] = $e->getMessage();
-//     http_response_code(400);
-// }
+
+} catch (Exception $e) {
+    $response['success'] = false;
+    $response['message'] = $e->getMessage();
+    http_response_code(400);
+}
 
 echo json_encode($response);
 ?>

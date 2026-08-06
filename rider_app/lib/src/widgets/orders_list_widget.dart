@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api/api_client.dart';
 import '../constants/api_constants.dart';
+import '../constants/colors.dart'; // Import AppColors
 import '../screens/rider_shipment_detail_screen.dart';
 
 class OrdersListWidget extends StatefulWidget {
@@ -158,9 +159,13 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
     if (orderId > 0) _confirmUpdate(orderId, 'reject');
   }
 
-  void _showOrderDetails(int orderId) {
+void _showOrderDetails(int orderId) {
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => RiderShipmentDetailScreen(orderId: orderId, apiClient: ApiClient(baseUrl: _baseUrl)),
+      builder: (_) => RiderShipmentDetailScreen(
+        orderId: orderId,
+        apiClient: ApiClient(baseUrl: _baseUrl),
+        token: widget.token,
+      ),
     ));
   }
 
@@ -222,7 +227,7 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
                     decoration: BoxDecoration(
                       color: isSelected ? Colors.white : Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
+                      border: Border.all( // Use Theme.of(context).primaryColor for selected border
                         color: isSelected ? Theme.of(context).primaryColor : Colors.grey.shade300,
                         width: isSelected ? 1.5 : 1,
                       ),
@@ -234,7 +239,7 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
                       child: Text(
                         label,
                         style: TextStyle(
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w600, // Keep font weight
                           color: isSelected ? Theme.of(context).primaryColor : Colors.grey.shade700,
                         ),
                       ),
@@ -277,10 +282,10 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
                         margin: const EdgeInsets.symmetric(vertical: 8),
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
+                          color: AppColors.cardBg, // Use AppColors.cardBg
+                          borderRadius: BorderRadius.circular(20), // Keep 20
                           boxShadow: [
-                            BoxShadow(
+                            BoxShadow( // Consistent shadow
                               color: Colors.black.withValues(alpha: 0.04),
                               blurRadius: 14,
                               offset: const Offset(0, 8),
@@ -343,36 +348,30 @@ class _OrdersListWidgetState extends State<OrdersListWidget> {
                                 Expanded(
                                   child: ElevatedButton(
                                     onPressed: () => _onAccept(order),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
-                                    ),
-                                    child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
+                                    // ElevatedButton theme will apply, but override background for 'Accept'
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 14)),
+                                    child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), // Ensure bold
                                   ),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: ElevatedButton(
                                     onPressed: () => _onReject(order),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.red,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
-                                    ),
-                                    child: const Text('Reject', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
+                                    // ElevatedButton theme will apply, but override background for 'Reject'
+                                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.statusDangerText, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 14)),
+                                    child: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), // Ensure bold
                                   ),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: OutlinedButton(
                                     onPressed: () => _showOrderDetails(orderId),
-                                    style: OutlinedButton.styleFrom(
-                                      side: BorderSide(color: Colors.grey.shade400),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                    style: OutlinedButton.styleFrom( // Apply consistent button styling
+                                      side: BorderSide(color: AppColors.textMuted.withOpacity(0.5)), // Use AppColors.textMuted
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // Keep 12
+                                      padding: const EdgeInsets.symmetric(vertical: 14), // Keep padding
                                     ),
-                                    child: const Text('Details', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
+                                    child: const Text('Details', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600)), // Use AppColors.textMain
                                   ),
                                 ),
                               ],

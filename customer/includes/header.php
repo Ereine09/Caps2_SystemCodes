@@ -244,6 +244,11 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
                     <i class="fas fa-gift"></i> My Rewards
                 </a>
             </li>
+            <li>
+                <a href="<?php echo BASE_URL; ?>/customer/about.php" class="<?php echo $current_page === 'about' ? 'active' : ''; ?>">
+                    <i class="fas fa-info-circle"></i> About Us
+                </a>
+            </li>
         </ul>
         <div class="customer-sidebar-logout">
             <a href="<?php echo BASE_URL; ?>/customer/logout.php">

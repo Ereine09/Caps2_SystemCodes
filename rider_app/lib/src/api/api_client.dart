@@ -32,7 +32,7 @@ class ApiClient {
             }
           } else {
             // Kung walang response (e.g. offline o hindi gumagana ang local server)
-            if (e.type == DioExceptionType.connectionTimeout || 
+            if (e.type == DioExceptionType.connectionTimeout ||
                 e.type == DioExceptionType.receiveTimeout) {
               errorMessage = "Connection timeout. Please try again.";
             } else {
@@ -62,12 +62,20 @@ class ApiClient {
     return _dio.get<T>(path, options: Options(headers: headers));
   }
 
-  /// Fetches a list of assigned deliveries for a rider.
-  Future<List<dynamic>> getDeliveries({int riderId = 1}) async {
-    // In a real app, riderId would come from auth state.
-    final response = await getJson('/rider_api.php?action=get_deliveries&rider_id=$riderId');
+  /// Fetches the list of assigned deliveries for the authenticated rider.
+  ///
+  /// Uses `rider_orders_api.php` and passes the JWT so the backend knows which
+  /// rider is asking. No hardcoded rider id is required.
+  Future<List<dynamic>> getDeliveries({String token = ''}) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await getJson(
+      '/modules/rider/rider_orders_api.php',
+      headers: headers,
+    );
     if (response.data['success'] == true) {
-      return response.data['data'];
+      final data = (response.data['data'] as Map?) ?? {};
+      final assignments = (data['assignments'] as List?) ?? [];
+      return assignments;
     } else {
       throw Exception('Failed to load deliveries: ${response.data['message']}');
     }
@@ -96,10 +104,14 @@ class ApiClient {
   }
 
   /// Fetches the full details for a single order.
-  Future<Map<String, dynamic>> getDeliveryDetails(int orderId) async {
-    final response = await getJson('/rider_api.php?action=get_delivery_details&order_id=$orderId');
+  Future<Map<String, dynamic>> getDeliveryDetails(int orderId, {String token = ''}) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await getJson(
+      '/modules/rider/rider_orders_api.php?action=get_order_details&id=$orderId',
+      headers: headers,
+    );
     if (response.data['success'] == true) {
-      return response.data['data'];
+      return Map<String, dynamic>.from(response.data['data']);
     } else {
       throw Exception('Failed to load delivery details: ${response.data['message']}');
     }

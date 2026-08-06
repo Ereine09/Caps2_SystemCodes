@@ -127,9 +127,12 @@ $order_summary = array_map(function ($value) {
     return $value === null ? 0 : $value;
 }, $order_summary);
 
-$order_result = mysqli_query($conn, "SELECT o.id, o.order_number, o.order_status, o.fulfillment_type, o.subtotal, o.delivery_fee, o.loyalty_points_earned, o.total, o.created_at, o.payment_method, o.payment_reference, c.name AS customer_name, c.email AS customer_email
+$order_result = mysqli_query($conn, "SELECT o.id, o.order_number, o.order_status, o.fulfillment_type, o.subtotal, o.delivery_fee, o.loyalty_points_earned, o.total, o.created_at, o.payment_method, o.payment_reference, c.name AS customer_name, c.email AS customer_email,
+    GROUP_CONCAT(CONCAT(oi.product_name, ' (x', oi.quantity, ')') SEPARATOR '<br>') as items_summary
     FROM tbl_orders o
     LEFT JOIN customers c ON o.customer_id = c.id
+    LEFT JOIN tbl_order_items oi ON o.id = oi.order_id
+    GROUP BY o.id
     ORDER BY o.created_at DESC LIMIT 200");
 
 $orders = [];
@@ -186,6 +189,8 @@ $unread_count = get_unread_count_staff($user_id);
                     <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo $order_summary['pending_orders']; ?></span>
                 <?php endif; ?>
             </a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/delivery.php" class="<?php echo basename($_SERVER['PHP_SELF']) === 'delivery.php' ? 'active' : ''; ?>"><i class="fas fa-truck"></i> Delivery</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/about.php" <?php echo basename($_SERVER['PHP_SELF']) === 'about.php' ? 'class="active"' : ''; ?>><i class="fas fa-info-circle"></i> About Us</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/messages.php" <?php echo basename($_SERVER['PHP_SELF']) === 'messages.php' ? 'class="active"' : ''; ?>>
                 <i class="fas fa-comment-dots"></i> Messages
                 <?php if ($unread_count > 0): ?>
@@ -193,7 +198,7 @@ $unread_count = get_unread_count_staff($user_id);
                 <?php endif; ?>
             </a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
-<li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance</a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance</a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'loyalty_points.php') ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'reward_redemption.php') ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>
             
@@ -243,6 +248,7 @@ $unread_count = get_unread_count_staff($user_id);
                         <tr>
                             <th>No</th>
                             <th>Order Number</th>
+                            <th>Items Purchased</th>
                             <th>Customer</th>
                             <th>Fulfillment</th>
                             <th>Status</th>
@@ -258,7 +264,12 @@ $unread_count = get_unread_count_staff($user_id);
                         ?>
                             <tr>
                                 <td><?php echo $row_number++; ?></td>
-                                <td><?php echo htmlspecialchars($order['order_number']); ?></td>
+                                <td>
+                                    <a href="order_details.php?id=<?php echo (int)$order['id']; ?>" style="font-weight: bold; text-decoration: none;">
+                                        <?php echo htmlspecialchars($order['order_number']); ?>
+                                    </a>
+                                </td>
+                                <td style="font-size: 0.85rem; color: #475569;"><?php echo $order['items_summary'] ?: 'N/A'; ?></td>
                                 <td><?php echo htmlspecialchars($order['customer_name'] ?: 'Unknown'); ?> <br><small><?php echo htmlspecialchars($order['customer_email'] ?: ''); ?></small></td>
                                 <td><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $order['fulfillment_type']))); ?></td>
                                 <td>
@@ -287,7 +298,7 @@ $unread_count = get_unread_count_staff($user_id);
                             </tr>
                         <?php endforeach; ?>
                         <?php if (empty($orders)): ?>
-                            <tr><td colspan="7" style="text-align:center; padding: 20px;">No orders found.</td></tr>
+                            <tr><td colspan="9" style="text-align:center; padding: 20px;">No orders found.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>

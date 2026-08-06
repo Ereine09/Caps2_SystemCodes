@@ -229,8 +229,8 @@ $GLOBALS['conn']->commit();
                 $previous_points_row = mysqli_fetch_assoc($previous_points_query);
                 $previous_points = (float)($previous_points_row['loyalty_points'] ?? 0.00);
 
-                $order_total = $order_cart_subtotal_net - $discount_amount; // Points are earned on the amount after discount (ex-VAT)
-                $points_earned = round($order_total / 100, 2); // P100 = 1 point
+                // Points are earned on the subtotal before discount (ex-VAT)
+                $points_earned = round($order_cart_subtotal_net / 100, 2); // P100 = 1 point
                 // --- End capture ---
 
                 clear_customer_cart();
@@ -786,7 +786,7 @@ function updateTotals(discount = 0) {
     vatDisplay.innerText = 'PHP ' + (subtotal_net * 0.12).toFixed(2);
 
     // Update points earned based on discounted net subtotal
-    const pointsEarned = Math.max(0, (subtotal_net - discount) / 100);
+   const pointsEarned = Math.max(0, subtotal_net / 100);
     pointsDisplay.innerText = `+${pointsEarned.toFixed(2)} pts`;
 
     if (discount > 0) {
@@ -985,17 +985,16 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php include __DIR__ . '/includes/footer.php'; ?>
 
 <script>
-function updateTotals(discount = 0) {
+function updateTotals (discount = 0) {
     const fulfillmentInput = document.querySelector('input[name="fulfillment_type"]:checked');
     const fulfillmentType = fulfillmentInput ? fulfillmentInput.value : 'pickup';
     const addressEl = document.getElementById('delivery_address');
     const address = addressEl ? addressEl.value.toLowerCase() : '';
-    
     const subtotalNetEl = document.getElementById('subtotal-net-display');
     const subtotal_net = parseFloat(subtotalNetEl ? subtotalNetEl.dataset.value : 0);
     const subtotal_gross = subtotal_net * 1.12;
-    
     let fee = 0;
+
     const hiddenDiscount = document.getElementById('discount_amount_hidden');
     if (hiddenDiscount) hiddenDiscount.value = discount;
 
@@ -1003,7 +1002,7 @@ function updateTotals(discount = 0) {
         if (address.includes('10th ave') || address.includes('10th avenue') || address.includes('grace park')) {
             fee = 0;
         } else if (address.includes('caloocan')) {
-            fee = (subtotal_gross >= 2000) ? 0 : 50;
+            fee = (subtotal_gross > 2000) ? 0 : 50;
         } else if (address.trim() === '') {
             fee = 120;
         }
@@ -1022,9 +1021,9 @@ function updateTotals(discount = 0) {
     if (feeDisplay) feeDisplay.innerText = fee === 0 ? 'Free' : 'PHP ' + fee.toFixed(2);
     if (totalDisplay) totalDisplay.innerText = 'PHP ' + finalTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
     if (vatDisplay) vatDisplay.innerText = 'PHP ' + (subtotal_net * 0.12).toFixed(2);
-    
-    // Points earned calculation based on discounted subtotal
-    const pointsEarned = Math.max(0, (subtotal_net - discount) / 100);
+
+    // FIXED: Points earned calculated on pre-discount net subtotal
+    const pointsEarned = Math.max(0, subtotal_net / 100);
     if (pointsDisplay) pointsDisplay.innerText = `+${pointsEarned.toFixed(2)} pts`;
 
     if (discountLine && discountDisplay) {
