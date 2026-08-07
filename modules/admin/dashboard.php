@@ -1,12 +1,12 @@
 <?php
 require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
-require_once __DIR__ . '/../../app/helpers/notification_helper.php';
 require_once __DIR__ . '/../../app/helpers/messaging_helper.php';
 
 $token = getJWTFromCookie();
 // Force logout if they are trying to use a customer session in the staff area
 enforcePortalGuard('staff');
+require_once __DIR__ . '/../../app/helpers/notification_helper.php';
 
 $payload = verifyJWT($token);
 

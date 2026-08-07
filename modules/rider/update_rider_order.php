@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
 require_once __DIR__ . '/../../app/helpers/db_schema_helper.php';
+require_once __DIR__ . '/../../app/helpers/notification_helper.php';
 
 $response = [
     'success' => false,
@@ -133,10 +134,59 @@ try {
         $new_rider_id = null;
     }
 
-    if (!$stmt->execute()) {
+if (!$stmt->execute()) {
         throw new Exception('Failed to update order');
     }
     $stmt->close();
+
+    // --- Notify the customer when the rider ACCEPTS their order ---
+    // The customer should know their order is now being delivered.
+    if ($action === 'accept') {
+        // Look up the customer who placed this order.
+        $cust_stmt = $conn->prepare("SELECT customer_id FROM tbl_orders WHERE id = ? LIMIT 1");
+        $cust_stmt->bind_param('i', $order_id);
+        $cust_stmt->execute();
+        $cust_res = $cust_stmt->get_result()->fetch_assoc();
+        $cust_stmt->close();
+
+        $customer_id = $cust_res ? (int)$cust_res['customer_id'] : 0;
+
+        if ($customer_id > 0) {
+            // Fetch the rider's name for the notification message.
+            $rider_name = 'Your rider';
+            $rn_stmt = $conn->prepare(
+                "SELECT u.first_name, u.last_name FROM users u JOIN riders r ON r.user_id = u.id WHERE r.id = ? LIMIT 1"
+            );
+            if ($rn_stmt) {
+                $rn_stmt->bind_param('i', $rider_id);
+                $rn_stmt->execute();
+                $rn_res = $rn_stmt->get_result()->fetch_assoc();
+                $rn_stmt->close();
+                if ($rn_res) {
+                    $rider_name = trim(($rn_res['first_name'] ?? '') . ' ' . ($rn_res['last_name'] ?? ''));
+                    if ($rider_name === '') {
+                        $rider_name = 'Your rider';
+                    }
+                }
+            }
+
+            // Create an in-app notification for the customer.
+            // Note: `user_id` is set to the customer's id because the customer's
+            // JWT uses the customer id as its user_id, which is what the WS server
+            // keys connections by. This routes the real-time push to the customer.
+            notifications_create($conn, [
+                'user_id' => $customer_id,
+                'customer_id' => $customer_id,
+                'type' => 'order_accepted',
+                'channel' => 'in_app',
+                'title' => 'Order Accepted',
+                'message' => $rider_name . ' has accepted your order and is now on the way to deliver it.',
+                'reference_table' => 'tbl_orders',
+                'reference_id' => $order_id,
+                'email_to' => null,
+            ]);
+        }
+    }
 
     $response['success'] = true;
     $response['message'] = $action === 'accept' ? 'Order accepted successfully.' : 'Order rejected successfully.';

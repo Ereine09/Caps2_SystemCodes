@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'src/state/auth_state.dart';
+import 'src/state/notification_state.dart';
+import 'src/services/realtime_service.dart';
 import 'src/ui/login_screen.dart';
 import 'src/ui/home_screen.dart';
 import 'src/constants/colors.dart'; // Import AppColors
 
 void main() {
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => AuthState(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => AuthState()),
+        ChangeNotifierProvider(create: (context) => NotificationState()),
+      ],
       child: const MyApp(),
     ),
   );
@@ -66,12 +71,49 @@ class _MyAppState extends State<MyApp> {
           ),
         ),
       ),
-      home: Consumer<AuthState>(
-        builder: (context, auth, child) {
-          // If logged in, show HomeScreen, otherwise show LoginScreen
-          return auth.isLoggedIn ? const HomeScreen() : const LoginScreen();
-        },
-      ),
+      home: const _SessionGate(),
     );
+  }
+}
+
+/// Switches between Login and Home based on auth, and manages the RealtimeService
+/// (WebSocket connection) lifecycle for the logged-in rider.
+class _SessionGate extends StatefulWidget {
+  const _SessionGate();
+
+  @override
+  State<_SessionGate> createState() => _SessionGateState();
+}
+
+class _SessionGateState extends State<_SessionGate> {
+  RealtimeService? _realtimeService;
+
+  @override
+  Widget build(BuildContext context) {
+    final token = context.select<AuthState, String>((a) => a.token ?? '');
+    final notificationState = context.read<NotificationState>();
+    final auth = context.read<AuthState>();
+    final isLoggedIn = token.isNotEmpty;
+
+    // Start/stop the WS service based on login state.
+    if (isLoggedIn && _realtimeService == null) {
+      _realtimeService = RealtimeService(
+        notificationState: notificationState,
+        token: token,
+      );
+      _realtimeService!.connect();
+    } else if (!isLoggedIn && _realtimeService != null) {
+      _realtimeService!.dispose();
+      _realtimeService = null;
+    }
+
+    return auth.isLoggedIn ? const HomeScreen() : const LoginScreen();
+  }
+
+  @override
+  void dispose() {
+    _realtimeService?.dispose();
+    _realtimeService = null;
+    super.dispose();
   }
 }

@@ -79,4 +79,11 @@ define('SMTP_FROM_NAME', $db_settings['SMTP_FROM_NAME'] ?? SYSTEM_NAME);
 
 // Business Logic
 define('LOYALTY_POINTS_EXPIRY_MONTHS', (int)($db_settings['LOYALTY_POINTS_EXPIRY_MONTHS'] ?? 12));
+
+// --- WEBSOCKET SERVER CONFIGURATION ---
+// Used by the notification push helper (ws_push_helper.php) to deliver
+// real-time notifications to online riders via the Ratchet WS server.
+define('WS_HOST', '127.0.0.1');
+define('WS_PORT', 8080);
+define('WS_SERVER_URL', 'ws://' . WS_HOST . ':' . WS_PORT);
 ?>

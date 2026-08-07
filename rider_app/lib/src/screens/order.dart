@@ -41,9 +41,14 @@ class Order {
           .toList();
     }
 
-    // The rider_orders_api returns `address`; customer/rider_api returns
+// The rider_orders_api returns `address`; customer/rider_api returns
     // `delivery_address`. Support both.
     final rawAddress = json['delivery_address'] ?? json['address'] ?? 'No address provided';
+
+    // The delivery phone may come back under `delivery_phone` (order details)
+    // or `phone` (assignments list). Support both.
+    final rawDeliveryPhone =
+        (json['delivery_phone']?.toString() ?? json['phone']?.toString()) ?? '';
 
     // The backend may return order id under `order_id` (assignments list) or
     // `id` (order details). Support both.
@@ -58,11 +63,11 @@ class Order {
     return Order(
       id: rawId,
       orderNumber: json['order_number'] ?? 'N/A',
-      orderStatus: json['order_status'] ?? 'unknown',
+orderStatus: json['order_status'] ?? 'unknown',
       fulfillmentType: json['fulfillment_type'] ?? 'delivery',
       total: double.tryParse(json['total'].toString()) ?? 0.0,
       deliveryAddress: rawAddress,
-      deliveryPhone: json['delivery_phone']?.toString() ?? json['phone']?.toString(),
+      deliveryPhone: rawDeliveryPhone.isNotEmpty ? rawDeliveryPhone : null,
       paymentMethod: json['payment_method'] ?? 'cod',
       customerName: json['customer_name'] ?? 'Unknown Customer',
       customerPhone: json['customer_phone']?.toString(),

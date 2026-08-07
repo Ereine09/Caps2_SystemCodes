@@ -99,7 +99,7 @@ class ChatServer implements MessageComponentInterface
                 ], $senderId);
                 break;
 
-            case 'seen':
+case 'seen':
                 $customerId = (int)($data['customer_id'] ?? 0);
                 $messageId = (int)($data['message_id'] ?? 0);
                 $this->broadcast([
@@ -108,6 +108,23 @@ class ChatServer implements MessageComponentInterface
                     'message_id' => $messageId,
                     'seen_by' => $senderId,
                 ], $senderId);
+                break;
+
+            case 'push_notification':
+                // Relay a notification to a specific user (e.g. a rider).
+                // The payload is sent by the PHP backend via a one-shot WS client.
+                $targetUserId = (int)($data['user_id'] ?? 0);
+                if ($targetUserId > 0 && isset($this->connections[$targetUserId])) {
+                    $this->connections[$targetUserId]->send(json_encode([
+                        'type' => 'notification',
+                        'notification_id' => (int)($data['notification_id'] ?? 0),
+                        'title' => (string)($data['title'] ?? 'Notification'),
+                        'message' => (string)($data['message'] ?? ''),
+                        'reference_table' => (string)($data['reference_table'] ?? ''),
+                        'reference_id' => (int)($data['reference_id'] ?? 0),
+                        'created_at' => (string)($data['created_at'] ?? ''),
+                    ]));
+                }
                 break;
 
             default:

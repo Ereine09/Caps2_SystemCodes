@@ -101,7 +101,7 @@ $action = strtolower(trim((string)($_GET['action'] ?? '')));
         $items = $items_q->get_result()->fetch_all(MYSQLI_ASSOC);
         $items_q->close();
 
-        $cust_name = '';
+$cust_name = '';
         $cust_phone = '';
         $cust_email = '';
         if (!empty($order_row['customer_id'])) {
@@ -117,12 +117,39 @@ $action = strtolower(trim((string)($_GET['action'] ?? '')));
             }
         }
 
+        // Fetch the delivery record so the detail screen shows the SAME address
+        // and phone that the list screen uses (tbl_delivery.address). This keeps
+        // the "Navigate" action working for both delivery and pickup orders.
+        $delivery_address = $order_row['delivery_address'] ?? '';
+        $delivery_phone = $order_row['delivery_phone'] ?? '';
+        $delivery_q = $conn->prepare("SELECT address, phone FROM tbl_delivery WHERE order_id = ? ORDER BY id DESC LIMIT 1");
+        if ($delivery_q) {
+            $delivery_q->bind_param('i', $order_id);
+            $delivery_q->execute();
+            $delivery_row = $delivery_q->get_result()->fetch_assoc();
+            $delivery_q->close();
+            if ($delivery_row) {
+                if (!empty($delivery_row['address'])) {
+                    $delivery_address = $delivery_row['address'];
+                }
+                if (!empty($delivery_row['phone'])) {
+                    $delivery_phone = $delivery_row['phone'];
+                }
+            }
+        }
+
         $response['success'] = true;
         $response['data'] = array_merge($order_row, [
             'id' => (int)$order_row['id'],
             'customer_name' => $cust_name,
             'customer_phone' => $cust_phone,
             'customer_email' => $cust_email,
+            // Provide the real delivery address/phone from tbl_delivery under
+            // both keys so the Flutter Order model always picks it up.
+            'delivery_address' => $delivery_address,
+            'address' => $delivery_address,
+            'delivery_phone' => $delivery_phone,
+            'phone' => $delivery_phone,
             'items' => $items,
         ]);
         echo json_encode($response);

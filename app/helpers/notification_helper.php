@@ -8,6 +8,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../../PHPMailer/Exception.php';
 require_once __DIR__ . '/../../PHPMailer/PHPMailer.php';
 require_once __DIR__ . '/../../PHPMailer/SMTP.php';
+require_once __DIR__ . '/ws_push_helper.php';
 
 if (!function_exists('notifications_sync_customer_loyalty_points')) {
     function notifications_sync_customer_loyalty_points($conn, $customer_id) {
@@ -318,11 +319,26 @@ if (!function_exists('notifications_create')) {
             $omit_prefix = in_array($type, ['security_sim', 'security_alert'], true);
             $email_result = notifications_send_email($email_to, $title, $message, $omit_prefix);
 
-            if ($email_result['success']) {
+if ($email_result['success']) {
                 notifications_update_delivery_status($conn, $notification_id, 'sent');
             } else {
                 notifications_update_delivery_status($conn, $notification_id, 'failed', $email_result['error']);
             }
+        }
+
+        // Push the notification in real-time to the target user (e.g. a rider)
+        // if they have an active WebSocket connection. Non-blocking / silent on failure.
+        if ($user_id > 0) {
+            ws_push_notification(
+                $conn,
+                $user_id,
+                $notification_id,
+                $title,
+                $message,
+                $reference_table,
+                $reference_id,
+                date('Y-m-d H:i:s')
+            );
         }
 
         return true;

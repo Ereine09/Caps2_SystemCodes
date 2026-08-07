@@ -117,6 +117,86 @@ class ApiClient {
     }
   }
 
+/// Fetches the current on-duty status of the authenticated rider.
+  ///
+  /// GETs `rider_status_api.php` and passes the JWT so the backend knows which
+  /// rider is asking. Returns the parsed `data` map.
+  Future<Map<String, dynamic>> getRiderStatus({String token = ''}) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await getJson(
+      '/modules/rider/rider_status_api.php',
+      headers: headers,
+    );
+    if (response.data['success'] == true) {
+      return Map<String, dynamic>.from(response.data['data'] ?? {});
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to fetch rider status');
+    }
+  }
+
+  /// Toggles the on-duty status of the authenticated rider.
+  ///
+  /// POSTs `is_on_duty` to `rider_status_api.php` and returns the parsed `data`.
+  Future<Map<String, dynamic>> toggleRiderStatus({
+    required bool isOnDuty,
+    String token = '',
+  }) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await postJson(
+      '/modules/rider/rider_status_api.php',
+      body: {'is_on_duty': isOnDuty},
+      headers: headers,
+    );
+    if (response.data['success'] == true) {
+      return Map<String, dynamic>.from(response.data['data'] ?? {});
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to update rider status');
+    }
+  }
+
+/// Fetches the unread notification count for the authenticated rider.
+  Future<int> getUnreadNotificationCount({String token = ''}) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await getJson(
+      '/modules/rider/rider_notifications_api.php?action=get_unread_count',
+      headers: headers,
+    );
+    if (response.data['success'] == true) {
+      final data = (response.data['data'] as Map?) ?? {};
+      return int.tryParse(data['unread_count']?.toString() ?? '0') ?? 0;
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to fetch unread count');
+    }
+  }
+
+  /// Fetches the list of notifications for the authenticated rider.
+  Future<List<dynamic>> getNotifications({String token = '', int limit = 50}) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await getJson(
+      '/modules/rider/rider_notifications_api.php?action=get_list&limit=$limit',
+      headers: headers,
+    );
+    if (response.data['success'] == true) {
+      final data = (response.data['data'] as Map?) ?? {};
+      return (data['notifications'] as List?) ?? [];
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to fetch notifications');
+    }
+  }
+
+  /// Marks all notifications as read for the authenticated rider.
+  Future<void> markAllNotificationsRead(String token) async {
+    final headers = {'Authorization': 'Bearer $token'};
+    final response = await postJson(
+      '/modules/rider/rider_notifications_api.php',
+      body: {'action': 'mark_all_read'},
+      headers: headers,
+    );
+    if (response.data['success'] != true) {
+      throw Exception(response.data['message'] ?? 'Failed to mark notifications as read');
+    }
+  }
+
   /// Verifies the delivery confirmation QR code with the backend.
   Future<Map<String, dynamic>> verifyDeliveryQR(String qrToken, int riderId) async {
     final response = await postJson(

@@ -18,3 +18,18 @@ final String baseUrl = kIsWeb ? _webBaseUrl : _mobileBaseUrl;
 
 /// Base URL for endpoints inside the /customer folder (e.g. customer/rider_api.php).
 final String customerBaseUrl = '$baseUrl/customer';
+
+/// WebSocket server URL for real-time notifications.
+/// The Ratchet WS server runs on port 8080 on the same host as the API.
+/// We derive the host from `baseUrl` so it works on web, emulator, and device.
+final String wsUrl = _resolveWsUrl(baseUrl);
+
+String _resolveWsUrl(String httpBase) {
+  // Convert http://host/path to ws://host:8080
+  final uri = Uri.tryParse(httpBase);
+  if (uri == null) {
+    return 'ws://localhost:8080';
+  }
+  final host = uri.host;
+  return 'ws://$host:8080';
+}

@@ -1,0 +1,7 @@
+<br />
+<b>Fatal error</b>:  Uncaught mysqli_sql_exception: No connection could be made because the target machine actively refused it in C:\xampp\htdocs\loyalty_managements\app\config\config.php:12
+Stack trace:
+#0 C:\xampp\htdocs\loyalty_managements\app\config\config.php(12): mysqli-&gt;__construct('localhost', 'root', '', 'capstone_db')
+#1 C:\xampp\htdocs\loyalty_managements\modules\rider\rider_login_api.php(27): require_once('C:\\xampp\\htdocs...')
+#2 {main}
+  thrown in <b>C:\xampp\htdocs\loyalty_managements\app\config\config.php</b> on line <b>12</b><br />

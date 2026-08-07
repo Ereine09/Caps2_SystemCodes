@@ -1,17 +1,24 @@
-# Rider Remittance & Rider App Improvement Plan
+# Feature Tasks
 
-## Backend Fixes
-- [x] Fix `modules/rider/rider_complete_order_api.php` — use `order_status` column instead of `status`
-- [x] Verify `rider_orders_api.php` returns `items` array for `get_order_details`
+## Feature 1 — Go Online/Offline Toggle
+- [x] (Already exists) `rider_status_api.php` - GET/POST toggle status
+- [x] Add `getRiderStatus()` and `toggleRiderStatus()` to `ApiClient`
+- [x] Add persisted `isOnDuty` field to `AuthState`
+- [x] Convert `HomeScreen` to StatefulWidget with AppBar toggle switch
+- [x] `flutter analyze` - no errors
 
-## Flutter App Fixes
-- [x] Rework `api_client.dart` — add JWT-authenticated delivery methods, remove hardcoded riderId
-- [x] Update `order.dart` — parse real API shape (order_id, address, items_summary)
-- [x] Wire `rider_shipment_screen.dart` — read token from AuthState, no hardcoded IDs
-- [x] Wire `rider_shipment_detail_screen.dart` — read token from AuthState, no hardcoded IDs
-- [x] Make shipment filter chips actually filter by date, compute real metrics
-- [x] Consolidate duplicate screens (removed orphaned `src/screens/qr_scanner_screen.dart` http version and `src/screens/rider_home_dashboard.dart`; unified on the Dio `src/ui/qr_scanner_screen.dart`)
-
-## Verification
-- [x] Run `php -l` on edited backend files
-- [x] Run `flutter analyze` on rider_app (if available)
+## Feature 2 — Real-time Notifications (reuse WS infra)
+### Backend
+- [x] Add `push_notification` handler to `ws/ChatServer.php`
+- [x] Create `app/helpers/ws_push_helper.php` (PHP WebSocket client)
+- [x] Call WS push from `notifications_create()` in `notification_helper.php`
+- [x] Add WS_HOST/WS_PORT/WS_SERVER_URL constants to `config.php`
+### Flutter
+- [x] Add `wsUrl` constant to `api_constants.dart`
+- [x] Create `state/notification_state.dart` (ChangeNotifier)
+- [x] Create `services/realtime_service.dart` (WebSocketChannel wrapper)
+- [x] Wire NotificationState + RealtimeService into `main.dart`
+- [x] Add unread badge to HomeScreen notification bell
+- [x] Create `ui/notifications_screen.dart`
+### Verification
+- [x] Run `flutter pub get` and `flutter analyze` - no errors

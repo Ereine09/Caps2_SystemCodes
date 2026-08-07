@@ -5,10 +5,12 @@ class AuthState extends ChangeNotifier {
   String? _token;
   String? _username;
   int? _userId;
+  bool _isOnDuty = false;
 
   String? get token => _token;
   String? get username => _username;
   int? get userId => _userId;
+  bool get isOnDuty => _isOnDuty;
 
   bool get isLoggedIn => _token != null;
 
@@ -33,6 +35,7 @@ class AuthState extends ChangeNotifier {
     _token = prefs.getString('authToken');
     _username = prefs.getString('username');
     _userId = prefs.getInt('userId');
+    _isOnDuty = prefs.getBool('isOnDuty') ?? false;
 
     // If a token is found, notify listeners to update the UI
     if (isLoggedIn) {
@@ -40,18 +43,28 @@ class AuthState extends ChangeNotifier {
     }
   }
 
+  /// Updates and persists the rider's on-duty status.
+  Future<void> setOnDuty(bool value) async {
+    _isOnDuty = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isOnDuty', value);
+    notifyListeners();
+  }
+
   // Method to be called on logout
   Future<void> logout() async {
     _token = null;
     _username = null;
     _userId = null;
+    _isOnDuty = false;
 
     // Clear credentials from persistent storage
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('authToken');
     await prefs.remove('username');
     await prefs.remove('userId');
-    
+    await prefs.remove('isOnDuty');
+
     notifyListeners();
   }
 }

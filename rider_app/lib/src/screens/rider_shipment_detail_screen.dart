@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../api/api_client.dart';
 import '../screens/order.dart';
 import '../state/auth_state.dart';
@@ -39,6 +40,52 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
       return Order.fromJson(data);
     } catch (e) {
       throw Exception('Failed to load order details: $e');
+    }
+  }
+
+/// Launches the device dialer with the customer's phone number.
+  Future<void> _callCustomer(String? phone) async {
+    final number = phone?.trim() ?? '';
+    if (number.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No customer contact number available.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    final uri = Uri(scheme: 'tel', path: number);
+    try {
+      final launched = await launchUrl(uri);
+      if (!launched) {
+        throw Exception('Could not launch dialer');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to call: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  /// Opens Google Maps with the delivery address as the destination.
+  Future<void> _navigateToDelivery(String address) async {
+    final query = address.trim();
+    if (query.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No delivery address available.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    final mapsUri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeQueryComponent(query)}');
+    try {
+      final launched = await launchUrl(mapsUri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        throw Exception('Could not open maps');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to open maps: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: Colors.red),
+      );
     }
   }
 
@@ -121,10 +168,40 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
                       _buildDetailRow('Payment Method:', order.paymentMethod.toUpperCase()),
                     ]),
                     const SizedBox(height: 16),
-                    _buildDetailCard('Customer & Delivery', [
+_buildDetailCard('Customer & Delivery', [
                       _buildDetailRow('Customer:', order.customerName),
                       _buildDetailRow('Contact:', order.customerPhone ?? 'N/A'),
                       _buildDetailRow('Address:', order.deliveryAddress, isAddress: true),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.phone, size: 18),
+                              label: const Text('Call'),
+                              onPressed: () => _callCustomer(order.customerPhone),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                side: const BorderSide(color: AppColors.statusDeliveredText),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.navigation, size: 18),
+                              label: const Text('Navigate'),
+                              onPressed: () => _navigateToDelivery(order.deliveryAddress),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                side: const BorderSide(color: AppColors.primary),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ]),
                     const SizedBox(height: 16),
                     _buildDetailCard('Order Items', [
