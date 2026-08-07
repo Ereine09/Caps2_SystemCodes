@@ -3,15 +3,18 @@ import 'package:flutter/material.dart';
 class AppColors {
   // Core Surface & Backgrounds
   static const Color background = Color(0xFFF7FBFA);
+  static const Color backgroundGrey = Color(0xFFF4F5F7); // SPX-style light grey
   static const Color cardBg = Colors.white;
 
   // Typography
   static const Color textMain = Color(0xFF1E1F22);
   static const Color textMuted = Color(0xFF8A8F99);
+  static const Color textSoft = Color(0xFF6B7280);
 
   // Brand Colors (Matched to Login Screen)
   static const Color primary = Color(0xFF00838F); // Teal
   static const Color primarySoft = Color(0x1A00838F); // Light Teal Tint (10%)
+  static const Color primarySoftBg = Color(0xFFE6F4F5); // Light Teal background
   static const Color accent = Color(0xFFFFB300); // Amber
 
   // Status Badges

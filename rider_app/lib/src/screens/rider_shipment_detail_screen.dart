@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:image_picker/image_picker.dart';
 import '../api/api_client.dart';
 import '../screens/order.dart';
 import '../state/auth_state.dart';
@@ -27,11 +30,137 @@ class RiderShipmentDetailScreen extends StatefulWidget {
 class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
   late Future<Order> _detailsFuture;
   bool _isVerifyingQR = false;
+  bool _isUploadingProof = false;
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
     _detailsFuture = _fetchDetails();
+  }
+
+  /// Opens the image picker to capture/select a proof-of-delivery photo and
+  /// then uploads it along with optional notes to the backend.
+  Future<void> _captureProofOfDelivery(int orderId) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera, color: AppColors.primary),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.of(context).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: AppColors.primary),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
+    final XFile? picked;
+    try {
+      picked = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 70,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open camera/gallery: $e'), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+
+if (picked == null || !mounted) return;
+
+    Uint8List? bytes;
+    try {
+      bytes = await picked.readAsBytes();
+    } catch (_) {
+      bytes = null;
+    }
+    if (bytes == null || bytes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not read the captured image.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    // Optionally allow the rider to add a note before uploading.
+    final notes = await _promptForNotes();
+    if (notes == null) return; // cancelled
+
+    setState(() {
+      _isUploadingProof = true;
+    });
+
+    try {
+      final base64 = base64Encode(bytes);
+      await widget.apiClient.uploadProofOfDelivery(
+        orderId: orderId,
+        imageBase64: base64,
+        notes: notes,
+        token: widget.token,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Proof of delivery uploaded successfully.'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingProof = false;
+        });
+      }
+    }
+  }
+
+  /// Prompts the rider for an optional delivery note. Returns null if cancelled.
+  Future<String?> _promptForNotes() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delivery Note (Optional)'),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'e.g. Left at front desk, handed to receptionist...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Upload'),
+          ),
+        ],
+      ),
+    );
+    return result;
   }
 
   Future<Order> _fetchDetails() async {
@@ -221,12 +350,35 @@ _buildDetailCard('Customer & Delivery', [
                   ],
                 ),
               ),
-              // --- Action Button Area ---
-              if (order.orderStatus == 'out_for_delivery')
+// --- Action Button Area ---
+              if (order.orderStatus == 'out_for_delivery') ...[
                 _buildConfirmButton(),
+                _buildProofButton(order.id),
+              ],
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildProofButton(int orderId) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          icon: _isUploadingProof
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.0))
+              : const Icon(Icons.photo_camera_outlined),
+          label: Text(_isUploadingProof ? 'Uploading...' : 'Upload Proof of Delivery'),
+          onPressed: _isUploadingProof ? null : () => _captureProofOfDelivery(orderId),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            side: const BorderSide(color: AppColors.primary),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
       ),
     );
   }

@@ -286,7 +286,12 @@ $avg_rating = $total_reviews > 0 ? number_format($total_rating / $total_reviews,
             </a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/delivery.php" class="<?php echo basename($_SERVER['PHP_SELF']) === 'delivery.php' ? 'active' : ''; ?>"><i class="fas fa-truck"></i> Delivery</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/about.php" <?php echo basename($_SERVER['PHP_SELF']) === 'about.php' ? 'class="active"' : ''; ?>><i class="fas fa-info-circle"></i> About Us</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/admin/messages.php"><i class="fas fa-comment-dots"></i> Messages <?php if ($unread_count > 0) echo "<span class='notif-badge'>$unread_count</span>"; ?></a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/messages.php">
+                <i class="fas fa-comment-dots"></i> Messages
+                <?php if ($unread_count > 0): ?>
+                    <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo (int)$unread_count; ?></span>
+                <?php endif; ?>
+            </a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php" class="active"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php"><i class="fas fa-user-friends"></i> Customers</a></li>

@@ -72,12 +72,49 @@ class ApiClient {
       '/modules/rider/rider_orders_api.php',
       headers: headers,
     );
-    if (response.data['success'] == true) {
+if (response.data['success'] == true) {
       final data = (response.data['data'] as Map?) ?? {};
       final assignments = (data['assignments'] as List?) ?? [];
       return assignments;
     } else {
       throw Exception('Failed to load deliveries: ${response.data['message']}');
+    }
+  }
+
+  /// Fetches the Phase 2 Earning and Performance dashboard for the rider.
+  ///
+  /// Returns the full `data` map from `rider_earnings_api.php`, which contains
+  /// `summary`, `earnings_history`, `remittance_history`, and `chart`.
+  Future<Map<String, dynamic>> getEarnings({String token = ''}) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await getJson(
+      '/modules/rider/rider_earnings_api.php',
+      headers: headers,
+    );
+    if (response.data['success'] == true) {
+      final data = (response.data['data'] as Map?) ?? {};
+      return Map<String, dynamic>.from(data);
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to load earnings data');
+    }
+  }
+
+  /// Fetches chart data for the earnings dashboard for a given period
+  /// (`weekly` or `monthly`).
+  Future<Map<String, dynamic>> getEarningsChart({
+    String period = 'monthly',
+    String token = '',
+  }) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await getJson(
+      '/modules/rider/rider_earnings_api.php?action=get_chart&period=$period',
+      headers: headers,
+    );
+    if (response.data['success'] == true) {
+      final data = (response.data['data'] as Map?) ?? {};
+      return Map<String, dynamic>.from(data);
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to load chart data');
     }
   }
 
@@ -100,6 +137,35 @@ class ApiClient {
       return response.data;
     } else {
       throw Exception(response.data['message'] ?? 'Failed to update rider order');
+    }
+  }
+
+/// Uploads a proof-of-delivery photo (base64) + optional notes for an order.
+  ///
+  /// POSTs to `rider_proof_api.php` with the rider JWT. The backend saves the
+  /// image to `uploads/proofs/` and logs it into `delivery_tracking`.
+  Future<Map<String, dynamic>> uploadProofOfDelivery({
+    required int orderId,
+    required String imageBase64,
+    String notes = '',
+    int deliveryId = 0,
+    String token = '',
+  }) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await postJson(
+      '/modules/rider/rider_proof_api.php',
+      body: {
+        'order_id': orderId,
+        'delivery_id': deliveryId,
+        'image': imageBase64,
+        'notes': notes,
+      },
+      headers: headers,
+    );
+    if (response.data['success'] == true) {
+      return Map<String, dynamic>.from(response.data['data'] ?? {});
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to upload proof of delivery');
     }
   }
 

@@ -1,24 +1,11 @@
-# Feature Tasks
+# Rider App — Teal Delivery Dashboard + Drawer Redesign
 
-## Feature 1 — Go Online/Offline Toggle
-- [x] (Already exists) `rider_status_api.php` - GET/POST toggle status
-- [x] Add `getRiderStatus()` and `toggleRiderStatus()` to `ApiClient`
-- [x] Add persisted `isOnDuty` field to `AuthState`
-- [x] Convert `HomeScreen` to StatefulWidget with AppBar toggle switch
-- [x] `flutter analyze` - no errors
+## Goal
+Reorganize the existing rider app layout (teal palette, all features intact) to mirror the SPX-style delivery dashboard + side drawer.
 
-## Feature 2 — Real-time Notifications (reuse WS infra)
-### Backend
-- [x] Add `push_notification` handler to `ws/ChatServer.php`
-- [x] Create `app/helpers/ws_push_helper.php` (PHP WebSocket client)
-- [x] Call WS push from `notifications_create()` in `notification_helper.php`
-- [x] Add WS_HOST/WS_PORT/WS_SERVER_URL constants to `config.php`
-### Flutter
-- [x] Add `wsUrl` constant to `api_constants.dart`
-- [x] Create `state/notification_state.dart` (ChangeNotifier)
-- [x] Create `services/realtime_service.dart` (WebSocketChannel wrapper)
-- [x] Wire NotificationState + RealtimeService into `main.dart`
-- [x] Add unread badge to HomeScreen notification bell
-- [x] Create `ui/notifications_screen.dart`
-### Verification
-- [x] Run `flutter pub get` and `flutter analyze` - no errors
+## Steps
+- [x] 1. Update `AppColors` (colors.dart) — add supporting grey/teal-tint shades; keep existing teal primary.
+- [x] 2. Create `rider_app/lib/src/ui/rider_drawer.dart` — profile header (avatar, name, rating, driver ID), feature list (Queue Status, Check In, Drive Report, Order Statistics, Performance, Parcel Transfer, Learning Center, Help Center, Settings), bottom action grid (Ticket Center, Upload ePOD w/ badge).
+- [x] 3. Create `rider_app/lib/src/ui/rider_delivery_dashboard.dart` — header (hamburger, Delivery label, search, notification/chat icons w/ badges, on-duty toggle), status tabs (To-do/Delivered/On-Hold) w/ teal underline + counts, map banner + sort/priority pills, reorganized parcel cards (tracking + copy, pin + address + recipient + status, call/chat), teal QR FAB.
+- [x] 4. Wire dashboard into `home_screen.dart` (replace body, keep on-duty + notification logic, add drawer; keep bottom nav).
+- [x] 5. Run `flutter analyze` (0 new errors; only pre-existing `withOpacity` deprecation infos remain).

@@ -4,6 +4,7 @@ import '../state/auth_state.dart';
 import '../constants/colors.dart';
 import '../screens/rider_shipment_screen.dart';
 import '../screens/remittance_screen.dart'; // Import the new screen
+import '../screens/earnings_screen.dart'; // Import the Earnings Dashboard
 import '../ui/qr_scanner_screen.dart'; // Import the QR Scanner (Dio version)
 
 class RiderBottomNavBar extends StatelessWidget {
@@ -37,7 +38,18 @@ GestureDetector(
                 MaterialPageRoute(builder: (context) => RiderShipmentScreen(token: token)),
               );
             },
-            child: _navItem(Icons.local_shipping_outlined, 'Shipment', false)),
+child: _navItem(Icons.local_shipping_outlined, 'Shipment', false)),
+          
+          GestureDetector(
+            onTap: () {
+              final token = context.read<AuthState>().token ?? '';
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => EarningsScreen(token: token)),
+              );
+            },
+            child: _navItem(Icons.attach_money, 'Earnings', false),
+          ),
           
           GestureDetector(
             onTap: () {
