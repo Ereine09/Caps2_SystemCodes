@@ -4,28 +4,39 @@ import '../constants/colors.dart';
 import '../state/auth_state.dart';
 import '../screens/earnings_screen.dart';
 import '../screens/rider_shipment_screen.dart';
+import '../screens/profile_screen.dart';
+import '../screens/settings_screen.dart';
+import '../screens/epod_upload_screen.dart';
+import '../screens/drive_report_screen.dart';
+import '../screens/conversations_screen.dart';
+import '../screens/parcel_transfer_screen.dart';
+import '../screens/learning_center_screen.dart';
+import '../screens/help_center_screen.dart';
+import '../screens/ticket_center_screen.dart';
 
 /// Side navigation drawer for the rider app, mirroring the reference layout:
 /// profile header, vertical feature list, and a bottom action grid.
 class RiderDrawer extends StatelessWidget {
-  const RiderDrawer({super.key});
+  /// Reference to the dashboard's Scaffold so we can reliably reopen the
+  /// drawer after a pushed screen is popped, instead of relying on
+  /// `Scaffold.of(context)` (which can be stale once the route is removed).
+  final GlobalKey<ScaffoldState>? scaffoldKey;
 
-  void _showComingSoon(BuildContext context, String feature) {
-    Navigator.of(context).pop(); // close drawer
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$feature — coming soon'),
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
+  const RiderDrawer({super.key, this.scaffoldKey});
 
   void _openScreen(BuildContext context, Widget screen) {
     Navigator.of(context).pop(); // close drawer
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => screen),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => screen))
+        .then((_) {
+      // When the user navigates back from the opened screen, reopen the
+      // drawer so they can pick another menu item instead of landing on the
+      // dashboard. We use the dashboard's scaffold key for reliability.
+      final scaffold = scaffoldKey?.currentState;
+      if (scaffold != null && !scaffold.isDrawerOpen) {
+        scaffold.openDrawer();
+      }
+    });
   }
 
   @override
@@ -44,7 +55,7 @@ class RiderDrawer extends StatelessWidget {
               name: auth.username ?? 'Rider',
               rating: '4.9 ★',
               driverId: auth.userId != null ? 'Driver ID: #${auth.userId}' : 'Driver ID: --',
-              onEdit: () => _showComingSoon(context, 'Edit Profile'),
+              onEdit: () => _openScreen(context, RiderProfileScreen(token: token)),
             ),
             const Divider(height: 1),
             // ---- Feature List ----
@@ -52,15 +63,16 @@ class RiderDrawer extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
-                  _MenuTile(icon: Icons.queue_rounded, label: 'Queue Status', onTap: () => _showComingSoon(context, 'Queue Status')),
-                  _MenuTile(icon: Icons.touch_app_rounded, label: 'Check In', onTap: () => _showComingSoon(context, 'Check In')),
-                  _MenuTile(icon: Icons.assessment_rounded, label: 'Drive Report', onTap: () => _showComingSoon(context, 'Drive Report')),
+_MenuTile(icon: Icons.queue_rounded, label: 'Queue Status', onTap: () => _openScreen(context, DriveReportScreen(token: token))),
+                  _MenuTile(icon: Icons.touch_app_rounded, label: 'Check In', onTap: () => _openScreen(context, DriveReportScreen(token: token))),
+                  _MenuTile(icon: Icons.assessment_rounded, label: 'Drive Report', onTap: () => _openScreen(context, DriveReportScreen(token: token))),
                   _MenuTile(icon: Icons.bar_chart_rounded, label: 'Order Statistics', onTap: () => _openScreen(context, RiderShipmentScreen(token: token))),
-                  _MenuTile(icon: Icons.trending_up_rounded, label: 'Performance', onTap: () => _openScreen(context, EarningsScreen(token: token))),
-                  _MenuTile(icon: Icons.swap_horiz_rounded, label: 'Parcel Transfer', onTap: () => _showComingSoon(context, 'Parcel Transfer')),
-                  _MenuTile(icon: Icons.school_rounded, label: 'Learning Center', onTap: () => _showComingSoon(context, 'Learning Center')),
-                  _MenuTile(icon: Icons.support_agent_rounded, label: 'Help Center', onTap: () => _showComingSoon(context, 'Help Center')),
-                  _MenuTile(icon: Icons.settings_rounded, label: 'Settings', onTap: () => _showComingSoon(context, 'Settings')),
+_MenuTile(icon: Icons.trending_up_rounded, label: 'Performance', onTap: () => _openScreen(context, EarningsScreen(token: token))),
+                  _MenuTile(icon: Icons.chat_bubble_outline_rounded, label: 'Messages', onTap: () => _openScreen(context, ConversationsScreen(token: token))),
+                  _MenuTile(icon: Icons.swap_horiz_rounded, label: 'Parcel Transfer', onTap: () => _openScreen(context, ParcelTransferScreen(token: token))),
+                  _MenuTile(icon: Icons.school_rounded, label: 'Learning Center', onTap: () => _openScreen(context, const LearningCenterScreen())),
+                  _MenuTile(icon: Icons.support_agent_rounded, label: 'Help Center', onTap: () => _openScreen(context, const HelpCenterScreen())),
+                  _MenuTile(icon: Icons.settings_rounded, label: 'Settings', onTap: () => _openScreen(context, SettingsScreen(token: token))),
                 ],
               ),
             ),
@@ -71,19 +83,19 @@ class RiderDrawer extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: _ActionTile(
+child: _ActionTile(
                       icon: Icons.confirmation_number_rounded,
                       label: 'Ticket Center',
-                      onTap: () => _showComingSoon(context, 'Ticket Center'),
+                      onTap: () => _openScreen(context, const TicketCenterScreen()),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _ActionTile(
+child: _ActionTile(
                       icon: Icons.photo_camera_rounded,
                       label: 'Upload ePOD',
                       badge: '3',
-                      onTap: () => _showComingSoon(context, 'Upload ePOD'),
+                      onTap: () => _openScreen(context, EpodUploadScreen(token: token)),
                     ),
                   ),
                 ],

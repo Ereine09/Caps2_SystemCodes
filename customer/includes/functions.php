@@ -1078,6 +1078,98 @@ function send_payment_confirmation_email(int $order_id, string $customer_email, 
     }
 }
 
+/**
+ * Sends an order status update email to the customer that includes the delivery
+ * confirmation QR code. The QR code encodes the JSON payload the rider app scans
+ * in `rider_qr_confirm_api.php` ({ "delivery_id": X, "token": "..." }), so the
+ * rider can confirm delivery directly from the email without opening the web system.
+ *
+ * @param int    $order_id
+ * @param string $customer_email
+ * @param string $customer_name
+ * @param string $new_status_label
+ * @param string $order_number
+ * @return bool
+ */
+function send_order_status_email_with_qr(int $order_id, string $customer_email, string $customer_name, string $new_status_label, string $order_number): bool {
+    global $customer_db;
+
+    try {
+        // Fetch the delivery record to get the delivery_id + confirmation token.
+        $delivery = get_delivery_details_by_order_id($order_id);
+        if (!$delivery || empty($delivery['qr_confirmation_token'])) {
+            // No QR token available -> fall back to a plain status email.
+            return false;
+        }
+
+        $delivery_id = $delivery['id'];
+        $token = $delivery['qr_confirmation_token'];
+
+        // Build the QR payload exactly as rider_qr_confirm_api.php expects.
+        $qr_data = json_encode([
+            'delivery_id' => (int)$delivery_id,
+            'token'       => $token,
+        ]);
+
+        // Generate the QR code image.
+        $qr_code_uri = null;
+        if (class_exists('Endroid\\QrCode\\QrCode') && class_exists('Endroid\\QrCode\\Writer\\PngWriter')) {
+            try {
+                $qrCode = QrCode::create($qr_data);
+                $writer = new PngWriter();
+                $qr_code_uri = $writer->write($qrCode)->getDataUri();
+            } catch (Throwable $t) {
+                error_log('[send_order_status_email_with_qr] QR generation failed: ' . $t->getMessage());
+                $qr_code_uri = null;
+            }
+        } else {
+            error_log('[send_order_status_email_with_qr] Endroid QR library not installed; skipping QR.');
+        }
+
+        // Always include a readable fallback token so the rider can still confirm.
+        $token_readable = $delivery_id . '|' . $token;
+
+        $mail = new PHPMailer(true);
+        $mail->isSMTP();
+        $mail->Host       = SMTP_HOST;
+        $mail->SMTPAuth   = SMTP_AUTH;
+        $mail->Username   = SMTP_USERNAME;
+        $mail->Password   = SMTP_PASSWORD;
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+        $mail->Port       = SMTP_PORT;
+
+        $mail->setFrom(SMTP_FROM_EMAIL, htmlspecialchars(SMTP_FROM_NAME));
+        $mail->addAddress($customer_email, htmlspecialchars($customer_name));
+        $mail->isHTML(true);
+        $mail->Subject = 'Order ' . $order_number . ' - ' . $new_status_label;
+
+        $qr_html = $qr_code_uri
+            ? "<div style='text-align:center; margin:20px 0;'>
+                 <h3 style='color:#4a3e94; margin-bottom:6px;'>Delivery Confirmation QR Code</h3>
+                 <p style='font-size:13px; color:#666; margin-bottom:12px;'>Present this to your rider so they can scan it and confirm delivery.</p>
+                 <img src='" . $qr_code_uri . "' alt='Delivery QR Code' style='width:190px; height:190px; border:4px solid #eef0f4; border-radius:8px;'/>
+               </div>"
+            : "<p style='color:#888;'>Please have your order number <strong>" . htmlspecialchars($order_number) . "</strong> ready for the rider.</p>";
+
+        $mail->Body = "
+            <div style='font-family:Arial, sans-serif; max-width:600px; margin:auto; border:1px solid #eee; padding:20px;'>
+                <h2 style='color:#4a3e94;'>Order Status Update</h2>
+                <p>Hi " . htmlspecialchars($customer_name) . ",</p>
+                <p>Your order <strong>" . htmlspecialchars($order_number) . "</strong> has been updated to: <strong style='color:#27ae60;'>" . htmlspecialchars($new_status_label) . "</strong>.</p>
+                " . $qr_html . "
+                <hr style='border:none; border-top:1px solid #eee; margin:20px 0;'>
+                <p style='font-size:12px; color:#999;'>If you have any questions, please contact us. This is an automated message from " . SYSTEM_NAME . ".</p>
+            </div>";
+        $mail->AltBody = "Your order $order_number has been updated to: $new_status_label. Delivery confirmation code: $token_readable";
+
+        $mail->send();
+        return true;
+    } catch (Exception $e) {
+        error_log("Failed to send order status email with QR for order $order_id: " . $e->getMessage());
+        return false;
+    }
+}
+
 function record_order_notification(mysqli $conn, int $customer_id, int $order_id, string $order_number, float $subtotal, string $fulfillment_type, int $bulk_order, int $free_delivery): void {
     $title = 'New Customer Order';
     $message = "Order #$order_number for PHP " . number_format($subtotal, 2) . " was placed as " . ucfirst($fulfillment_type) . ".";
@@ -1148,6 +1240,37 @@ function get_delivery_details_by_order_id(int $order_id): ?array {
         'id' => (int)$delivery['id'],
         'qr_confirmation_token' => $delivery['qr_confirmation_token']
     ] : null;
+}
+
+/**
+ * Fetch the proof-of-delivery record for an order.
+ *
+ * The rider uploads a proof photo via rider_proof_api.php which is logged in
+ * the `delivery_tracking` table with status='delivered', proof_image_url and
+ * notes. We join riders + users to also surface the rider's name.
+ *
+ * @param int $order_id
+ * @return array|null Returns the latest delivered proof record, or null if none.
+ */
+function get_order_delivery_proof(int $order_id): ?array {
+    global $customer_db;
+    $stmt = $customer_db->prepare(
+        "SELECT dt.id, dt.status, dt.notes, dt.proof_image_url, dt.created_at,
+                CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,'')) AS rider_name,
+                r.vehicle_type, r.plate_number
+         FROM delivery_tracking dt
+         JOIN riders r ON r.id = dt.rider_id
+         LEFT JOIN users u ON u.id = r.user_id
+         WHERE dt.order_id = ? AND dt.status = 'delivered' AND dt.proof_image_url IS NOT NULL
+         ORDER BY dt.created_at DESC
+         LIMIT 1"
+    );
+    $stmt->bind_param('i', $order_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $proof = $result->fetch_assoc();
+    $stmt->close();
+    return $proof ?: null;
 }
 
 function get_order_items(int $order_id): array {

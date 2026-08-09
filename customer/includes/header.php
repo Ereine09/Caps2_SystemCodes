@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../../app/helpers/messaging_helper.php';
+require_once __DIR__ . '/../../app/helpers/notification_helper.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -8,6 +9,25 @@ if (session_status() === PHP_SESSION_NONE) {
 $customer = current_customer();
 $cart_count = cart_item_count();
 $unread_msg_count = $customer ? get_unread_count_customer((int)$customer['id']) : 0;
+
+// Customer notification unread count (bell) from the shared notifications table.
+$notif_count = 0;
+$rider_msg_unread = 0;
+if ($customer) {
+    $cid = (int)$customer['id'];
+    notifications_ensure_schema($conn);
+    $n_stmt = $conn->prepare("SELECT COUNT(*) AS total FROM notifications WHERE customer_id = ? AND is_read = 0");
+    $n_stmt->bind_param('i', $cid);
+    $n_stmt->execute();
+    $notif_count = (int)($n_stmt->get_result()->fetch_assoc()['total'] ?? 0);
+    $n_stmt->close();
+
+    $rm_stmt = $conn->prepare("SELECT COUNT(*) AS total FROM tbl_messages WHERE customer_id = ? AND sender_type = 'rider' AND is_read = 0");
+    $rm_stmt->bind_param('i', $cid);
+    $rm_stmt->execute();
+    $rider_msg_unread = (int)($rm_stmt->get_result()->fetch_assoc()['total'] ?? 0);
+    $rm_stmt->close();
+}
 
 // Get current page for active state
 $current_page = basename($_SERVER['PHP_SELF'], '.php');
@@ -177,10 +197,139 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
                 font-size: 0.85rem;
                 justify-content: center;
             }
-            .customer-sidebar-logout {
+.customer-sidebar-logout {
                 margin-top: 10px;
                 padding-top: 10px;
             }
+        }
+
+        /* ===== Floating Notification Bell (top-right) ===== */
+        .notif-bell-wrap {
+            position: fixed;
+            top: 20px;
+            right: 24px;
+            z-index: 1000;
+        }
+        .notif-bell-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            background: #ffffff;
+            color: #1f2937;
+            font-size: 1.15rem;
+            border: none;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+            cursor: pointer;
+            transition: 0.3s;
+            position: relative;
+        }
+        .notif-bell-btn:hover { background: #eef2ff; color: #6366f1; }
+        .notif-bell-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: #ef4444;
+            color: #fff;
+            font-size: 0.68rem;
+            font-weight: 700;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 0 2px #fff;
+        }
+        .notif-panel {
+            position: absolute;
+            top: 56px;
+            right: 0;
+            width: 360px;
+            max-width: calc(100vw - 40px);
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+            overflow: hidden;
+            display: none;
+            flex-direction: column;
+        }
+        .notif-panel.open { display: flex; }
+        .notif-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 18px;
+            border-bottom: 1px solid #eef1f6;
+            background: #f8f9ff;
+        }
+        .notif-panel-header h3 {
+            margin: 0;
+            font-size: 1rem;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .notif-panel-markall {
+            background: #6366f1;
+            color: #fff;
+            border: none;
+            padding: 7px 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.72rem;
+            cursor: pointer;
+        }
+        .notif-panel-markall:hover { background: #4f46e5; }
+        .notif-panel-body {
+            max-height: 380px;
+            overflow-y: auto;
+            padding: 8px;
+        }
+        .notif-panel-item {
+            display: flex;
+            gap: 12px;
+            padding: 12px 10px;
+            border-radius: 10px;
+            align-items: flex-start;
+        }
+        .notif-panel-item:hover { background: #f8f9ff; }
+        .notif-panel-item.unread { background: #eef2ff; }
+        .notif-panel-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 9px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #eef2ff;
+            color: #6366f1;
+            font-size: 0.9rem;
+        }
+        .notif-panel-title { font-weight: 700; color: #1e293b; font-size: 0.85rem; margin: 0 0 3px; }
+        .notif-panel-msg { color: #64748b; font-size: 0.78rem; margin: 0 0 4px; line-height: 1.4; }
+        .notif-panel-time { color: #94a3b8; font-size: 0.7rem; }
+        .notif-panel-empty { text-align: center; padding: 34px 16px; color: #94a3b8; }
+        .notif-panel-empty i { font-size: 2rem; color: #cbd5e1; margin-bottom: 8px; }
+        .notif-panel-footer {
+            border-top: 1px solid #eef1f6;
+            padding: 10px;
+            text-align: center;
+        }
+        .notif-panel-footer a {
+            color: #6366f1;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-decoration: none;
+        }
+        .notif-panel-footer a:hover { text-decoration: underline; }
+        @media (max-width: 768px) {
+            .notif-bell-wrap { top: 12px; right: 14px; }
         }
     </style>
 </head>
@@ -223,7 +372,7 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
                     <i class="fas fa-award"></i> Reward Catalog
                 </a>
             </li>
-            <li>
+<li>
                 <a href="<?php echo BASE_URL; ?>/customer/messages.php" class="<?php echo $current_page === 'messages' ? 'active' : ''; ?>">
                     <i class="fas fa-comment-dots"></i> Messages
                     <?php if ($unread_msg_count > 0): ?>
@@ -232,6 +381,14 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
                 </a>
             </li>
             <li>
+                <a href="<?php echo BASE_URL; ?>/customer/rider_chat.php" class="<?php echo $current_page === 'rider_chat' ? 'active' : ''; ?>">
+                    <i class="fas fa-motorcycle"></i> Message Rider
+                    <?php if ($rider_msg_unread > 0): ?>
+                        <span class="cart-badge" style="background: #0d9488;"><?php echo (int)$rider_msg_unread; ?></span>
+                    <?php endif; ?>
+                </a>
+            </li>
+<li>
                 <a href="<?php echo BASE_URL; ?>/customer/cart.php" class="<?php echo $current_page === 'cart' ? 'active' : ''; ?>">
                     <i class="fas fa-shopping-cart"></i> Cart
                     <?php if ($cart_count > 0): ?>
@@ -240,7 +397,7 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
                 </a>
             </li>
             <li>
-                <a href="<?php echo BASE_URL; ?>/customer/my_rewards.php" class="<?php echo $current_page === 'my_rewards' ? 'active' : ''; ?>">
+<a href="<?php echo BASE_URL; ?>/customer/my_rewards.php" class="<?php echo $current_page === 'my_rewards' ? 'active' : ''; ?>">
                     <i class="fas fa-gift"></i> My Rewards
                 </a>
             </li>
@@ -257,11 +414,37 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
         </div>
     </div>
 
-    <!-- Main Content -->
+<!-- Main Content -->
     <div class="customer-main-content">
         <?php if ($customer): ?>
             <div class="customer-welcome-banner">
                 <h1>Welcome back, <?php echo htmlspecialchars($customer['name']); ?>! 👋</h1>
                 <p>Your loyalty points: <strong style="color: #000000;"><?php echo number_format($customer['loyalty_points'] ?? 0, 2); ?></strong></p>
             </div>
+        <?php endif; ?>
+
+        <?php if ($customer): ?>
+        <!-- Floating Notification Bell -->
+        <div class="notif-bell-wrap" id="notif-bell-wrap">
+            <button class="notif-bell-btn" id="notif-bell-btn" aria-label="Notifications" title="Notifications">
+                <i class="fas fa-bell"></i>
+                <?php if ($notif_count > 0): ?>
+                    <span class="notif-bell-badge" id="notif-bell-badge"><?php echo (int)$notif_count; ?></span>
+                <?php endif; ?>
+            </button>
+            <div class="notif-panel" id="notif-panel">
+                <div class="notif-panel-header">
+                    <h3><i class="fas fa-bell"></i> Notifications</h3>
+                    <button class="notif-panel-markall" id="notif-panel-markall" style="<?php echo $notif_count > 0 ? '' : 'display:none;'; ?>">
+                        <i class="fas fa-check-double"></i> Mark all
+                    </button>
+                </div>
+                <div class="notif-panel-body" id="notif-panel-body">
+                    <div class="notif-panel-empty"><i class="fas fa-bell-slash"></i><p style="margin:0;">Loading notifications...</p></div>
+                </div>
+                <div class="notif-panel-footer">
+                    <a href="<?php echo BASE_URL; ?>/customer/notifications.php"><i class="fas fa-bell"></i> View all notifications</a>
+                </div>
+            </div>
+        </div>
         <?php endif; ?>

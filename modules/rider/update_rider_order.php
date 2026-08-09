@@ -110,8 +110,8 @@ try {
 
     $new_status = $status_map[$action];
 
-    // Check if order exists
-    $stmt = $conn->prepare('SELECT id, order_status, rider_id FROM tbl_orders WHERE id = ? LIMIT 1');
+// Check if order exists
+    $stmt = $conn->prepare('SELECT id, order_status, rider_id, fulfillment_type FROM tbl_orders WHERE id = ? LIMIT 1');
     $stmt->bind_param('i', $order_id);
     $stmt->execute();
     $order = $stmt->get_result()->fetch_assoc();
@@ -119,6 +119,11 @@ try {
 
     if (!$order) {
         throw new Exception('Order not found');
+    }
+
+    // Pickup orders are fulfilled by the customer at the shop — never assigned to a rider.
+    if (($order['fulfillment_type'] ?? '') === 'pickup') {
+        throw new Exception('Pickup orders are not assigned to riders.');
     }
 
     // Execute update according to action
@@ -170,7 +175,7 @@ if (!$stmt->execute()) {
                 }
             }
 
-            // Create an in-app notification for the customer.
+// Create an in-app notification for the customer.
             // Note: `user_id` is set to the customer's id because the customer's
             // JWT uses the customer id as its user_id, which is what the WS server
             // keys connections by. This routes the real-time push to the customer.
@@ -185,6 +190,38 @@ if (!$stmt->execute()) {
                 'reference_id' => $order_id,
                 'email_to' => null,
             ]);
+
+            // --- Remind the rider to prepare the exact COD amount ---
+            // Push an in-app notification to the rider (keyed by their user id)
+            // so they are reminded to prepare the exact cash amount to collect.
+            if ($customer_id > 0) {
+                // Fetch the order total for the reminder message.
+                $amt_stmt = $conn->prepare("SELECT total, payment_method FROM tbl_orders WHERE id = ? LIMIT 1");
+                $amt_stmt->bind_param('i', $order_id);
+                $amt_stmt->execute();
+                $amt_res = $amt_stmt->get_result()->fetch_assoc();
+                $amt_stmt->close();
+
+                $order_total = (float)($amt_res['total'] ?? 0.00);
+                $pay_method = strtolower((string)($amt_res['payment_method'] ?? 'cod'));
+
+                $reminder_message = 'Reminder: Please prepare the exact amount of PHP ' . number_format($order_total, 2) . ' to collect for this order.';
+                if ($pay_method !== 'cod') {
+                    $reminder_message = 'Order accepted. Payment method: ' . strtoupper($pay_method) . '.';
+                }
+
+                notifications_create($conn, [
+                    'user_id' => $rider_user_id,
+                    'customer_id' => $customer_id,
+                    'type' => 'rider_reminder',
+                    'channel' => 'in_app',
+                    'title' => 'Prepare Exact Amount',
+                    'message' => $reminder_message,
+                    'reference_table' => 'tbl_orders',
+                    'reference_id' => $order_id,
+                    'email_to' => null,
+                ]);
+            }
         }
     }
 

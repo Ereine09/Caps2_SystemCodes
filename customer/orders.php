@@ -18,11 +18,13 @@ $conn->query("CREATE TABLE IF NOT EXISTS tbl_deliveries (
 $order = null;
 $order_items = [];
 $delivery_details = null;
+$delivery_proof = null;
 $orders = [];
 if (isset($_GET['id'])) {
     $order_id = (int) $_GET['id'];
     $order = get_order_by_id($order_id, (int) $customer['id']);
     $delivery_details = $order ? get_delivery_details_by_order_id($order['id']) : null;
+    $delivery_proof = $order ? get_order_delivery_proof($order['id']) : null;
 
     // --- DYNAMICALLY ENSURE DELIVERY RECORD & QR TOKEN FOR ANY ORDER ID ---
     if ($order && $order['order_status'] !== 'cancelled') {
@@ -180,6 +182,38 @@ if (isset($_GET['id'])) {
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
+<?php if ($delivery_proof): ?>
+                <div class="info-card" style="margin-top: 25px; border-left: 5px solid #10b981;">
+                    <h4><i class="fas fa-camera"></i> Proof of Delivery</h4>
+                    <div style="display: flex; gap: 25px; align-items: flex-start; flex-wrap: wrap;">
+                        <div style="max-width: 240px;">
+                            <a href="<?php echo BASE_URL . '/' . htmlspecialchars($delivery_proof['proof_image_url']); ?>" target="_blank" title="View full proof image">
+                                <img src="<?php echo BASE_URL . '/' . htmlspecialchars($delivery_proof['proof_image_url']); ?>" alt="Proof of Delivery" style="width: 100%; max-width: 240px; border-radius: 10px; border: 4px solid #f1f5f9; box-shadow: 0 2px 8px rgba(0,0,0,0.12); cursor: zoom-in;">
+                            </a>
+                            <a href="<?php echo BASE_URL . '/' . htmlspecialchars($delivery_proof['proof_image_url']); ?>" target="_blank" class="button" style="display: block; text-align: center; margin-top: 12px; font-size: 0.85rem;">
+                                <i class="fas fa-expand"></i> View Proof of Delivery
+                            </a>
+                        </div>
+                        <div style="flex: 1; min-width: 220px;">
+                            <?php if (!empty($delivery_proof['rider_name']) && trim($delivery_proof['rider_name']) !== ''): ?>
+                                <div class="info-item"><span class="info-label">Delivered By</span><span class="info-value"><i class="fas fa-user-circle"></i> <?php echo htmlspecialchars($delivery_proof['rider_name']); ?></span></div>
+                            <?php endif; ?>
+                            <?php if (!empty($delivery_proof['plate_number'])): ?>
+                                <div class="info-item"><span class="info-label">Vehicle</span><span class="info-value"><?php echo htmlspecialchars($delivery_proof['vehicle_type'] . ' - ' . $delivery_proof['plate_number']); ?></span></div>
+                            <?php endif; ?>
+                            <div class="info-item"><span class="info-label">Delivered At</span><span class="info-value"><?php echo htmlspecialchars(date('M d, Y h:i A', strtotime($delivery_proof['created_at']))); ?></span></div>
+                            <?php if (!empty($delivery_proof['notes'])): ?>
+                                <div class="info-item" style="flex-direction: column; gap: 5px;">
+                                    <span class="info-label">Delivery Notes</span>
+                                    <span class="info-value" style="font-weight: 500; font-size: 0.9rem; background: #f8fafc; padding: 10px 14px; border-radius: 8px; border: 1px solid #eef2f7;"><?php echo nl2br(htmlspecialchars($delivery_proof['notes'])); ?></span>
+                                </div>
+                            <?php endif; ?>
+                            <p style="font-size: 0.8rem; color: #94a3b8; margin: 8px 0 0;">This photo confirms your order was delivered. If you were not home, please check the notes for where it was left.</p>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <?php if ($delivery_details && $order['order_status'] !== 'cancelled'): ?>
 
                 <div class="info-card" style="margin-top: 25px; text-align: center; border-left: 5px solid #10b981;">

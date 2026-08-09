@@ -1,19 +1,12 @@
-# rider_app fix plan
+# Rider App — Remove "Coming Soon" Placeholders
 
-## Step 1: Understand current rider app API usage
-- Inspect rider_app Dart code to see which endpoints it calls and what status mapping it expects.
+## Goal
+Replace the remaining "coming soon" snackbar placeholders in the rider drawer with functional screens.
 
-## Step 2: Fix rider app to use correct admin orders data
-- Update rider_app order list/state code to fetch real order statuses from `modules/admin/orders.php` (or, better, from a dedicated API used by that page) instead of showing all as `pending`.
-
-## Step 3: Fix customer checkout failure ("Unable to place your order...")
-- Identify why `create_customer_order()` returns null/false during `customer/checkout.php`.
-- Patch backend function(s) in `customer/checkout.php` / `customer/order_create_api.php` / `customer/includes/functions.php` so checkout succeeds consistently.
-
-## Step 4: Add debugging + safer error handling
-- When order creation fails, return/log the real underlying error message.
-
-## Step 5: Validate end-to-end
-- Test: rider app shows correct statuses.
-- Test: customer checkout successfully places an order.
-
+## Steps
+- [x] 1. Create `parcel_transfer_screen.dart` — lists active deliveries with a transfer action UI (uses real delivery data).
+- [x] 2. Create `learning_center_screen.dart` — self-contained educational/onboarding content.
+- [x] 3. Create `help_center_screen.dart` — FAQ accordion + contact info.
+- [x] 4. Create `ticket_center_screen.dart` — support ticket form with in-session list.
+- [x] 5. Wire all four screens into `rider_drawer.dart`, removing the `_showComingSoon` calls for these items.
+- [x] 6. Run `flutter analyze` to confirm 0 errors. (15 issues, 0 errors — all pre-existing `withOpacity` deprecations + 1 unused const; none from new code)

@@ -186,17 +186,20 @@ $cust_name = '';
                 o.created_at,
                 o.rider_id,
                 GROUP_CONCAT(CONCAT(oi.product_name, ' x', oi.quantity) SEPARATOR ', ') AS items_summary,
+                c.id AS customer_id,
                 c.name AS customer_name,
+                c.phone AS customer_phone,
                 c.email AS customer_email
          FROM tbl_delivery d
          JOIN tbl_orders o ON d.order_id = o.id
          LEFT JOIN tbl_order_items oi ON o.id = oi.order_id
          LEFT JOIN customers c ON o.customer_id = c.id
-         WHERE d.status IN ('pending','in_transit')
+WHERE d.status IN ('pending','in_transit')
+           AND o.fulfillment_type = 'delivery'
            AND (o.rider_id = ? OR o.rider_id IS NULL OR o.rider_id = 0)
          GROUP BY d.id, d.order_id, d.address, d.phone, d.instructions, d.status, d.delivered_at,
                   o.order_number, o.order_status, o.total, o.fulfillment_type, o.payment_method,
-                  o.created_at, o.rider_id, c.name, c.email
+                  o.created_at, o.rider_id, c.id, c.name, c.phone, c.email
          ORDER BY d.created_at DESC
          LIMIT 50"
     );
@@ -214,7 +217,9 @@ $cust_name = '';
             'delivery_id' => (int)($row['delivery_id'] ?? 0),
             'order_id' => (int)($row['order_id'] ?? 0),
             'order_number' => $row['order_number'] ?? '',
+            'customer_id' => (int)($row['customer_id'] ?? 0),
             'customer_name' => $row['customer_name'] ?? '',
+            'customer_phone' => $row['customer_phone'] ?? '',
             'address' => $row['address'] ?? '',
             'phone' => $row['phone'] ?? '',
             'instructions' => $row['instructions'] ?? '',

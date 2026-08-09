@@ -18,11 +18,24 @@ header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 
-require_once __DIR__ . '/../../app/config/config.php';
-require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
-require_once __DIR__ . '/../../app/helpers/db_schema_helper.php';
-
 $response = ['success' => false, 'message' => 'An error occurred.', 'data' => null];
+
+try {
+    require_once __DIR__ . '/../../app/config/config.php';
+    require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
+    require_once __DIR__ . '/../../app/helpers/db_schema_helper.php';
+    require_once __DIR__ . '/../../app/helpers/remittance_schema_helper.php';
+} catch (Throwable $e) {
+    // DB/server unavailable — return clean JSON so the app can show a retry
+    // instead of a PHP fatal HTML page (which Dio reads as a network error).
+    http_response_code(503);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Service temporarily unavailable. Please check your connection and try again.',
+        'data' => null,
+    ]);
+    exit;
+}
 
 try {
     // --- Authentication ---
@@ -80,9 +93,10 @@ try {
                 COALESCE(SUM(COALESCE(o.delivery_fee,0) + COALESCE(o.tip,0)), 0) AS total_earnings,
                 COALESCE(SUM(COALESCE(o.tip,0)), 0) AS total_tips,
                 COALESCE(SUM(COALESCE(o.delivery_fee,0)), 0) AS total_delivery_fees
-             FROM tbl_orders o
+FROM tbl_orders o
              WHERE o.rider_id = ?
-               AND o.order_status = 'completed'"
+               AND o.order_status = 'completed'
+               AND o.fulfillment_type = 'delivery'"
         );
         $summary->bind_param('i', $rider_id);
         $summary->execute();
@@ -107,9 +121,10 @@ try {
             "SELECT o.id AS order_id, o.order_number, o.delivery_fee, o.tip, o.total,
                     COALESCE(o.delivery_fee,0) + COALESCE(o.tip,0) AS earnings,
                     o.created_at
-             FROM tbl_orders o
+FROM tbl_orders o
              WHERE o.rider_id = ?
                AND o.order_status = 'completed'
+               AND o.fulfillment_type = 'delivery'
              ORDER BY o.created_at DESC
              LIMIT 100"
         );
@@ -246,8 +261,9 @@ try {
             COALESCE(SUM(COALESCE(o.delivery_fee,0) + COALESCE(o.tip,0)), 0) AS total_earnings,
             COALESCE(SUM(COALESCE(o.tip,0)), 0) AS total_tips,
             COALESCE(SUM(COALESCE(o.delivery_fee,0)), 0) AS total_delivery_fees
-         FROM tbl_orders o
-         WHERE o.rider_id = ? AND o.order_status = 'completed'"
+FROM tbl_orders o
+         WHERE o.rider_id = ? AND o.order_status = 'completed'
+           AND o.fulfillment_type = 'delivery'"
     );
     $summary->bind_param('i', $rider_id);
     $summary->execute();
@@ -259,6 +275,7 @@ try {
                 COALESCE(o.delivery_fee,0) + COALESCE(o.tip,0) AS earnings, o.created_at
          FROM tbl_orders o
          WHERE o.rider_id = ? AND o.order_status = 'completed'
+           AND o.fulfillment_type = 'delivery'
          ORDER BY o.created_at DESC
          LIMIT 100"
     );

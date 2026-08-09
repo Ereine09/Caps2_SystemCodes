@@ -8,9 +8,9 @@ import '../constants/colors.dart';
 import '../state/auth_state.dart';
 import '../state/notification_state.dart';
 import '../screens/rider_shipment_detail_screen.dart';
+import '../screens/chat_screen.dart';
 import 'rider_drawer.dart';
 import 'notifications_screen.dart';
-import 'qr_scanner_screen.dart';
 
 /// Main Delivery Dashboard — reorganized mirror of the reference rider app.
 /// Uses the existing teal palette, keeps all rider features intact.
@@ -111,10 +111,6 @@ class _RiderDeliveryDashboardState extends State<RiderDeliveryDashboard> {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
   }
 
-  void _openQR() {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => QRScannerScreen(token: widget.token)));
-  }
-
   void _openDetail(Map<String, dynamic> order) {
     final orderId = int.tryParse(order['order_id']?.toString() ?? order['id']?.toString() ?? '') ?? 0;
     if (orderId <= 0) return;
@@ -147,10 +143,38 @@ class _RiderDeliveryDashboardState extends State<RiderDeliveryDashboard> {
     }
   }
 
-  void _chatCustomer() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Messaging feature coming soon.'), backgroundColor: AppColors.primary),
-    );
+  /// Opens a chat screen with the given customer. If no customer is provided
+  /// (e.g. from the header icon), fall back to the first available active order's
+  /// customer or show a helpful message.
+  void _chatCustomer([Map<String, dynamic>? order]) {
+    Map<String, dynamic>? target = order;
+    if (target == null) {
+      final active = _assignments.where((a) {
+        final s = ((a as Map)['order_status']?.toString() ?? '').toLowerCase();
+        return !['completed', 'cancelled'].contains(s);
+      }).toList();
+      if (active.isNotEmpty) {
+        target = Map<String, dynamic>.from(active.first as Map);
+      }
+    }
+
+    final customerId = int.tryParse(target?['customer_id']?.toString() ?? '') ?? 0;
+    if (customerId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No active customer to chat with yet. Open a delivery to start messaging.'),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ChatScreen(
+        customerId: customerId,
+        customerName: target?['customer_name']?.toString() ?? 'Customer',
+        token: widget.token,
+      ),
+    ));
   }
 
   void _copyTracking(String tracking) {
@@ -210,13 +234,7 @@ class _RiderDeliveryDashboardState extends State<RiderDeliveryDashboard> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppColors.backgroundGrey,
-      drawer: const RiderDrawer(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openQR,
-        backgroundColor: AppColors.primary,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 28),
-      ),
+drawer: RiderDrawer(scaffoldKey: _scaffoldKey),
       body: Column(
         children: [
           _buildHeader(auth, notifCount),
@@ -498,8 +516,8 @@ class _RiderDeliveryDashboardState extends State<RiderDeliveryDashboard> {
           phone: order['phone']?.toString() ?? '',
           onTap: () => _openDetail(order),
           onCopy: () => _copyTracking(order['order_number']?.toString() ?? ''),
-          onCall: () => _callCustomer(order['phone']?.toString()),
-          onChat: _chatCustomer,
+onCall: () => _callCustomer(order['phone']?.toString()),
+          onChat: () => _chatCustomer(order),
         );
       }).toList(),
     );

@@ -263,6 +263,100 @@ if (response.data['success'] == true) {
     }
   }
 
+  /// Fetches the authenticated rider's profile (username, email, vehicle type,
+  /// plate number, on-duty status) from `rider_profile_api.php`.
+  Future<Map<String, dynamic>> getRiderProfile({String token = ''}) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await getJson(
+      '/modules/rider/rider_profile_api.php',
+      headers: headers,
+    );
+    if (response.data['success'] == true) {
+      return Map<String, dynamic>.from(response.data['data'] ?? {});
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to fetch rider profile');
+    }
+  }
+
+  /// Updates the rider's vehicle type and plate number via `rider_profile_api.php`.
+  Future<Map<String, dynamic>> updateRiderProfile({
+    required String vehicleType,
+    required String plateNumber,
+    String token = '',
+  }) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await postJson(
+      '/modules/rider/rider_profile_api.php',
+      body: {
+        'vehicle_type': vehicleType,
+        'plate_number': plateNumber,
+      },
+      headers: headers,
+    );
+    if (response.data['success'] == true) {
+      return Map<String, dynamic>.from(response.data['data'] ?? {});
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to update rider profile');
+    }
+  }
+
+  /// Fetches the list of customer conversations for the rider from
+  /// `rider_messaging_api.php`.
+  Future<List<dynamic>> getMessagingConversations({String token = ''}) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await getJson(
+      '/modules/rider/rider_messaging_api.php?action=get_conversations',
+      headers: headers,
+    );
+    if (response.data['success'] == true) {
+      final data = (response.data['data'] as Map?) ?? {};
+      return (data['conversations'] as List?) ?? [];
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to load conversations');
+    }
+  }
+
+  /// Fetches the full message history with a given customer.
+  Future<List<dynamic>> getMessagingConversation({
+    required int customerId,
+    String token = '',
+  }) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await getJson(
+      '/modules/rider/rider_messaging_api.php?action=get_conversation&customer_id=$customerId',
+      headers: headers,
+    );
+    if (response.data['success'] == true) {
+      final data = (response.data['data'] as Map?) ?? {};
+      return (data['messages'] as List?) ?? [];
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to load conversation');
+    }
+  }
+
+  /// Sends a message from the rider to a customer.
+  Future<Map<String, dynamic>> sendRiderMessage({
+    required int customerId,
+    required String message,
+    String token = '',
+  }) async {
+    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await postJson(
+      '/modules/rider/rider_messaging_api.php',
+      body: {
+        'action': 'send_message',
+        'customer_id': customerId,
+        'message': message,
+      },
+      headers: headers,
+    );
+    if (response.data['success'] == true) {
+      return Map<String, dynamic>.from(response.data['data'] ?? {});
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to send message');
+    }
+  }
+
   /// Verifies the delivery confirmation QR code with the backend.
   Future<Map<String, dynamic>> verifyDeliveryQR(String qrToken, int riderId) async {
     final response = await postJson(

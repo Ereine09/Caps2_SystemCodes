@@ -164,7 +164,29 @@ function send_message($customer_id, $user_id, $sender_type, $message) {
 }
 
 /**
- * Get all messages for a customer
+ * Where clause fragment that identifies the CUSTOMER <-> ADMIN/STAFF support
+ * thread only. Rider messages (sender_type='rider') and customer messages sent
+ * to a rider (customer with a user_id set = the rider's user id) are EXCLUDED.
+ */
+function messaging_support_thread_filter($alias = 'm') {
+    $a = $alias;
+    return "($a.sender_type IN ('admin','staff','system') OR ($a.sender_type = 'customer' AND $a.user_id IS NULL))";
+}
+
+/**
+ * Where clause fragment that identifies the CUSTOMER <-> RIDER thread only.
+ * Both customer messages sent TO a rider and rider replies carry the rider's
+ * `user_id`, so we can isolate this thread by `user_id` regardless of whether
+ * the customer also has a support thread (which uses user_id = NULL).
+ */
+function messaging_rider_thread_filter($alias = 'm') {
+    $a = $alias;
+    return "($a.sender_type IN ('customer','rider') AND $a.user_id IS NOT NULL)";
+}
+
+/**
+ * Get all messages for a customer (support/helpdesk thread only).
+ * Rider <-> customer conversations are excluded to keep chats isolated.
  */
 function get_customer_messages($customer_id) {
     global $conn;
@@ -172,6 +194,7 @@ function get_customer_messages($customer_id) {
     // Auto-fix if table is missing
     messaging_ensure_schema($conn);
 
+    $filter = messaging_support_thread_filter('m');
     $stmt = $conn->prepare("
         SELECT m.*, 
                CASE 
@@ -183,6 +206,7 @@ function get_customer_messages($customer_id) {
         LEFT JOIN customers c ON m.customer_id = c.id
         LEFT JOIN users u ON m.user_id = u.id
         WHERE m.customer_id = ?
+          AND $filter
         ORDER BY m.created_at DESC
     ");
     $stmt->bind_param("i", $customer_id);
@@ -195,12 +219,19 @@ function get_customer_messages($customer_id) {
 }
 
 /**
- * Get unread message count for customer
+ * Get unread message count for customer (support/helpdesk thread only).
  */
 function get_unread_count_customer($customer_id) {
     global $conn;
-    
-    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM tbl_messages WHERE customer_id = ? AND is_read = 0 AND sender_type != 'customer'");
+
+    $filter = messaging_support_thread_filter('m');
+    $stmt = $conn->prepare(
+        "SELECT COUNT(*) as count FROM tbl_messages m
+         WHERE m.customer_id = ?
+           AND m.is_read = 0
+           AND NOT (m.sender_type = 'customer')
+           AND $filter"
+    );
     $stmt->bind_param("i", $customer_id);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -215,7 +246,9 @@ function get_unread_count_customer($customer_id) {
  */
 function get_staff_messages($user_id) {
     global $conn;
-    
+
+    $filter = messaging_support_thread_filter('m');
+
     $stmt = $conn->prepare("
         SELECT m.*, 
                c.name as customer_name,
@@ -227,8 +260,9 @@ function get_staff_messages($user_id) {
         LEFT JOIN customers c ON m.customer_id = c.id
         LEFT JOIN users u ON m.user_id = u.id
         WHERE m.customer_id IN (
-            SELECT DISTINCT customer_id FROM tbl_messages
+            SELECT DISTINCT customer_id FROM tbl_messages WHERE $filter
         )
+          AND $filter
         ORDER BY m.created_at DESC
     ");
     $stmt->execute();
@@ -244,6 +278,8 @@ function get_staff_messages($user_id) {
  */
 function get_conversation($customer_id, $user_id = null) {
     global $conn;
+
+    $filter = messaging_support_thread_filter('m');
     
     if ($user_id) {
         $stmt = $conn->prepare("
@@ -256,6 +292,7 @@ function get_conversation($customer_id, $user_id = null) {
             LEFT JOIN customers c ON m.customer_id = c.id
             LEFT JOIN users u ON m.user_id = u.id
             WHERE m.customer_id = ? AND (m.user_id = ? OR m.user_id IS NULL)
+              AND $filter
             ORDER BY m.created_at ASC
         ");
         $stmt->bind_param("ii", $customer_id, $user_id);
@@ -270,6 +307,7 @@ function get_conversation($customer_id, $user_id = null) {
             LEFT JOIN customers c ON m.customer_id = c.id
             LEFT JOIN users u ON m.user_id = u.id
             WHERE m.customer_id = ?
+              AND $filter
             ORDER BY m.created_at ASC
         ");
         $stmt->bind_param("i", $customer_id);
@@ -316,8 +354,14 @@ function mark_all_as_read($customer_id) {
  */
 function get_unread_count_staff($user_id) {
     global $conn;
-    
-    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM tbl_messages WHERE is_read = 0 AND sender_type = 'customer'");
+
+    // Count unread customer messages in the SUPPORT thread only.
+    $stmt = $conn->prepare(
+        "SELECT COUNT(*) as count FROM tbl_messages m
+         WHERE m.is_read = 0
+           AND m.sender_type = 'customer'
+           AND m.user_id IS NULL"
+    );
     $stmt->execute();
     $result = $stmt->get_result();
     $row = $result->fetch_assoc();
@@ -331,13 +375,22 @@ function get_unread_count_staff($user_id) {
  */
 function get_customers_with_messages() {
     global $conn;
-    
+
+    // Only support-thread messages (customer <-> admin/staff) count for the
+    // admin messaging list. Rider messages are excluded.
     $stmt = $conn->prepare("
         SELECT DISTINCT c.id, c.name, c.email,
-               (SELECT COUNT(*) FROM tbl_messages WHERE customer_id = c.id AND is_read = 0 AND sender_type = 'customer') as unread_count,
-               (SELECT MAX(created_at) FROM tbl_messages WHERE customer_id = c.id) as last_message_time
+               (SELECT COUNT(*) FROM tbl_messages m2
+                WHERE m2.customer_id = c.id AND m2.is_read = 0 AND m2.sender_type = 'customer' AND m2.user_id IS NULL) as unread_count,
+               (SELECT MAX(m3.created_at) FROM tbl_messages m3
+                WHERE m3.customer_id = c.id
+                  AND (m3.sender_type IN ('admin','staff','system') OR (m3.sender_type = 'customer' AND m3.user_id IS NULL))) as last_message_time
         FROM customers c
-        WHERE c.id IN (SELECT DISTINCT customer_id FROM tbl_messages)
+        WHERE EXISTS (
+            SELECT 1 FROM tbl_messages m4
+            WHERE m4.customer_id = c.id
+              AND (m4.sender_type IN ('admin','staff','system') OR (m4.sender_type = 'customer' AND m4.user_id IS NULL))
+        )
         ORDER BY last_message_time DESC
     ");
     $stmt->execute();

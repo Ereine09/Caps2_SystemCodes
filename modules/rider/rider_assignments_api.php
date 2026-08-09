@@ -83,11 +83,12 @@ try {
             o.total,
             c.name AS customer_name,
             c.email AS customer_email
-     FROM tbl_delivery d
+FROM tbl_delivery d
      JOIN tbl_orders o ON d.order_id = o.id
      LEFT JOIN customers c ON o.customer_id = c.id
-     -- Only show deliveries that are pending or in transit and are either unassigned or assigned to this rider
+     -- Only show delivery orders (not pickup) that are pending or in transit and are either unassigned or assigned to this rider
      WHERE d.status IN ('pending','in_transit')
+       AND o.fulfillment_type = 'delivery'
      ORDER BY d.created_at DESC
      LIMIT 50"
   );

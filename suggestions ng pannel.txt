@@ -86,3 +86,31 @@ Should we apply the same AJAX auto-refresh logic to admin/messages.php so they d
 
  - DPS Admin
 
+
+dapat kapag yung discount voucher is hindi nag babawas sa loyalty point kapag na apply na ang nangyayari kasi kapag nilagay ko yung discount voucher is parang nag leless din yung loyalty points parang nag aaplly din don yung discount
+
+
+kaya mong lagyan ng order details yung admin/order.php ko? like makikita yung items don na binili ng customer 
+
+can you my admin/messages.php kasi nag dodoble yung message ni admin so if i send "hi what can i help you?" nag doduble sya lang nakakadalwang ulet sya
+
+can you remove the scroll next to my sidebar?
+these are the files you need to fix
+http://localhost/loyalty_managements/modules/admin/dashboard.php
+http://localhost/loyalty_managements/modules/admin/staff_management.php
+http://localhost/loyalty_managements/modules/admin/activity_logs.php
+http://localhost/loyalty_managements/modules/admin/manage_rewards.php
+http://localhost/loyalty_managements/modules/admin/products.php
+http://localhost/loyalty_managements/modules/admin/orders.php
+http://localhost/loyalty_managements/modules/admin/delivery.php
+http://localhost/loyalty_managements/modules/admin/about.php
+http://localhost/loyalty_managements/modules/admin/messages.php
+http://localhost/loyalty_managements/modules/customers/customers.php
+http://localhost/loyalty_managements/modules/customers/loyalty_points.php
+http://localhost/loyalty_managements/modules/customers/reward_redemption.php
+http://localhost/loyalty_managements/modules/admin/analytics.php
+
+
+I found that most of the "coming soon" items in your rider drawer already have finished screens and backend APIs that were never connected. I plan to wire them up: Edit Profile, Drive Report (+ Queue Status/Check In), Settings, Upload ePOD, and the chat icon (creating a Conversations list screen). Should I proceed with wiring these up? For the items with no backend yet (Parcel Transfer, Learning Center, Help Center, Ticket Center), I'll leave them as "coming soon". Does that sound good?
+
+You need to use a separate database for that—right now, the chat between the admin and the customer is the same as the one between the rider and the customer.

@@ -16,8 +16,20 @@ function customer_is_logged_in(): bool {
 }
 
 function require_customer_login(): void {
+    // A valid JWT token alone is not enough — the customer must ALSO still
+    // exist in the database. This guards against stale sessions pointing to a
+    // customer record that was deleted (or a database that was reset).
     if (!customer_is_logged_in()) {
         header('Location: ' . BASE_URL . '/customer/login.php');
+        exit();
+    }
+
+    $customer = current_customer();
+    if (!$customer) {
+        // The token is valid but the customer no longer exists in the DB.
+        // Clear the stale token and force a fresh login.
+        clearJWTCookie(true);
+        header('Location: ' . BASE_URL . '/customer/login.php?error=session_expired');
         exit();
     }
 }

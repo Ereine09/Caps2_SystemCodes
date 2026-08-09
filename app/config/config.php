@@ -4,22 +4,27 @@ date_default_timezone_set('Asia/Manila');
 
 // my database info
 $servername = "localhost"; // my server name
+$servername_ip = "127.0.0.1"; // Use IP for reliability
 $username = "root"; // my database username
 $password = ""; // my database password
 $dbname = "capstone_db"; // my database name
+$port = 3306; // Default MySQL port
 
-// i will make a connection to my database
-$conn = new mysqli($servername, $username, $password, $dbname);
+// Enable mysqli exceptions for error handling
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-// i will check my connection
-if ($conn->connect_error) {
-    // if i have an error, i will stop and show it
-    die("Connection failed: " . $conn->connect_error);
+try {
+    // i will make a connection to my database
+    $conn = new mysqli($servername_ip, $username, $password, $dbname, $port);
+} catch (mysqli_sql_exception $e) {
+    // If connection fails, provide a clear error message and stop.
+    // This is much more user-friendly than a fatal error.
+    http_response_code(503); // Service Unavailable
+    die("<h2>Database Connection Error</h2><p>Could not connect to the database. Please ensure the MySQL server is running in XAMPP and that the credentials are correct.</p><p><strong>Error details:</strong> " . $e->getMessage() . "</p>");
 }
 
 // Set charset to handle special characters correctly
 $conn->set_charset("utf8mb4");
-mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 // my base url for my links and redirects
 if (!defined('BASE_URL')) {
