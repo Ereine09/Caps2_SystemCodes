@@ -43,6 +43,12 @@ function ensureRiderSchema(mysqli $conn): void
     // is intentionally no longer created here to avoid duplicate/unused tables.
 }
 
+    // Add availability_status to riders table
+    $check_col_avail = $conn->query("SHOW COLUMNS FROM `riders` LIKE 'availability_status'");
+    if ($check_col_avail && $check_col_avail->num_rows === 0) {
+        $conn->query("ALTER TABLE `riders` ADD COLUMN `availability_status` ENUM('available', 'unavailable') NOT NULL DEFAULT 'available' AFTER `is_on_duty`");
+    }
+
     // Add rider_id to orders table to assign deliveries
     $check_col = $conn->query("SHOW COLUMNS FROM `tbl_orders` LIKE 'rider_id'");
     if ($check_col && $check_col->num_rows === 0) {

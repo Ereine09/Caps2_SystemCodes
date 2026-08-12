@@ -486,6 +486,65 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
                 display: none; /* Hide text, keep paper plane icon on tiny screens */
             }
         }
+        /* Sidebar Container Solution */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: #1e293b;
+            z-index: 1000;
+            box-sizing: border-box;
+        }
+
+        .sidebar-brand {
+            flex-shrink: 0;
+            padding: 20px 15px;
+            text-align: center;
+        }
+
+        /* Ginawang scrollable ang listahan kapag mahaba */
+        .nav-links {
+            flex: 1;
+            overflow-y: auto;
+            list-style: none;
+            padding: 0 10px !important;
+            margin: 0;
+        }
+
+        /* Subtle Scrollbar Style */
+        .nav-links::-webkit-scrollbar {
+            width: 5px;
+        }
+        .nav-links::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        /* Sidebar Footer para sa Logout (Pinned at the bottom) */
+        .sidebar-footer {
+            flex-shrink: 0;
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background-color: #1e293b;
+        }
+
+        .logout-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #ef4444 !important;
+            font-weight: 600;
+            text-decoration: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .logout-link:hover {
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
@@ -525,9 +584,11 @@ $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) 
                 <li><a href="<?php echo BASE_URL; ?>/modules/admin/analytics.php" <?php echo basename($_SERVER['PHP_SELF']) === 'analytics.php' ? 'class="active"' : ''; ?>><i class="fas fa-chart-line"></i> Analytics & Reports</a></li>
             <?php endif; ?>
         </ul>
-        <a href="<?php echo BASE_URL; ?>/modules/auth/logout.php" class="logout-link" style="position: absolute; bottom: 20px; left: 20px; text-decoration: none;">
-            <i class="fas fa-sign-out-alt"></i> Logout
-        </a>
+        <div class="sidebar-footer">
+            <a href="<?php echo BASE_URL; ?>/modules/auth/logout.php" class="logout-link">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+        </div>
     </div>
 
     <div class="main-content">

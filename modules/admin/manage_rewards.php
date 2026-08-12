@@ -167,6 +167,65 @@ $rewards = mysqli_query($conn, "SELECT * FROM rewards ORDER BY points DESC");
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>/assets/css/admin_style.css">
 </head>
 <body>
+    <style>
+        /* FORCE FIX FOR SIDEBAR OVERLAPPING */
+        .sidebar {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 260px !important;
+            height: 100vh !important;
+            display: flex !important;
+            flex-direction: column !important;
+            background-color: #1e293b !important;
+            z-index: 1000 !important;
+            box-sizing: border-box !important;
+        }
+
+        .sidebar-brand {
+            flex-shrink: 0 !important;
+            padding: 20px 15px !important;
+            text-align: center !important;
+        }
+
+        /* Ginagawang scrollable ang mismong links lang */
+        .sidebar .nav-links {
+            flex: 1 1 auto !important;
+            overflow-y: auto !important;
+            list-style: none !important;
+            padding: 0 10px 20px 10px !important;
+            margin: 0 !important;
+            max-height: calc(100vh - 180px) !important; /* Piliting mag-scroll bago tumapat sa logout */
+        }
+
+        /* Custom Scrollbar */
+        .sidebar .nav-links::-webkit-scrollbar {
+            width: 5px;
+        }
+        .sidebar .nav-links::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        /* Naka-pin sa pinakababa ang Logout */
+        .sidebar-footer {
+            flex-shrink: 0 !important;
+            padding: 16px 20px !important;
+            border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+            background-color: #1e293b !important;
+            margin-top: auto !important;
+        }
+
+        .sidebar-footer .logout-link {
+            position: static !important; /* Tinatanggal ang absolute positioning */
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            color: #ef4444 !important;
+            font-weight: 600 !important;
+            text-decoration: none !important;
+        }
+    </style>
     <div class="sidebar">
         <div class="sidebar-brand" style="text-align: center; padding: 20px 15px;">
             <img src="<?php echo SYSTEM_LOGO_URL; ?>" alt="Logo" style="max-width: 160px; max-height: 80px; display: block; margin: 0 auto 10px; border-radius: 5px;">
@@ -195,16 +254,18 @@ $rewards = mysqli_query($conn, "SELECT * FROM rewards ORDER BY points DESC");
                 <?php endif; ?>
             </a></li>            
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
-<li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance</a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance</a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'loyalty_points.php') ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'reward_redemption.php') ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>
             <?php if ($role === 'admin'): ?>
                 <li><a href="<?php echo BASE_URL; ?>/modules/admin/analytics.php" <?php echo basename($_SERVER['PHP_SELF']) === 'analytics.php' ? 'class="active"' : ''; ?>><i class="fas fa-chart-line"></i> Analytics & Reports</a></li>
             <?php endif; ?>
         </ul>
-        <a href="<?php echo BASE_URL; ?>/modules/auth/logout.php" class="logout-link" style="position: absolute; bottom: 20px; left: 20px; text-decoration: none;">
-            <i class="fas fa-sign-out-alt"></i> Logout
-        </a>
+        <div class="sidebar-footer">
+            <a href="<?php echo BASE_URL; ?>/modules/auth/logout.php" class="logout-link">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+        </div>
     </div>
 
     <div class="main-content">

@@ -7,6 +7,7 @@ function ensure_remittance_schema(mysqli $conn): void
         CREATE TABLE IF NOT EXISTS `tbl_rider_remittances` (
           `id` INT AUTO_INCREMENT PRIMARY KEY,
           `rider_id` INT NOT NULL,
+          `reference_number` VARCHAR(100) NULL,
           `amount` DECIMAL(10, 2) NOT NULL,
           `status` ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
           `notes` TEXT NULL COMMENT 'Reason for rejection, etc.',

@@ -41,6 +41,65 @@ $unread_count = get_unread_count_staff($user_id);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>/assets/css/admin_style.css">
     <style>
+        /* Sidebar Container Solution */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: #1e293b;
+            z-index: 1000;
+            box-sizing: border-box;
+        }
+
+        .sidebar-brand {
+            flex-shrink: 0;
+            padding: 20px 15px;
+            text-align: center;
+        }
+
+        /* Ginawang scrollable ang listahan kapag mahaba */
+        .nav-links {
+            flex: 1;
+            overflow-y: auto;
+            list-style: none;
+            padding: 0 10px !important;
+            margin: 0;
+        }
+
+        /* Subtle Scrollbar Style */
+        .nav-links::-webkit-scrollbar {
+            width: 5px;
+        }
+        .nav-links::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        /* Sidebar Footer para sa Logout (Pinned at the bottom) */
+        .sidebar-footer {
+            flex-shrink: 0;
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background-color: #1e293b;
+        }
+
+        .logout-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #ef4444 !important;
+            font-weight: 600;
+            text-decoration: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .logout-link:hover {
+            opacity: 0.8;
+        }
         .order-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 25px; margin-top: 20px; }
         .info-card { background: #fff; padding: 25px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; margin-bottom: 25px; }
         .info-card h4 { margin-top: 0; margin-bottom: 20px; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; }
@@ -91,9 +150,11 @@ $unread_count = get_unread_count_staff($user_id);
                 <li><a href="<?php echo BASE_URL; ?>/modules/admin/analytics.php"><i class="fas fa-chart-line"></i> Analytics & Reports</a></li>
             <?php endif; ?>
         </ul>
-        <a href="<?php echo BASE_URL; ?>/modules/auth/logout.php" class="logout-link" style="position: absolute; bottom: 20px; left: 20px; text-decoration: none;">
-            <i class="fas fa-sign-out-alt"></i> Logout
-        </a>
+        <div class="sidebar-footer">
+            <a href="<?php echo BASE_URL; ?>/modules/auth/logout.php" class="logout-link">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+        </div>
     </div>
 
     <div class="main-content">

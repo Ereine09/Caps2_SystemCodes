@@ -8,8 +8,8 @@ function getGeminiBusinessInsight($stats_summary) {
     }
     $api_key = GEMINI_API_KEY; 
     
-    // Naka-v1beta tayo para suportado ang gemini-1.5-flash/2.5-flash at safety/generation settings
-    $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . $api_key;
+// Naka-v1beta tayo para suportado ang pinakabagong Gemini models na available sa free tier
+    $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' . $api_key;
 
     // Default settings para sa system prompt at customer inquiry
     $system_instruction = "You are a helpful business assistant.";

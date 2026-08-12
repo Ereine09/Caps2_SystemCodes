@@ -123,12 +123,12 @@ try {
                     $conn->query("ALTER TABLE `tbl_rider_remittances` ADD COLUMN `status` ENUM('pending', 'approved', 'rejected') DEFAULT 'pending'");
                 }
 
-                // --- FIX: Insert $rider_user_id instead of $rider_id to satisfy the foreign key constraint ---
+                // --- FIX: Insert the correct rider_id from the riders table ---
                 $stmt_remit = $conn->prepare(
                     "INSERT INTO tbl_rider_remittances (rider_id, amount, reference_number, status, remitted_at) 
                      VALUES (?, ?, ?, 'pending', NOW())"
                 );
-                $stmt_remit->bind_param('ids', $rider_user_id, $remitted_amount, $reference_number);
+                $stmt_remit->bind_param('ids', $rider_id, $remitted_amount, $reference_number);
                 $stmt_remit->execute();
                 $remittance_id = $conn->insert_id;
                 $stmt_remit->close();

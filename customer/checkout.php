@@ -2,6 +2,13 @@
 require_once __DIR__ . '/includes/auth.php';
 // require_customer_login();
 
+// Fetch live E-Bike Rider status from database
+$is_rider_available = true; // Default
+$rider_query = mysqli_query($conn, "SELECT is_available FROM tbl_rider_status LIMIT 1");
+if ($rider_query && mysqli_num_rows($rider_query) > 0) {
+    $is_rider_available = (bool)mysqli_fetch_assoc($rider_query)['is_available'];
+}
+
 // Handle quantity updates from checkout page form
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_checkout_quantity'])) {
     $customer = current_customer();
@@ -25,6 +32,7 @@ $customer = current_customer();
 $errors = [];
 $success_message = '';
 $stock_deducted = false; 
+$stock_deducted = false;
 $order_details = null;
 
 $admin_message = "Please scan the QR code below and enter the 13-digit GCash reference number after payment. Your order will be processed once payment is verified.";
@@ -33,7 +41,7 @@ $bank_admin_message = "Please transfer the total amount to the account details b
 $voucher_code_input = '';
 $discount_amount = 0.00;
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quantity'])) {
     $fulfillment_type = $_POST['fulfillment_type'] ?? 'pickup';
     $delivery_address = trim($_POST['delivery_address'] ?? '');
     $delivery_phone = trim($_POST['delivery_phone'] ?? '');
@@ -192,6 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'pickup_time' => $pickup_time,
             'payment_method' => $payment_method,
             'gcash_reference_number' => ($payment_method === 'gcash') ? $gcash_reference_number : $bank_reference_number,
+            'reference_number' => ($payment_method === 'gcash') ? $gcash_reference_number : $bank_reference_number,
             'delivery_fee' => $delivery_fee,
             'voucher_code' => $voucher_code_input, // Pass voucher to order creation
             'discount_amount' => $discount_amount, // Pass discount amount
@@ -214,6 +223,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($deduction_successful) {
             $stock_deducted = true; 
+            $stock_deducted = true;
             $order_id = create_customer_order((int)$customer['id'], $fulfillment_type, $details, $cart);
             if ($order_id !== null) {
 $GLOBALS['conn']->commit();
@@ -325,6 +335,7 @@ $GLOBALS['conn']->commit();
             }
         } else {
             $GLOBALS['conn']->rollback();
+            $GLOBALS['conn']->rollback(); // Rollback if stock deduction fails
         }
     }
 }
@@ -440,6 +451,29 @@ $GLOBALS['conn']->commit();
         100% { opacity: 0.8; }
     }
 
+    /* Rider Status Badge Styles */
+    .rider-status-box {
+        margin-top: 10px;
+        margin-bottom: 20px;
+        padding: 12px 15px;
+        border-radius: 10px;
+        font-size: 0.88rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        line-height: 1.4;
+    }
+    .rider-status-box.available {
+        background-color: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        color: #065f46;
+    }
+    .rider-status-box.unavailable {
+        background-color: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+    }
+    
     /* GCash Section Styling */
     .payment-options {
         border-top: 1px solid #eee;
@@ -635,6 +669,27 @@ $GLOBALS['conn']->commit();
                     <label class="option-label">
                         <input type="radio" name="fulfillment_type" value="delivery" <?php echo (isset($_POST['fulfillment_type']) && $_POST['fulfillment_type'] === 'delivery') ? 'checked' : ''; ?> onchange="toggleFulfillmentFields()"> Delivery
                     </label>
+                </div>
+
+                <!-- ADDED: E-Bike Rider Availability Status Indicator -->
+                <div id="rider-status-container">
+                    <?php if ($is_rider_available): ?>
+                        <div class="rider-status-box available">
+                            <i class="fas fa-motorcycle" style="font-size: 1.2rem; margin-top: 2px;"></i>
+                            <div>
+                                <div><span class="rider-status-badge badge-green">Available</span> <strong>E-Bike Delivery Rider</strong></div>
+                                <div style="font-size: 0.82rem; margin-top: 2px;">Rider is active and ready to deliver your orders.</div>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="rider-status-box unavailable">
+                            <i class="fas fa-battery-quarter" style="font-size: 1.2rem; margin-top: 2px;"></i>
+                            <div>
+                                <div><span class="rider-status-badge badge-red">Unavailable</span> <strong>E-Bike is Charging</strong></div>
+                                <div style="font-size: 0.82rem; margin-top: 2px;">Please wait 3–5 hours as our e-bike is currently charging. We appreciate your patience!</div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                 </div>
 
                 <div id="pickup-fields" style="<?php echo (!isset($_POST['fulfillment_type']) || $_POST['fulfillment_type'] === 'pickup') ? '' : 'display:none;'; ?>">
@@ -931,6 +986,10 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || `HTTP error! status: ${response.status}`);
+            }
 
             if (data.success) {
                 if (voucherMessage) {

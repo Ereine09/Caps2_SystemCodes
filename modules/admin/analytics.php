@@ -126,13 +126,94 @@ while ($s_row = mysqli_fetch_assoc($summary_res)) { $daily_summary_data[] = $s_r
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Analytics & Reports - DPS Admin</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>/assets/css/admin_style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        body {
+            overflow-x: hidden;
+            margin: 0;
+            background-color: #f8fafc;
+        }
+
+        /* Sidebar Flexbox Solution */
+        .sidebar {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 260px !important;
+            height: 100vh !important;
+            display: flex !important;
+            flex-direction: column !important;
+            background-color: #1e293b !important;
+            z-index: 1000 !important;
+            box-sizing: border-box !important;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .sidebar-brand {
+            flex-shrink: 0 !important;
+            padding: 20px 15px !important;
+            text-align: center !important;
+        }
+
+        /* Scrollable Navigation Links */
+        .sidebar .nav-links {
+            flex: 1 1 auto !important;
+            overflow-y: auto !important;
+            list-style: none !important;
+            padding: 0 10px 10px 10px !important;
+            margin: 0 !important;
+        }
+
+        .sidebar .nav-links::-webkit-scrollbar {
+            width: 5px;
+        }
+        .sidebar .nav-links::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        /* Pinned Footer Logout Area */
+        .sidebar-footer {
+            flex-shrink: 0 !important;
+            padding: 16px 20px !important;
+            border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+            background-color: #1e293b !important;
+            margin-top: auto !important;
+        }
+
+        .sidebar-footer .logout-link {
+            position: static !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            color: #ef4444 !important;
+            font-weight: 600 !important;
+            text-decoration: none !important;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar-footer .logout-link:hover {
+            opacity: 0.8;
+        }
+
+        .main-content {
+            margin-left: 260px;
+            padding: 30px;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
         @media print {
-            .sidebar, .logout-link, button, .nav-links, .ai-insight-box, .welcome-header div:last-child, .filter-box {
+            .sidebar, button, .ai-insight-box, .welcome-header div:last-child, .filter-box {
                 display: none !important;
             }
             .main-content { margin-left: 0 !important; padding: 0 !important; width: 100% !important; }
@@ -143,6 +224,7 @@ while ($s_row = mysqli_fetch_assoc($summary_res)) { $daily_summary_data[] = $s_r
             .stats-container { gap: 10px !important; }
             .card { border: 1px solid #eee !important; }
         }
+
         .print-report-header { display: none; }
         .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; color: white; }
         .badge-success { background: #27ae60; }
@@ -151,25 +233,24 @@ while ($s_row = mysqli_fetch_assoc($summary_res)) { $daily_summary_data[] = $s_r
         .badge-secondary { background: #95a5a6; }
         .ai-insight-box { background: #f0f7ff; border-left: 5px solid #3498db; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
 
-        body {
-    overflow-x: hidden;
-}
-    .sidebar::-webkit-scrollbar {
-    display: none;
-}
-    .sidebar {
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
-}
+        @media (max-width: 992px) {
+            .main-content {
+                margin-left: 0;
+                padding: 20px 15px;
+            }
+        }
     </style>
 </head>
 <body>
+
+    <!-- Sidebar Container -->
     <div class="sidebar">
-        <div class="sidebar-brand" style="text-align: center; padding: 20px 15px;">
+        <div class="sidebar-brand">
             <img src="<?php echo SYSTEM_LOGO_URL; ?>" alt="Logo" style="max-width: 160px; max-height: 80px; display: block; margin: 0 auto 10px; border-radius: 5px;">
             <h2 style="color: white; font-size: 1rem; margin: 0; line-height: 1.2;"><?php echo htmlspecialchars(SYSTEM_NAME); ?></h2>
         </div>
-        <ul class="nav-links" style="list-style: none; padding: 0;">
+        
+        <ul class="nav-links">
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/dashboard.php" <?php echo basename($_SERVER['PHP_SELF']) === 'dashboard.php' ? 'class="active"' : ''; ?>><i class="fas fa-home"></i> Dashboard</a></li>
             <?php if ($role === 'admin'): ?>
                 <li><a href="<?php echo BASE_URL; ?>/modules/admin/staff_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'staff_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-users-cog"></i> Staff Management</a></li>
@@ -183,7 +264,7 @@ while ($s_row = mysqli_fetch_assoc($summary_res)) { $daily_summary_data[] = $s_r
                     <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo $pending_orders_count; ?></span>
                 <?php endif; ?>
             </a></li>
-             <li><a href="<?php echo BASE_URL; ?>/modules/admin/delivery.php" class="<?php echo basename($_SERVER['PHP_SELF']) === 'delivery.php' ? 'active' : ''; ?>"><i class="fas fa-truck"></i> Delivery</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/delivery.php" class="<?php echo basename($_SERVER['PHP_SELF']) === 'delivery.php' ? 'active' : ''; ?>"><i class="fas fa-truck"></i> Delivery</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/about.php" <?php echo basename($_SERVER['PHP_SELF']) === 'about.php' ? 'class="active"' : ''; ?>><i class="fas fa-info-circle"></i> About Us</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/messages.php" <?php echo basename($_SERVER['PHP_SELF']) === 'messages.php' ? 'class="active"' : ''; ?>>
                 <i class="fas fa-comment-dots"></i> Messages
@@ -192,16 +273,23 @@ while ($s_row = mysqli_fetch_assoc($summary_res)) { $daily_summary_data[] = $s_r
                 <?php endif; ?>
             </a></li>            
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
-<li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance</a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'loyalty_points.php') ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'reward_redemption.php') ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>
             <?php if ($role === 'admin'): ?>
                 <li><a href="<?php echo BASE_URL; ?>/modules/admin/analytics.php" <?php echo basename($_SERVER['PHP_SELF']) === 'analytics.php' ? 'class="active"' : ''; ?>><i class="fas fa-chart-line"></i> Analytics & Reports</a></li>
             <?php endif; ?>
         </ul>
-        <a href="<?php echo BASE_URL; ?>/modules/auth/logout.php" class="logout-link" style="position: absolute; bottom: 20px; left: 20px; text-decoration: none;"><i class="fas fa-sign-out-alt"></i> Logout</a>
+
+        <div class="sidebar-footer">
+            <a href="<?php echo BASE_URL; ?>/modules/auth/logout.php" class="logout-link">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+        </div>
     </div>
 
+    <!-- Main Content Area -->
     <div class="main-content">
         <div class="print-report-header">
             <h2>DPS Loyalty Management System</h2>
@@ -265,7 +353,7 @@ while ($s_row = mysqli_fetch_assoc($summary_res)) { $daily_summary_data[] = $s_r
                 <h3>Active (Period)</h3>
                 <p style="font-size: 1.5rem; font-weight: bold;"><?php echo $active_customers_period; ?></p>
             </div>
-<div class="card" style="background: white; padding: 20px; border-radius: 12px; flex: 1; min-width: 200px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            <div class="card" style="background: white; padding: 20px; border-radius: 12px; flex: 1; min-width: 200px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
                 <i class="fas fa-dollar-sign" style="font-size: 2rem; color: #27ae60;"></i>
                 <h3>Total Sales</h3>
                 <p style="font-size: 1.5rem; font-weight: bold;">PHP <?php echo number_format($total_sales, 2); ?></p>
