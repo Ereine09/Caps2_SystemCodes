@@ -118,9 +118,10 @@ $subtotal_gross = cart_subtotal();
                                 <td>
                                     <form method="POST" style="display:flex; align-items:center; gap:5px;">
                                         <input type="hidden" name="product_id" value="<?php echo $item['id']; ?>">
-                                        <input type="hidden" name="variant_id" value="<?php echo $item['variant_id']; ?>">
-                                        <input type="number" name="quantity" value="<?php echo $item['quantity']; ?>" min="1" class="qty-input">
-                                        <button type="submit" name="update_quantity" class="button" style="padding: 8px 12px; font-size: 0.75rem;"><i class="fas fa-sync"></i></button>
+                                        <input type="hidden" name="variant_id" value="<?php echo $item['variant_id'] ?? ''; ?>">
+                                        <input type="number" name="quantity" value="<?php echo $item['quantity']; ?>" min="1" class="qty-input" onchange="this.form.requestSubmit()">
+                                        <input type="hidden" name="update_quantity" value="1">
+                                        <button type="submit" class="button" style="padding: 8px 12px; font-size: 0.75rem;"><i class="fas fa-sync"></i></button>
                                     </form>
                                 </td>
                                 <td style="text-align:right; font-weight: 700; color: #312e81;">

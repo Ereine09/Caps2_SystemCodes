@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/../modules/customers/achievements_helper.php';
 // require_customer_login();
 
 // Fetch live E-Bike Rider status from database
@@ -322,6 +323,10 @@ $GLOBALS['conn']->commit();
                     }
                 }
                 // --- End Loyalty Points Logic ---
+
+                // --- Gamification: Check for new achievements ---
+                achievements_check_and_award($conn, (int)$customer['id']);
+                // --- End Gamification ---
 
                 $order_details = get_order_by_id($order_id, (int)$customer['id']);
                 $success_message = 'Your order was successfully placed.';
@@ -838,10 +843,10 @@ function updateTotals(discount = 0) {
 
     feeDisplay.innerText = fee === 0 ? 'Free' : 'PHP ' + fee.toFixed(2);
     totalDisplay.innerText = 'PHP ' + finalTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
-    vatDisplay.innerText = 'PHP ' + (subtotal_net * 0.12).toFixed(2);
+    vatDisplay.innerText = 'PHP ' + (subtotal_net * 0.12).toFixed(2 );
 
-    // Update points earned based on discounted net subtotal
-   const pointsEarned = Math.max(0, subtotal_net / 100);
+    // FIXED: Points earned should be based on the pre-discount net subtotal.
+    const pointsEarned = Math.max(0, subtotal_net / 100);
     pointsDisplay.innerText = `+${pointsEarned.toFixed(2)} pts`;
 
     if (discount > 0) {
@@ -1081,7 +1086,7 @@ function updateTotals (discount = 0) {
     if (totalDisplay) totalDisplay.innerText = 'PHP ' + finalTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
     if (vatDisplay) vatDisplay.innerText = 'PHP ' + (subtotal_net * 0.12).toFixed(2);
 
-    // FIXED: Points earned calculated on pre-discount net subtotal
+    // Points earned are correctly calculated on the pre-discount net subtotal
     const pointsEarned = Math.max(0, subtotal_net / 100);
     if (pointsDisplay) pointsDisplay.innerText = `+${pointsEarned.toFixed(2)} pts`;
 

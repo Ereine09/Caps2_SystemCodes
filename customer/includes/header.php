@@ -29,8 +29,8 @@ if ($customer) {
     $rm_stmt->close();
 }
 
-// Get current page for active state
-$current_page = basename($_SERVER['PHP_SELF'], '.php');
+// Get current page for active state (allows manual override if set before including header)
+$current_page = $current_page ?? basename($_SERVER['PHP_SELF'], '.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -49,7 +49,7 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
             padding: 0;
             min-height: 100vh;
         }
-.customer-sidebar {
+        .customer-sidebar {
             width: 260px;
             background: #1f2937;
             color: white;
@@ -158,12 +158,10 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
             margin: 0;
             color: #64748b;
         }
-        /* Hide old wrapper styles */
         .customer-wrapper, .customer-header, .customer-nav, .customer-main {
             display: none !important;
         }
 
-        /* Mobile Responsiveness */
         @media (max-width: 768px) {
             .customer-sidebar {
                 width: 100%;
@@ -197,13 +195,13 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
                 font-size: 0.85rem;
                 justify-content: center;
             }
-.customer-sidebar-logout {
+            .customer-sidebar-logout {
                 margin-top: 10px;
                 padding-top: 10px;
             }
         }
 
-        /* ===== Floating Notification Bell (top-right) ===== */
+        /* ===== Floating Notification Bell ===== */
         .notif-bell-wrap {
             position: fixed;
             top: 20px;
@@ -339,7 +337,7 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
         <div class="customer-sidebar-brand">
             <img src="<?php echo SYSTEM_LOGO_URL; ?>" alt="Logo" style="max-width: 160px; max-height: 80px; display: block; margin: 0 auto 10px; border-radius: 5px;">
             <a href="<?php echo BASE_URL; ?>/customer/dashboard.php" style="font-size: 1.2rem;"><?php echo htmlspecialchars(SYSTEM_NAME); ?></a>
-                <p style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-top: 5px;">Customer Portal</p>
+            <p style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-top: 5px;">Customer Portal</p>
         </div>
         <ul class="customer-sidebar-nav">
             <li>
@@ -372,7 +370,7 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
                     <i class="fas fa-award"></i> Reward Catalog
                 </a>
             </li>
-<li>
+            <li>
                 <a href="<?php echo BASE_URL; ?>/customer/messages.php" class="<?php echo $current_page === 'messages' ? 'active' : ''; ?>">
                     <i class="fas fa-comment-dots"></i> Messages
                     <?php if ($unread_msg_count > 0): ?>
@@ -384,11 +382,11 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
                 <a href="<?php echo BASE_URL; ?>/customer/rider_chat.php" class="<?php echo $current_page === 'rider_chat' ? 'active' : ''; ?>">
                     <i class="fas fa-motorcycle"></i> Message Rider
                     <?php if ($rider_msg_unread > 0): ?>
-                        <span class="cart-badge" style="background: #0d9488;"><?php echo (int)$rider_msg_unread; ?></span>
+                        <span class="cart-badge" style="background: #e74c3c;"><?php echo (int)$rider_msg_unread; ?></span>
                     <?php endif; ?>
                 </a>
             </li>
-<li>
+            <li>
                 <a href="<?php echo BASE_URL; ?>/customer/cart.php" class="<?php echo $current_page === 'cart' ? 'active' : ''; ?>">
                     <i class="fas fa-shopping-cart"></i> Cart
                     <?php if ($cart_count > 0): ?>
@@ -397,8 +395,13 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
                 </a>
             </li>
             <li>
-<a href="<?php echo BASE_URL; ?>/customer/my_rewards.php" class="<?php echo $current_page === 'my_rewards' ? 'active' : ''; ?>">
+                <a href="<?php echo BASE_URL; ?>/customer/my_rewards.php" class="<?php echo $current_page === 'my_rewards' ? 'active' : ''; ?>">
                     <i class="fas fa-gift"></i> My Rewards
+                </a>
+            </li>
+            <li>
+                <a href="<?php echo BASE_URL; ?>/customer/my_achievements.php" class="<?php echo $current_page === 'my_achievements' ? 'active' : ''; ?>">
+                    <i class="fas fa-trophy"></i> My Achievements
                 </a>
             </li>
             <li>
@@ -414,7 +417,7 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
         </div>
     </div>
 
-<!-- Main Content -->
+    <!-- Main Content -->
     <div class="customer-main-content">
         <?php if ($customer): ?>
             <div class="customer-welcome-banner">
@@ -440,11 +443,33 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
                     </button>
                 </div>
                 <div class="notif-panel-body" id="notif-panel-body">
-                    <div class="notif-panel-empty"><i class="fas fa-bell-slash"></i><p style="margin:0;">Loading notifications...</p></div>
+                    <div class="notif-panel-empty"><i class="fas fa-bell-slash"></i><p style="margin:0;">No new notifications</p></div>
                 </div>
                 <div class="notif-panel-footer">
                     <a href="<?php echo BASE_URL; ?>/customer/notifications.php"><i class="fas fa-bell"></i> View all notifications</a>
                 </div>
             </div>
         </div>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const bellBtn = document.getElementById('notif-bell-btn');
+            const panel = document.getElementById('notif-panel');
+
+            if (bellBtn && panel) {
+                // Toggle notification panel on bell click
+                bellBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    panel.classList.toggle('open');
+                });
+
+                // Close panel when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!panel.contains(e.target) && !bellBtn.contains(e.target)) {
+                        panel.classList.remove('open');
+                    }
+                });
+            }
+        });
+        </script>
         <?php endif; ?>

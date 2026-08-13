@@ -92,6 +92,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_points'])) {
         $trans_stmt->bind_param("iisdd", $adj_customer_id, $user_id, $transaction_description, $transaction_source_value, $points_to_process);
 
         if ($trans_stmt->execute()) {
+            // --- BUG FIX: The previous logic was overwriting points. ---
+            // This new logic correctly adds or subtracts from the current balance.
+            $conn->query("UPDATE customers SET loyalty_points = loyalty_points + $points_to_process WHERE id = $adj_customer_id");
+
             $new_total = notifications_sync_customer_loyalty_points($conn, $adj_customer_id);
 
             $name_res = mysqli_query($conn, "SELECT name, email FROM customers WHERE id = $adj_customer_id");
