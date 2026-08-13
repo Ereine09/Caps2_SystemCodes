@@ -1,9 +1,13 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/../modules/customers/achievements_helper.php';
 require_customer_login();
 
 $customer = current_customer();
 $customer_id = (int)$customer['id'];
+
+// --- FIX: Ensure the database schema for achievements is created before querying it. ---
+achievements_ensure_schema($conn);
 
 // Fetch unlocked achievements for the customer
 $query = "
