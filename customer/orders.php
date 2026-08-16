@@ -308,7 +308,12 @@ if (isset($_GET['id'])) {
                             <div class="info-item"><span class="info-label">Account Name</span><span class="info-value"><?php echo htmlspecialchars($order['bank_account_name']); ?></span></div>
                             <div class="info-item"><span class="info-label">Reference #</span><span class="info-value" style="font-size: 0.8rem;"><?php echo htmlspecialchars($order['payment_reference']); ?></span></div>
                             <?php if ($order['payment_proof_path']): ?>
-                                <div class="info-item"><span class="info-label">Proof</span><span class="info-value"><a href="<?php echo BASE_URL . htmlspecialchars($order['payment_proof_path']); ?>" target="_blank" class="button-link">View Proof</a></span></div>
+                                <div class="info-item">
+                                    <span class="info-label">Proof</span>
+                                    <span class="info-value">
+                                        <button type="button" class="button-link" onclick="openProofModal('<?php echo BASE_URL . htmlspecialchars($order['payment_proof_path']); ?>')">View Proof</button>
+                                    </span>
+                                </div>
                             <?php endif; ?>
                         <?php elseif ($order['payment_reference']): ?>
                             <div class="info-item"><span class="info-label">Reference</span><span class="info-value" style="font-size: 0.8rem;"><?php echo htmlspecialchars($order['payment_reference']); ?></span></div>
@@ -370,5 +375,27 @@ if (isset($_GET['id'])) {
             <a class="button" href="<?php echo BASE_URL; ?>/customer/products.php">Browse Products</a>
         <?php endif; ?>
     <?php endif; ?>
+
+    <!-- Proof of Payment Modal -->
+    <div id="proofModal" class="modal">
+        <span class="close-modal" onclick="closeProofModal()">&times;</span>
+        <img class="modal-content" id="proofModalImage">
+    </div>
+
+    <script>
+        const modal = document.getElementById('proofModal');
+        const modalImg = document.getElementById('proofModalImage');
+
+        function openProofModal(src) {
+            modal.style.display = "flex";
+            modalImg.src = src;
+        }
+
+        function closeProofModal() {
+            modal.style.display = "none";
+        }
+
+        window.onclick = (event) => event.target == modal ? closeProofModal() : null;
+    </script>
 </section>
 <?php include __DIR__ . '/includes/footer.php'; ?>

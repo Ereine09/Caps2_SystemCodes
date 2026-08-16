@@ -127,6 +127,18 @@ function ensure_customer_tables(mysqli $conn): void {
             FOREIGN KEY (order_id) REFERENCES tbl_orders(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
+        "CREATE TABLE IF NOT EXISTS customer_addresses (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            customer_id INT NOT NULL,
+            label VARCHAR(50) NOT NULL,
+            full_address TEXT NOT NULL,
+            phone VARCHAR(20) NULL,
+            is_default TINYINT(1) DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+            INDEX (customer_id, is_default)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
         "CREATE TABLE IF NOT EXISTS tbl_vouchers (
             id INT AUTO_INCREMENT PRIMARY KEY,
             code VARCHAR(100) NOT NULL UNIQUE,
@@ -489,27 +501,50 @@ function is_nearby_delivery_area(string $address): bool {
     return false;
 }
 
-function calculate_delivery_fee(string $fulfillment_type, float $subtotal, string $address = ''): float {
+/**
+ * Calculates the distance between two points on Earth given their latitudes and longitudes.
+ * @return float The distance in kilometers.
+ */
+function calculate_distance_km(float $lat1, float $lon1, float $lat2, float $lon2): float {
+    $earth_radius = 6371; // Earth's radius in kilometers
+
+    $dLat = deg2rad($lat2 - $lat1);
+    $dLon = deg2rad($lon2 - $lon1);
+
+    $a = sin($dLat / 2) * sin($dLat / 2) + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLon / 2) * sin($dLon / 2);
+    $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+    return $earth_radius * $c;
+}
+
+function calculate_delivery_fee(string $fulfillment_type, float $subtotal, string $address = '', ?float $lat = null, ?float $lon = null): float {
     if ($fulfillment_type === 'pickup') {
         return 0.00;
     }
 
-    $address_norm = normalize_address($address);
-
-    // Rule: Free delivery for 10th Ave and Grace Park
-    if (is_free_delivery_area($address)) {
+    // Rule: Free delivery for purchases of ₱2,000 or more, regardless of distance.
+    if ($subtotal >= 2000.00) {
         return 0.00;
     }
 
-    // Rule: ₱50.00 fee for Caloocan, or Free if subtotal is ₱2,000+
-    if (strpos($address_norm, 'caloocan') !== false) {
-        if ($subtotal >= 2000.00) {
+    // --- New Distance-Based Fee Logic ---
+    if ($lat !== null && $lon !== null) {
+        // Store coordinates (Darius Poultry Supply, 109 P. Burgos St, Caloocan)
+        $store_lat = 14.6594;
+        $store_lon = 120.9838;
+
+        $distance = calculate_distance_km($store_lat, $store_lon, $lat, $lon);
+
+        // Rule: Free if within 2km
+        if ($distance <= 2.0) {
             return 0.00;
         }
-        return 50.00;
+        // Rule: Standard fee if over 2km
+        return 50.00; // You can adjust this standard fee
     }
 
-    return 120.00;
+    // Fallback fee if no coordinates are provided
+    return 50.00;
 }
 
 function calculate_loyalty_points(float $amount): float {

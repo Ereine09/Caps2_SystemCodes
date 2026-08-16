@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/../modules/customers/achievements_helper.php';
-// require_customer_login();
+require_customer_login();
 
 // Fetch live E-Bike Rider status from database
 $is_rider_available = true; // Default
@@ -36,6 +36,11 @@ $stock_deducted = false;
 $stock_deducted = false;
 $order_details = null;
 
+// Fetch customer's saved addresses
+$customer_addresses = [];
+$addresses_res = mysqli_query($conn, "SELECT * FROM customer_addresses WHERE customer_id = " . (int)$customer['id'] . " ORDER BY is_default DESC, created_at DESC");
+if ($addresses_res) while ($row = mysqli_fetch_assoc($addresses_res)) $customer_addresses[] = $row;
+
 $admin_message = "Please scan the QR code below and enter the 13-digit GCash reference number after payment. Your order will be processed once payment is verified.";
 $bank_admin_message = "Please transfer the total amount to the account details below. Upload a screenshot of your transaction receipt and enter the reference number to confirm.";
 
@@ -44,8 +49,19 @@ $discount_amount = 0.00;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quantity'])) {
     $fulfillment_type = $_POST['fulfillment_type'] ?? 'pickup';
-    $delivery_address = trim($_POST['delivery_address'] ?? '');
-    $delivery_phone = trim($_POST['delivery_phone'] ?? '');
+    $address_option = $_POST['address_option'] ?? 'new';
+    $delivery_address = '';
+    $delivery_phone = '';
+
+    $latitude = isset($_POST['latitude']) && is_numeric($_POST['latitude']) ? (float)$_POST['latitude'] : null;
+    $longitude = isset($_POST['longitude']) && is_numeric($_POST['longitude']) ? (float)$_POST['longitude'] : null;
+    if ($address_option === 'new') {
+        $delivery_address = trim($_POST['new_delivery_address'] ?? '');
+        $delivery_phone = trim($_POST['new_delivery_phone'] ?? '');
+    } else {
+        $delivery_address = trim($_POST['saved_address_text'] ?? '');
+        $delivery_phone = trim($_POST['saved_address_phone'] ?? '');
+    }
     $order_notes = trim($_POST['order_notes'] ?? '');
     $delivery_instructions = trim($_POST['delivery_instructions'] ?? '');
     $pickup_date = trim($_POST['pickup_date'] ?? '');
@@ -69,14 +85,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quan
         if (!is_delivery_area_allowed($delivery_address)) {
             $errors[] = 'Delivery is currently limited to Caloocan, 10th Avenue, and Grace Park.';
         }
-
-        // Calculate Delivery Fee for Backend
-        $addr_lower = strtolower($delivery_address);
-        $subtotal = cart_subtotal();
-        if (strpos($addr_lower, '10th ave') !== false || strpos($addr_lower, '10th avenue') !== false || strpos($addr_lower, 'grace park') !== false) {
-            $delivery_fee = 0;
-        } elseif (strpos($addr_lower, 'caloocan') !== false) {
-            $delivery_fee = ($subtotal >= 2000) ? 0 : 50;
+        if ($latitude === null || $longitude === null) {
+            $errors[] = 'Please select a valid location on the map for delivery.';
         }
 
         if ($payment_method === 'pay_at_shop') {
@@ -99,13 +109,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quan
             $errors[] = 'GCash reference number is required for GCash payments.';
         } elseif (!preg_match('/^\d{13}$/', $gcash_reference_number)) {
             $errors[] = 'Please enter a valid 13-digit GCash reference number.';
+        } else {
+            // Check for duplicate reference number to prevent fraud
+            $ref_stmt = $conn->prepare("SELECT id FROM tbl_orders WHERE payment_reference = ? LIMIT 1");
+            $ref_stmt->bind_param('s', $gcash_reference_number);
+            $ref_stmt->execute();
+            if ($ref_stmt->get_result()->num_rows > 0) {
+                $errors[] = 'This GCash reference number has already been used. Please double-check your transaction or contact support if you believe this is an error.';
+            }
+            $ref_stmt->close();
         }
     }
 
     if ($payment_method === 'bank') {
         if ($bank_name === '') $errors[] = 'Bank Name is required for bank transfers.';
         if ($bank_account_name === '') $errors[] = 'Your Account Name is required for bank transfers.';
-        if ($bank_reference_number === '') $errors[] = 'Bank Reference Number is required.';
+        if ($bank_reference_number === '') {
+            $errors[] = 'Bank Reference Number is required.';
+        } else {
+            // Check for duplicate reference number to prevent fraud
+            $ref_stmt = $conn->prepare("SELECT id FROM tbl_orders WHERE payment_reference = ? LIMIT 1");
+            $ref_stmt->bind_param('s', $bank_reference_number);
+            $ref_stmt->execute();
+            if ($ref_stmt->get_result()->num_rows > 0) {
+                $errors[] = 'This Bank reference number has already been used. Please use a unique reference for each transaction.';
+            }
+            $ref_stmt->close();
+        }
 
         // --- Handle File Upload for Payment Proof ---
         if (isset($_FILES['payment_proof']) && $_FILES['payment_proof']['error'] === UPLOAD_ERR_OK) {
@@ -191,6 +221,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quan
 
 
     if (empty($errors)) {
+        // Recalculate delivery fee on the server-side for security
+        $delivery_fee = calculate_delivery_fee($fulfillment_type, cart_subtotal(), $delivery_address, $latitude, $longitude);
         $details = [
             'delivery_address' => $delivery_address,
             'delivery_phone' => $delivery_phone,
@@ -325,9 +357,6 @@ $GLOBALS['conn']->commit();
                 // --- End Loyalty Points Logic ---
 
                 // --- Gamification: Check for new achievements ---
-                achievements_check_and_award($conn, (int)$customer['id']);
-                // --- End Gamification ---
-
                 $order_details = get_order_by_id($order_id, (int)$customer['id']);
                 $success_message = 'Your order was successfully placed.';
             } else {
@@ -521,6 +550,23 @@ $GLOBALS['conn']->commit();
 
     @keyframes zoom { from {transform:scale(0)} to {transform:scale(1)} }
 
+    .address-card-option { background: #f8fafc; border-radius: 12px; padding: 15px; border: 2px solid #e2e8f0; margin-bottom: 10px; cursor: pointer; }
+    .address-card-option label { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+    .address-card-option input[type="radio"] { margin-top: 5px; }
+    .address-card-option.default { border-color: #6366f1; }
+    .address-card-option:has(input:checked) { border-color: #6366f1; background: #eef2ff; }
+    .address-details .address-label { font-weight: 700; color: #1e293b; }
+    .address-details .address-text { font-size: 0.9rem; color: #475569; margin: 4px 0 0; }
+    .address-details .address-phone { font-size: 0.85rem; color: #64748b; margin: 4px 0 0; }
+    .default-badge {
+        background: #6366f1; color: white; padding: 2px 8px;
+        border-radius: 5px; margin-left: 8px; font-size: 0.7rem;
+        text-transform: uppercase;
+    }
+
+
+
+
     .close-zoomer {
         position: absolute;
         top: 50px;
@@ -709,14 +755,40 @@ $GLOBALS['conn']->commit();
                 </div>
 
                 <div id="delivery-fields" style="<?php echo (isset($_POST['fulfillment_type']) && $_POST['fulfillment_type'] === 'delivery') ? '' : 'display:none;'; ?>">
-                    <div class="form-row">
-                        <label for="delivery_address">Delivery Address <small>(Pin location on map for accuracy)</small></label>
-                        <input type="text" name="delivery_address" id="delivery_address" value="<?php echo htmlspecialchars($_POST['delivery_address'] ?? ''); ?>" oninput="updateDeliveryFeeDisplay()" />
+                    <label style="display: block; font-weight: 600; color: #1e293b; margin-bottom: 15px;">Select Delivery Address</label>
+                    <?php foreach ($customer_addresses as $addr): ?>
+                        <div class="address-card-option <?php echo $addr['is_default'] ? 'default' : ''; ?>">
+                            <label>
+                                <input type="radio" name="address_option" value="<?php echo $addr['id']; ?>" <?php echo $addr['is_default'] ? 'checked' : ''; ?>
+                                       data-address="<?php echo htmlspecialchars($addr['full_address']); ?>"
+                                       data-phone="<?php echo htmlspecialchars($addr['phone']); ?>" onchange="updateDeliveryFeeDisplay()"
+                                       onchange="toggleNewAddressForm()">
+                                <div class="address-details">
+                                    <strong class="address-label"><?php echo htmlspecialchars($addr['label']); ?> <?php echo $addr['is_default'] ? '<span class="default-badge">Primary</span>' : ''; ?></strong>
+                                    <p class="address-text"><?php echo htmlspecialchars($addr['full_address']); ?></p>
+                                    <p class="address-phone"><i class="fas fa-phone-alt"></i> <?php echo htmlspecialchars($addr['phone']); ?></p>
+                                </div>
+                            </label>
+                        </div>
+                    <?php endforeach; ?>
+
+                    <div class="address-card-option">
+                        <label>
+                            <input type="radio" name="address_option" value="new" onchange="toggleNewAddressForm(); updateDeliveryFeeDisplay();" <?php echo empty($customer_addresses) ? 'checked' : ''; ?>>
+                            <div class="address-details">
+                                <strong class="address-label"><i class="fas fa-plus-circle"></i> Use a New Address</strong>
+                            </div>
+                        </label>
                     </div>
-                    <div class="form-row">
-                        <label for="delivery_phone">Delivery Phone</label>
-                        <input type="text" name="delivery_phone" id="delivery_phone" value="<?php echo htmlspecialchars($_POST['delivery_phone'] ?? ''); ?>" />
+
+                    <div id="new-address-fields" style="<?php echo empty($customer_addresses) ? '' : 'display:none;'; ?>">
+                        <div class="form-row" style="margin-top:15px;"><label for="new_delivery_address">New Delivery Address</label><input type="text" name="new_delivery_address" id="delivery_address" oninput="updateDeliveryFeeDisplay()"></div>
+                        <div class="form-row"><label for="new_delivery_phone">New Delivery Phone</label><input type="text" name="new_delivery_phone" id="delivery_phone"></div>
                     </div>
+
+                    <input type="hidden" name="saved_address_text" id="saved_address_text">
+                    <input type="hidden" name="saved_address_phone" id="saved_address_phone">
+
                     <div class="form-row">
                         <label for="delivery_instructions">Delivery Instructions</label>
                         <textarea name="delivery_instructions" id="delivery_instructions"><?php echo htmlspecialchars($_POST['delivery_instructions'] ?? ''); ?></textarea>
@@ -903,13 +975,103 @@ function togglePaymentFields() {
     document.getElementById('bank_reference_number').required = (method === 'bank');
 }
 
+function toggleNewAddressForm() {
+    const selectedOption = document.querySelector('input[name="address_option"]:checked');
+    const isNew = selectedOption && selectedOption.value === 'new';
+    const newAddressFields = document.getElementById('new-address-fields');
+    const newAddressInput = document.getElementById('delivery_address');
+    const savedAddressText = document.getElementById('saved_address_text');
+    const savedAddressPhone = document.getElementById('saved_address_phone');
+
+    if (isNew) {
+        newAddressFields.style.display = 'block';
+        savedAddressText.value = ''; // Clear saved address data
+        savedAddressPhone.value = '';
+    } else {
+        newAddressFields.style.display = 'none';
+        newAddressInput.value = ''; // Clear new address input
+        if (selectedOption) {
+            savedAddressText.value = selectedOption.dataset.address;
+            savedAddressPhone.value = selectedOption.dataset.phone;
+        }
+    }
+    updateDeliveryFeeDisplay(); // Recalculate fee on any change
+}
+
+function updateDeliveryFeeDisplay() {
+    const selectedOption = document.querySelector('input[name="address_option"]:checked');
+    const isNew = selectedOption && selectedOption.value === 'new';
+    const addressInput = isNew ? document.getElementById('delivery_address').value : (selectedOption ? selectedOption.dataset.address : '');
+    updateTotals(parseFloat(document.getElementById('discount_amount_hidden').value) || 0, addressInput);
+}
+
+function updateTotals(discount = 0, address = '') {
+    const fulfillmentType = document.querySelector('input[name="fulfillment_type"]:checked').value;
+    const lat = parseFloat(document.getElementById('latitude').value);
+    const lon = parseFloat(document.getElementById('longitude').value);
+
+    const subtotalNetEl = document.getElementById('subtotal-net-display');
+    const subtotal_net = parseFloat(subtotalNetEl.dataset.value) || 0;
+    const subtotal_gross = subtotal_net * 1.12;
+
+    let fee = 0;
+    document.getElementById('discount_amount_hidden').value = discount;
+    
+    if (fulfillmentType === 'delivery') {
+        // Rule: Free delivery if total purchase is ₱2,000 or more
+        if (subtotal_gross >= 2000) {
+            fee = 0;
+        } else if (!isNaN(lat) && !isNaN(lon)) {
+            // Store coordinates
+            const storeLat = 14.6594;
+            const storeLon = 120.9838;
+            
+            const R = 6371; // Radius of the earth in km
+            const dLat = (lat - storeLat) * (Math.PI / 180);
+            const dLon = (lon - storeLon) * (Math.PI / 180);
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(storeLat * (Math.PI / 180)) * Math.cos(lat * (Math.PI / 180)) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const distance = R * c; // Distance in km
+
+            // Rule: Free if within 2km, otherwise a standard fee
+            fee = (distance <= 2.0) ? 0 : 50.00;
+        }
+    }
+
+    const totalBeforeDiscount = subtotal_gross + fee;
+    const finalTotal = Math.max(0, totalBeforeDiscount - discount);
+
+    const feeDisplay = document.getElementById('delivery-fee-display');
+    const totalDisplay = document.getElementById('total-to-pay-display');
+    const vatDisplay = document.getElementById('vat-display');
+    const discountLine = document.getElementById('discount-line');
+    const discountDisplay = document.getElementById('discount-display');
+    const pointsDisplay = document.getElementById('points-to-earn-display');
+
+    feeDisplay.innerText = fee === 0 ? 'Free' : 'PHP ' + fee.toFixed(2);
+    totalDisplay.innerText = 'PHP ' + finalTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
+    vatDisplay.innerText = 'PHP ' + (subtotal_net * 0.12).toFixed(2);
+
+    const pointsEarned = Math.max(0, subtotal_net / 100);
+    pointsDisplay.innerText = `+${pointsEarned.toFixed(2)} pts`;
+
+    if (discount > 0) {
+        discountLine.style.display = 'flex';
+        discountDisplay.innerText = '-PHP ' + discount.toFixed(2);
+    } else {
+        discountLine.style.display = 'none';
+    }
+}
+
 let leafletMap, marker;
 function initFreeMap() {
     if (leafletMap) {
         leafletMap.invalidateSize();
         return;
     }
-    leafletMap = L.map('map').setView([14.6416, 120.9762], 13);
+    leafletMap = L.map('map').setView([14.6594, 120.9838], 15); // Centered on the store
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(leafletMap);
@@ -928,7 +1090,7 @@ function initFreeMap() {
         document.getElementById('latitude').value = latlng.lat;
         document.getElementById('longitude').value = latlng.lng;
         document.getElementById('delivery_address').value = e.geocode.name;
-        updateTotals();
+        updateDeliveryFeeDisplay();
     })
     .addTo(leafletMap);
 
@@ -940,13 +1102,51 @@ function initFreeMap() {
 
         fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
             .then(response => response.json())
-            .then(data => {
-                if (data.display_name) {
-                    document.getElementById('delivery_address').value = data.display_name;
-                    updateTotals();
-                }
-            })
-            .catch(err => console.error('Geocoding error:', err));
+            .then(data => { if (data.display_name) document.getElementById('delivery_address').value = data.display_name; })
+            .catch(err => console.error('Geocoding error:', err))
+            .finally(() => updateDeliveryFeeDisplay());
+    });
+}
+
+function initFreeMap() {
+    if (leafletMap) {
+        leafletMap.invalidateSize();
+        return;
+    }
+    leafletMap = L.map('map').setView([14.6594, 120.9838], 15); // Centered on the store
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(leafletMap);
+
+    L.Control.geocoder({
+        defaultMarkGeocode: false,
+        placeholder: "Search for address...",
+        errorMessage: "Address not found."
+    })
+    .on('markgeocode', function(e) {
+        const latlng = e.geocode.center;
+        if (marker) leafletMap.removeLayer(marker);
+        marker = L.marker(latlng).addTo(leafletMap);
+        leafletMap.setView(latlng, 16);
+
+        document.getElementById('latitude').value = latlng.lat;
+        document.getElementById('longitude').value = latlng.lng;
+        document.getElementById('delivery_address').value = e.geocode.name;
+        updateDeliveryFeeDisplay();
+    })
+    .addTo(leafletMap);
+
+    leafletMap.on('click', function(e) {
+        if (marker) leafletMap.removeLayer(marker);
+        marker = L.marker(e.latlng).addTo(leafletMap);
+        document.getElementById('latitude').value = e.latlng.lat;
+        document.getElementById('longitude').value = e.latlng.lng;
+
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
+            .then(response => response.json())
+            .then(data => { if (data.display_name) document.getElementById('delivery_address').value = data.display_name; })
+            .catch(err => console.error('Geocoding error:', err))
+            .finally(() => updateDeliveryFeeDisplay());
     });
 }
 
@@ -1049,57 +1249,6 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php include __DIR__ . '/includes/footer.php'; ?>
 
 <script>
-function updateTotals (discount = 0) {
-    const fulfillmentInput = document.querySelector('input[name="fulfillment_type"]:checked');
-    const fulfillmentType = fulfillmentInput ? fulfillmentInput.value : 'pickup';
-    const addressEl = document.getElementById('delivery_address');
-    const address = addressEl ? addressEl.value.toLowerCase() : '';
-    const subtotalNetEl = document.getElementById('subtotal-net-display');
-    const subtotal_net = parseFloat(subtotalNetEl ? subtotalNetEl.dataset.value : 0);
-    const subtotal_gross = subtotal_net * 1.12;
-    let fee = 0;
-
-    const hiddenDiscount = document.getElementById('discount_amount_hidden');
-    if (hiddenDiscount) hiddenDiscount.value = discount;
-
-    if (fulfillmentType === 'delivery') {
-        if (address.includes('10th ave') || address.includes('10th avenue') || address.includes('grace park')) {
-            fee = 0;
-        } else if (address.includes('caloocan')) {
-            fee = (subtotal_gross > 2000) ? 0 : 50;
-        } else if (address.trim() === '') {
-            fee = 120;
-        }
-    }
-
-    const totalBeforeDiscount = subtotal_gross + fee;
-    const finalTotal = Math.max(0, totalBeforeDiscount - discount);
-
-    const feeDisplay = document.getElementById('delivery-fee-display');
-    const totalDisplay = document.getElementById('total-to-pay-display');
-    const vatDisplay = document.getElementById('vat-display');
-    const discountLine = document.getElementById('discount-line');
-    const discountDisplay = document.getElementById('discount-display');
-    const pointsDisplay = document.getElementById('points-to-earn-display');
-
-    if (feeDisplay) feeDisplay.innerText = fee === 0 ? 'Free' : 'PHP ' + fee.toFixed(2);
-    if (totalDisplay) totalDisplay.innerText = 'PHP ' + finalTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
-    if (vatDisplay) vatDisplay.innerText = 'PHP ' + (subtotal_net * 0.12).toFixed(2);
-
-    // Points earned are correctly calculated on the pre-discount net subtotal
-    const pointsEarned = Math.max(0, subtotal_net / 100);
-    if (pointsDisplay) pointsDisplay.innerText = `+${pointsEarned.toFixed(2)} pts`;
-
-    if (discountLine && discountDisplay) {
-        if (discount > 0) {
-            discountLine.style.display = 'flex';
-            discountDisplay.innerText = '-PHP ' + discount.toFixed(2);
-        } else {
-            discountLine.style.display = 'none';
-        }
-    }
-}
-
 document.addEventListener('DOMContentLoaded', function() {
     const voucherInput = document.getElementById('voucher_code_input');
     const applyBtn = document.getElementById('apply_voucher_btn');

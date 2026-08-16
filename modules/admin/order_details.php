@@ -26,6 +26,29 @@ if (!$order) {
     die("Order not found.");
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    $action = $_POST['action'];
+    $allowed_statuses = ['confirmed', 'cancelled'];
+    $new_status = '';
+
+    if ($action === 'approve_payment') {
+        $new_status = 'confirmed';
+    } elseif ($action === 'reject_payment') {
+        $new_status = 'cancelled';
+    }
+
+    if (in_array($new_status, $allowed_statuses)) {
+        $stmt = $conn->prepare("UPDATE tbl_orders SET order_status = ? WHERE id = ?");
+        $stmt->bind_param('si', $new_status, $order_id);
+        if ($stmt->execute()) {
+            // Redirect to refresh the page and see the new status
+            header("Location: order_details.php?id=$order_id&status_updated=1");
+            exit();
+        }
+        $stmt->close();
+    }
+}
+
 $order_items = get_order_items($order_id);
 $customer = get_customer_by_id($order['customer_id']);
 
@@ -108,6 +131,29 @@ $unread_count = get_unread_count_staff($user_id);
         .info-value { color: #1e293b; font-weight: 700; }
         .item-img { width: 60px; height: 60px; border-radius: 10px; object-fit: cover; background: #f8fafc; border: 1px solid #eee; }
         .order-summary-box { background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px dashed #cbd5e1; }
+        .button-link {
+            background: #eef2ff; color: #4338ca; padding: 6px 12px; border-radius: 8px;
+            text-decoration: none; font-weight: 600; font-size: 0.85rem; border: 1px solid #c7d2fe;
+            cursor: pointer; transition: all 0.2s ease;
+        }
+        .button-link:hover { background: #c7d2fe; }
+
+        /* Proof Modal Styles */
+        .modal {
+            display: none; position: fixed; z-index: 1001; left: 0; top: 0;
+            width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.7);
+            align-items: center; justify-content: center;
+        }
+        .modal-content {
+            margin: auto; display: block; width: 80%; max-width: 600px;
+            animation: zoom 0.3s;
+        }
+        @keyframes zoom { from {transform:scale(0.8)} to {transform:scale(1)} }
+        .close-modal {
+            position: absolute; top: 25px; right: 45px; color: #f1f1f1;
+            font-size: 40px; font-weight: bold; cursor: pointer;
+        }
+
         .summary-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; color: #475569; }
         .summary-total { margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0; font-size: 1.2rem; color: #1e293b; font-weight: 800; }
         @media (max-width: 900px) { .order-grid { grid-template-columns: 1fr; } }
@@ -206,9 +252,35 @@ $unread_count = get_unread_count_staff($user_id);
                 <div class="info-card">
                     <h4><i class="fas fa-credit-card"></i> Payment</h4>
                     <div class="info-item"><span class="info-label">Method</span><span class="info-value"><?php echo strtoupper($order['payment_method']); ?></span></div>
-                    <?php if ($order['payment_reference']): ?>
-                        <div class="info-item"><span class="info-label">Reference</span><span class="info-value" style="font-size: 0.8rem;"><?php echo htmlspecialchars($order['payment_reference']); ?></span></div>
+                    <?php if ($order['payment_method'] === 'bank'): ?>
+                        <div class="info-item"><span class="info-label">Bank Name</span><span class="info-value"><?php echo htmlspecialchars($order['bank_name']); ?></span></div>
+                        <div class="info-item"><span class="info-label">Account Name</span><span class="info-value"><?php echo htmlspecialchars($order['bank_account_name']); ?></span></div>
+                        <div class="info-item"><span class="info-label">Reference #</span><span class="info-value" style="font-size: 0.8rem;"><?php echo htmlspecialchars($order['payment_reference']); ?></span></div>
+                        <?php if ($order['payment_proof_path']): ?>
+                            <div class="info-item">
+                                <span class="info-label">Proof</span>
+                                <span class="info-value">
+                                    <button type="button" class="button-link" onclick="openProofModal('<?php echo BASE_URL . htmlspecialchars($order['payment_proof_path']); ?>')">View Proof</button>
+                                </span>
+                            </div>
+                        <?php endif; ?>
+                    <?php elseif ($order['payment_reference']): ?>
+                        <div class="info-item"><span class="info-label">Reference #</span><span class="info-value" style="font-size: 0.8rem;"><?php echo htmlspecialchars($order['payment_reference']); ?></span></div>
                     <?php endif; ?>
+
+                    <?php if ($order['order_status'] === 'pending' && ($order['payment_method'] === 'gcash' || $order['payment_method'] === 'bank')): ?>
+                        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #f1f5f9; display: flex; gap: 10px;">
+                            <form method="POST" style="flex: 1;">
+                                <input type="hidden" name="action" value="approve_payment">
+                                <button type="submit" class="button" style="width: 100%; background: #10b981;"><i class="fas fa-check-circle"></i> Approve</button>
+                            </form>
+                            <form method="POST" style="flex: 1;" onsubmit="return confirm('Are you sure you want to reject this payment and cancel the order?');">
+                                <input type="hidden" name="action" value="reject_payment">
+                                <button type="submit" class="button button-secondary" style="width: 100%; background: #ef4444; color: white;"><i class="fas fa-times-circle"></i> Reject</button>
+                            </form>
+                        </div>
+                    <?php endif; ?>
+
                 </div>
                 <div class="info-card">
                     <h4><i class="fas fa-file-invoice-dollar"></i> Summary</h4>
@@ -229,8 +301,27 @@ $unread_count = get_unread_count_staff($user_id);
             <a href="orders.php" class="button button-secondary"><i class="fas fa-arrow-left"></i> Back to All Orders</a>
         </div>
     </div>
+
+    <!-- Proof of Payment Modal -->
+    <div id="proofModal" class="modal">
+        <span class="close-modal" onclick="closeProofModal()">&times;</span>
+        <img class="modal-content" id="proofModalImage">
+    </div>
+
+    <script>
+        const modal = document.getElementById('proofModal');
+        const modalImg = document.getElementById('proofModalImage');
+
+        function openProofModal(src) {
+            modal.style.display = "flex";
+            modalImg.src = src;
+        }
+
+        function closeProofModal() {
+            modal.style.display = "none";
+        }
+
+        window.onclick = (event) => event.target == modal ? closeProofModal() : null;
+    </script>
 </body>
 </html>
-
-
-

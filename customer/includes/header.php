@@ -61,7 +61,24 @@ $current_page = $current_page ?? basename($_SERVER['PHP_SELF'], '.php');
             display: flex;
             flex-direction: column;
             box-sizing: border-box;
+            overflow-y: auto; /* Enables vertical scrolling when content exceeds height */
         }
+
+        /* Custom Scrollbar for Sidebar */
+        .customer-sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .customer-sidebar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        .customer-sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        .customer-sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
         .customer-sidebar-brand {
             text-align: center;
             padding: 20px 10px;
@@ -169,6 +186,7 @@ $current_page = $current_page ?? basename($_SERVER['PHP_SELF'], '.php');
                 position: static;
                 padding: 10px;
                 border-bottom: 2px solid rgba(255,255,255,0.1);
+                overflow-y: visible;
             }
             .customer-sidebar-brand {
                 padding: 10px;
@@ -351,11 +369,6 @@ $current_page = $current_page ?? basename($_SERVER['PHP_SELF'], '.php');
                 </a>
             </li>
             <li>
-                <a href="<?php echo BASE_URL; ?>/customer/addresses.php" class="<?php echo $current_page === 'addresses' ? 'active' : ''; ?>">
-                    <i class="fas fa-map-marker-alt"></i> My Address
-                </a>
-            </li>
-            <li>
                 <a href="<?php echo BASE_URL; ?>/customer/orders.php" class="<?php echo $current_page === 'orders' ? 'active' : ''; ?>">
                     <i class="fas fa-history"></i> Purchase History
                 </a>
@@ -396,12 +409,7 @@ $current_page = $current_page ?? basename($_SERVER['PHP_SELF'], '.php');
             </li>
             <li>
                 <a href="<?php echo BASE_URL; ?>/customer/my_rewards.php" class="<?php echo $current_page === 'my_rewards' ? 'active' : ''; ?>">
-                    <i class="fas fa-gift"></i> My Rewards
-                </a>
-            </li>
-            <li>
-                <a href="<?php echo BASE_URL; ?>/customer/my_achievements.php" class="<?php echo $current_page === 'my_achievements' ? 'active' : ''; ?>">
-                    <i class="fas fa-trophy"></i> My Achievements
+                    <i class="fas fa-gift"></i> My Vouchers
                 </a>
             </li>
             <li>

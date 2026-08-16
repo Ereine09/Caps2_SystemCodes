@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/../modules/customers/achievements_helper.php';
 require_customer_login(); // Ensure customer is logged in
 
 $customer = current_customer();
@@ -74,9 +73,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_id'])) {
         mysqli_stmt_execute($redemption_stmt);
         mysqli_stmt_close($redemption_stmt);
         // --- End New Logic ---
-
-        // --- Gamification: Check for new achievements ---
-        achievements_check_and_award($conn, (int)$customer['id']);
 
         mysqli_commit($conn);
 
