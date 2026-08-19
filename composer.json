@@ -1,6 +1,7 @@
 {
     "require": {
-        "phpmailer/phpmailer": "^7.1",
-        "firebase/php-jwt": "^7.1"
+        "phpmailer/phpmailer": "7.1",
+        "firebase/php-jwt": "7.1",
+        "endroid/qr-code": "4.8"
     }
 }

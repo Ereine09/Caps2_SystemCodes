@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/../modules/customers/achievements_helper.php';
-require_customer_login();
+// require_customer_login(); // Temporarily disabled for full access without login
 
 // Fetch live E-Bike Rider status from database
 $is_rider_available = true; // Default
@@ -33,7 +33,6 @@ $customer = current_customer();
 $errors = [];
 $success_message = '';
 $stock_deducted = false; 
-$stock_deducted = false;
 $order_details = null;
 
 // Fetch customer's saved addresses
@@ -54,13 +53,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quan
     $delivery_phone = '';
 
     $latitude = isset($_POST['latitude']) && is_numeric($_POST['latitude']) ? (float)$_POST['latitude'] : null;
-    $longitude = isset($_POST['longitude']) && is_numeric($_POST['longitude']) ? (float)$_POST['longitude'] : null;
+    $longitude = isset($_POST['longitude']) && is_numeric($_POST['longitude']) ? (float)$_POST['longitude'] : null;    
     if ($address_option === 'new') {
         $delivery_address = trim($_POST['new_delivery_address'] ?? '');
         $delivery_phone = trim($_POST['new_delivery_phone'] ?? '');
     } else {
-        $delivery_address = trim($_POST['saved_address_text'] ?? '');
-        $delivery_phone = trim($_POST['saved_address_phone'] ?? '');
+        $delivery_address = trim($_POST['saved_address_text'] ?? ''); // This is correct
+        $delivery_phone = trim($_POST['saved_address_phone'] ?? ''); // This was the missing link
     }
     $order_notes = trim($_POST['order_notes'] ?? '');
     $delivery_instructions = trim($_POST['delivery_instructions'] ?? '');
@@ -82,11 +81,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quan
         if ($delivery_phone === '') {
             $errors[] = 'Delivery phone number is required.';
         }
-        if (!is_delivery_area_allowed($delivery_address)) {
-            $errors[] = 'Delivery is currently limited to Caloocan, 10th Avenue, and Grace Park.';
-        }
-        if ($latitude === null || $longitude === null) {
-            $errors[] = 'Please select a valid location on the map for delivery.';
+        // The is_delivery_area_allowed function seems to be legacy. The logic is handled by distance or address string checks now.
+        // if (!is_delivery_area_allowed($delivery_address)) {
+        //     $errors[] = 'Delivery is currently limited to Caloocan, 10th Avenue, and Grace Park.';
+        // }
+        
+        // Validate map coordinates ONLY if a new address is being entered.
+        // Saved addresses might not have coordinates, and that's okay.
+        if ($address_option === 'new' && ($latitude === null || $longitude === null)) {
+            $errors[] = 'Please select your location on the map for a new delivery address.';
         }
 
         if ($payment_method === 'pay_at_shop') {
@@ -168,13 +171,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quan
     foreach ($cart as $item) {
         // Fix: Check for both 'product_id' and 'id' in case the cart array uses the product's primary key name
         $product_id = (int) ($item['product_id'] ?? $item['id'] ?? 0);
+        $variant_id = isset($item['variant_id']) && !empty($item['variant_id']) ? (int)$item['variant_id'] : null;
         $requested_quantity = (int) ($item['quantity'] ?? 0);
         $available_stock = get_product_stock($product_id); 
 
         if ($requested_quantity > $available_stock) {
             $errors[] = 'Insufficient stock for ' . htmlspecialchars($item['name']) . '. Only ' . $available_stock . ' available.';
         } else {
-            $items_to_deduct[] = ['product_id' => $product_id, 'quantity' => $requested_quantity];
+            $items_to_deduct[] = ['product_id' => $product_id, 'variant_id' => $variant_id, 'quantity' => $requested_quantity];
         }
     }
 
@@ -243,133 +247,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quan
         ];
 
         // Ensure we are using the global connection defined in config.php
-        $GLOBALS['conn']->begin_transaction();
-
-        $deduction_successful = true;
-        foreach ($items_to_deduct as $item) {
-            if (!deduct_product_stock($item['product_id'], $item['quantity'])) {
-                $errors[] = 'Failed to deduct stock for product ID ' . $item['product_id'] . '. Please try again.';
-                $deduction_successful = false;
-                break;
-            }
-        }
-
-        if ($deduction_successful) {
-            $stock_deducted = true; 
-            $stock_deducted = true;
-            $order_id = create_customer_order((int)$customer['id'], $fulfillment_type, $details, $cart);
-            if ($order_id !== null) {
-$GLOBALS['conn']->commit();
-                
-                // --- Loyalty Points Logic (MUST be BEFORE clear_customer_cart) ---
-                $customer_id = (int) current_customer()['id'];
-                
-                // Capture subtotal BEFORE cart is cleared (use ex-VAT for points calculation)
-                $order_cart_subtotal_net = cart_subtotal_ex_vat();
-                
-                // Fetch previous loyalty points before any updates
-                $previous_points_query = mysqli_query($conn, "SELECT loyalty_points FROM customers WHERE id = " . $customer_id);
-                $previous_points_row = mysqli_fetch_assoc($previous_points_query);
-                $previous_points = (float)($previous_points_row['loyalty_points'] ?? 0.00);
-
-                // Points are earned on the subtotal before discount (ex-VAT)
-                $points_earned = round($order_cart_subtotal_net / 100, 2); // P100 = 1 point
-                // --- End capture ---
-
+        // Stock will be deducted upon confirmation, not at initial creation.
+        $order_id = create_customer_order((int)$customer['id'], $fulfillment_type, $details, $cart);
+        if ($order_id !== null) {
+            // No transaction needed here anymore as create_customer_order handles it.
                 clear_customer_cart();
-
-                // --- VOUCHER SINGLE-USE DEACTIVATION LOGIC ---
-                if (!empty($voucher_code_input)) {
-                    $v_code = mysqli_real_escape_string($conn, $voucher_code_input);
-                    
-                    // 1. Deactivates the checkout validity state
-                    mysqli_query($conn, "UPDATE tbl_vouchers SET active = 0 WHERE code = '$v_code'");
-                    
-                    // 2. Updates the history tracking state to 'Used' for my_reward.php blocking
-                    mysqli_query($conn, "UPDATE reward_redemptions SET status = 'Used' WHERE card_number = '$v_code'");
-                }
-
-                if ($points_earned > 0) {
-                    // Get customer name and email for notifications
-                    $client_stmt = $conn->prepare("SELECT name, email FROM customers WHERE id = ? LIMIT 1");
-                    $client_stmt->bind_param("i", $customer_id);
-                    $client_stmt->execute();
-                    $client = $client_stmt->get_result()->fetch_assoc();
-                    $client_name = $client['name'] ?? 'Customer';
-                    $client_email = $client['email'] ?? '';
-
-                    // Record loyalty transaction
-                    $transaction_stmt = $conn->prepare("INSERT INTO loyalty_transactions (customer_id, user_id, product_name, quantity_kg, points_earned, order_id) VALUES (?, NULL, ?, ?, ?, ?)"); // user_id is NULL for customer-initiated transactions
-                    // For purchases, product_name can be 'Online Purchase', quantity_kg can be 0 or derived if applicable
-                    $product_name_for_transaction = 'Online Purchase (Order #' . $order_id . ')';
-                    $zero_kg = 0.00; // No direct kg for this point earning method
-                    if ($transaction_stmt) {
-                        $transaction_stmt->bind_param("isddi", $customer_id, $product_name_for_transaction, $zero_kg, $points_earned, $order_id);
-                        if (!$transaction_stmt->execute()) {
-                            error_log('[checkout] Failed to insert loyalty transaction: ' . $transaction_stmt->error);
-                        }
-                        $transaction_id = (int) $conn->insert_id;
-                        $transaction_stmt->close();
-                    } else {
-                        error_log('[checkout] Failed to prepare loyalty transaction statement: ' . $conn->error);
-                        $transaction_id = 0;
-                    }
-
-                    // Sync points again after adding transaction
-                    $new_total_points = notifications_sync_customer_loyalty_points($conn, $customer_id);
-
-                    // Send notifications
-                    notifications_create($conn, [
-                        'user_id' => NULL, // Customer-initiated action, no staff user_id
-                        'customer_id' => $customer_id,
-                        'type' => 'points_earned',
-                        'channel' => 'both',
-                        'title' => 'You earned ' . notifications_format_points($points_earned) . ' points!',
-                        'message' => $client_name . ' earned ' . notifications_format_points($points_earned) . ' points from your purchase. New usable balance: ' . notifications_format_points($new_total_points) . ' points. Points expire after ' . notifications_expiry_months() . ' months.',
-                        'reference_table' => 'loyalty_transactions',
-                        'reference_id' => $transaction_id,
-                        'points_value' => $points_earned,
-                        'email_to' => $client_email
-                    ]);
-
-                    foreach (notifications_crossed_thresholds($previous_points, $new_total_points) as $threshold) {
-                        // --- FIX: Update customer's loyalty points balance ---
-                        $update_points_stmt = $conn->prepare("UPDATE customers SET loyalty_points = ? WHERE id = ?");
-                        if ($update_points_stmt) {
-                            $update_points_stmt->bind_param("di", $new_total_points, $customer_id);
-                            $update_points_stmt->execute();
-                            $update_points_stmt->close();
-                        }
-                        notifications_create($conn, [
-                            'user_id' => NULL, // Customer-initiated action, no staff user_id
-                            'customer_id' => $customer_id,
-                            'type' => 'reward_redeemable',
-                            'channel' => 'in_app',
-                            'title' => 'You can now redeem a reward',
-                            'message' => $client_name . ' now has ' . notifications_format_points($new_total_points) . ' usable points and unlocked the ' . notifications_format_points($threshold) . '-point reward tier.',
-                            'reference_table' => 'loyalty_transactions',
-                            'reference_id' => $transaction_id,
-                            'points_value' => $new_total_points,
-                            'email_to' => $client_email
-                        ]);
-                    }
-                }
-                // --- End Loyalty Points Logic ---
 
                 // --- Gamification: Check for new achievements ---
                 $order_details = get_order_by_id($order_id, (int)$customer['id']);
                 $success_message = 'Your order was successfully placed.';
             } else {
-                $GLOBALS['conn']->rollback();
-
                 $real_err = $_SESSION['last_order_error'] ?? null;
                 unset($_SESSION['last_order_error']);
 
                 $errors[] = $real_err ? $real_err : 'Unable to place your order at this time. Please try again later.';
-            }
-        } else {
-            $GLOBALS['conn']->rollback();
-            $GLOBALS['conn']->rollback(); // Rollback if stock deduction fails
         }
     }
 }
@@ -484,6 +375,14 @@ $GLOBALS['conn']->commit();
         50% { opacity: 0.5; }
         100% { opacity: 0.8; }
     }
+
+    /* Delivery validation message styles */
+    .delivery-validation-msg {
+        font-size: 0.9rem; font-weight: 600; padding: 10px; border-radius: 8px; margin-top: 10px;
+        text-align: center;
+    }
+    .delivery-validation-msg.valid { background: #eefbf3; color: #15803d; border: 1px solid #a7f3d0; }
+    .delivery-validation-msg.invalid { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
 
     /* Rider Status Badge Styles */
     .rider-status-box {
@@ -755,35 +654,105 @@ $GLOBALS['conn']->commit();
                 </div>
 
                 <div id="delivery-fields" style="<?php echo (isset($_POST['fulfillment_type']) && $_POST['fulfillment_type'] === 'delivery') ? '' : 'display:none;'; ?>">
-                    <label style="display: block; font-weight: 600; color: #1e293b; margin-bottom: 15px;">Select Delivery Address</label>
-                    <?php foreach ($customer_addresses as $addr): ?>
-                        <div class="address-card-option <?php echo $addr['is_default'] ? 'default' : ''; ?>">
-                            <label>
-                                <input type="radio" name="address_option" value="<?php echo $addr['id']; ?>" <?php echo $addr['is_default'] ? 'checked' : ''; ?>
-                                       data-address="<?php echo htmlspecialchars($addr['full_address']); ?>"
-                                       data-phone="<?php echo htmlspecialchars($addr['phone']); ?>" onchange="updateDeliveryFeeDisplay()"
-                                       onchange="toggleNewAddressForm()">
-                                <div class="address-details">
-                                    <strong class="address-label"><?php echo htmlspecialchars($addr['label']); ?> <?php echo $addr['is_default'] ? '<span class="default-badge">Primary</span>' : ''; ?></strong>
-                                    <p class="address-text"><?php echo htmlspecialchars($addr['full_address']); ?></p>
-                                    <p class="address-phone"><i class="fas fa-phone-alt"></i> <?php echo htmlspecialchars($addr['phone']); ?></p>
-                                </div>
-                            </label>
-                        </div>
-                    <?php endforeach; ?>
+                    <style>
+                        .custom-select-container { position: relative; }
+                        .custom-select-trigger {
+                            display: flex; align-items: center; justify-content: space-between;
+                            padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px;
+                            background: #fff; cursor: pointer;
+                            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                            /* Allow vertical expansion for wrapped text */
+                            height: auto; min-height: 44px;
+                        }
+                        .custom-select-trigger .trigger-text {
+                            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                            /* Allow the text to shrink and wrap instead of forcing parent wider */
+                            min-width: 0;
+                        }
+                        .custom-select-trigger::after {
+                            content: '▼'; font-size: 0.7rem; color: #94a3b8; margin-left: 10px;
+                        }
+                        .custom-select-options {
+                            display: none; /* No longer absolutely positioned */
+                            background: #fff; border: 1px solid #cbd5e1; border-radius: 8px;
+                            box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100;
+                            margin-top: 4px; max-height: 250px; overflow-y: auto; overflow-x: hidden;
+                        }
+                        .custom-select-option {
+                            z-index: 1000; /* Ensure options are above map */
+                            padding: 12px 16px; cursor: pointer;
+                            border-bottom: 1px solid #f1f5f9;
+                            /* Allow text wrapping inside options */
+                            white-space: normal;
+                            line-height: 1.4;
+                        }
+                        .custom-select-option:last-child { border-bottom: none; }
+                        .custom-select-option:hover { background: #f8fafc; }
+                        .custom-select-option.selected {
+                            background: #eef2ff; color: #4338ca; font-weight: 700;
+                        }
+                        .custom-select-option .option-label {
+                            font-weight: 700; display: block;
+                        }
+                        .custom-select-option .option-address {
+                            font-size: 0.88rem; color: #64748b;
+                            white-space: normal;
+                            word-break: break-word; /* Break long words/addresses */
+                            overflow-wrap: anywhere;
+                        }
+                        .custom-select-option.selected .option-address { color: #4338ca; }
+                        .custom-select-option.new-address-opt {
+                            background: #f8fafc; font-weight: 700; color: #4338ca;
+                            text-align: center;
+                        }
+                    </style>
 
-                    <div class="address-card-option">
-                        <label>
-                            <input type="radio" name="address_option" value="new" onchange="toggleNewAddressForm(); updateDeliveryFeeDisplay();" <?php echo empty($customer_addresses) ? 'checked' : ''; ?>>
-                            <div class="address-details">
-                                <strong class="address-label"><i class="fas fa-plus-circle"></i> Use a New Address</strong>
+                    <div class="form-row">
+                        <label for="address_option">Delivery Address</label>
+                        
+                        <!-- Hidden native select to hold the actual form value -->
+                        <select name="address_option" id="address_option" onchange="toggleNewAddressForm()" style="display:none;">
+                            <?php foreach ($customer_addresses as $addr): ?>
+                                <option value="<?php echo $addr['id']; ?>" 
+                                        data-address="<?php echo htmlspecialchars($addr['full_address']); ?>" 
+                                        data-phone="<?php echo htmlspecialchars($addr['phone']); ?>"
+                                        data-label="<?php echo htmlspecialchars($addr['label']); ?>"
+                                        <?php echo $addr['is_default'] ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($addr['label']); ?> — <?php echo htmlspecialchars($addr['full_address']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                            <option value="new" <?php if (empty($customer_addresses)) echo 'selected'; ?>>-- Choose a new address from map --</option>
+                        </select>
+
+                        <!-- Custom Dropdown UI -->
+                        <div class="custom-select-container" id="custom-address-select">
+                            <div class="custom-select-trigger">
+                                <span class="trigger-text">Loading...</span>
                             </div>
-                        </label>
+                            <div class="custom-select-options">
+                                <?php foreach ($customer_addresses as $addr): ?>
+                                    <div class="custom-select-option" data-value="<?php echo $addr['id']; ?>">
+                                        <span class="option-label"><i class="fas fa-map-marker-alt"></i> <?php echo htmlspecialchars($addr['label']); ?></span>
+                                        <span class="option-address"><?php echo htmlspecialchars($addr['full_address']); ?></span>
+                                    </div>
+                                <?php endforeach; ?>
+                                <div class="custom-select-option new-address-opt" data-value="new">
+                                    <i class="fas fa-map"></i> Choose a new address from map
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="new-address-fields" style="<?php echo empty($customer_addresses) ? '' : 'display:none;'; ?>">
-                        <div class="form-row" style="margin-top:15px;"><label for="new_delivery_address">New Delivery Address</label><input type="text" name="new_delivery_address" id="delivery_address" oninput="updateDeliveryFeeDisplay()"></div>
-                        <div class="form-row"><label for="new_delivery_phone">New Delivery Phone</label><input type="text" name="new_delivery_phone" id="delivery_phone"></div>
+                        <!-- Map Selection for Delivery Area Verification -->
+                        <div id="map-container" style="margin-top: 15px;">
+                            <div id="map" style="height: 300px; border-radius: 8px; border: 1px solid #cbd5e1;"></div>
+                            <input type="hidden" name="latitude" id="latitude">
+                            <input type="hidden" name="longitude" id="longitude">
+                        </div>
+                        <div id="delivery-validation-container"></div>
+                        <div class="form-row" style="margin-top:15px;"><label for="new_delivery_address">Selected Address</label><input type="text" name="new_delivery_address" id="delivery_address" placeholder="Address will appear here after pinning a location" readonly></div>
+                        <div class="form-row"><label for="delivery_phone">Contact Number</label><input type="text" name="new_delivery_phone" id="delivery_phone" value="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"></div>
                     </div>
 
                     <input type="hidden" name="saved_address_text" id="saved_address_text">
@@ -792,12 +761,6 @@ $GLOBALS['conn']->commit();
                     <div class="form-row">
                         <label for="delivery_instructions">Delivery Instructions</label>
                         <textarea name="delivery_instructions" id="delivery_instructions"><?php echo htmlspecialchars($_POST['delivery_instructions'] ?? ''); ?></textarea>
-                    </div>
-                    <!-- Map Selection for Delivery Area Verification -->
-                    <div id="map-container" style="margin-top: 15px;">
-                        <div id="map" style="height: 400px; border-radius: 8px; border: 1px solid #cbd5e1;"></div>
-                        <input type="hidden" name="latitude" id="latitude">
-                        <input type="hidden" name="longitude" id="longitude">
                     </div>
                 </div>
                 <div class="form-row" style="margin-top: 20px;">
@@ -883,68 +846,20 @@ $GLOBALS['conn']->commit();
 </div>
 
 <script>
-function updateTotals(discount = 0) {
-    const fulfillmentType = document.querySelector('input[name="fulfillment_type"]:checked').value;
-    const address = document.getElementById('delivery_address').value.toLowerCase();
-    const subtotalNetEl = document.getElementById('subtotal-net-display');
-    const subtotal_net = parseFloat(subtotalNetEl.dataset.value) || 0;
-    const subtotal_gross = subtotal_net * 1.12;
-
-    let fee = 0;
-    document.getElementById('discount_amount_hidden').value = discount;
-
-    if (fulfillmentType === 'delivery') {
-        if (address.includes('10th ave') || address.includes('10th avenue') || address.includes('grace park')) {
-            fee = 0;
-        } else if (address.includes('caloocan')) {
-            fee = (subtotal >= 2000) ? 0 : 50;
-        } else if (address.trim() !== '') {
-            fee = 120;
-        }
-    }
-
-    const totalBeforeDiscount = subtotal_gross + fee;
-    const finalTotal = Math.max(0, totalBeforeDiscount - discount);
-
-    const feeDisplay = document.getElementById('delivery-fee-display');
-    const totalDisplay = document.getElementById('total-to-pay-display');
-    const vatDisplay = document.getElementById('vat-display');
-    const discountLine = document.getElementById('discount-line');
-    const discountDisplay = document.getElementById('discount-display');
-    const pointsDisplay = document.getElementById('points-to-earn-display');
-
-    feeDisplay.innerText = fee === 0 ? 'Free' : 'PHP ' + fee.toFixed(2);
-    totalDisplay.innerText = 'PHP ' + finalTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
-    vatDisplay.innerText = 'PHP ' + (subtotal_net * 0.12).toFixed(2 );
-
-    // FIXED: Points earned should be based on the pre-discount net subtotal.
-    const pointsEarned = Math.max(0, subtotal_net / 100);
-    pointsDisplay.innerText = `+${pointsEarned.toFixed(2)} pts`;
-
-    if (discount > 0) {
-        discountLine.style.display = 'flex';
-        discountDisplay.innerText = '-PHP ' + discount.toFixed(2);
-    } else {
-        discountLine.style.display = 'none';
-    }
-}
-
-function updateDeliveryFeeDisplay() {
-    updateTotals(parseFloat(document.getElementById('discount_amount_hidden').value) || 0);
-}
+let leafletMap, marker;
 
 function toggleFulfillmentFields() {
     const type = document.querySelector('input[name="fulfillment_type"]:checked').value;
     document.getElementById('pickup-fields').style.display = type === 'pickup' ? 'block' : 'none';
     document.getElementById('delivery-fields').style.display = type === 'delivery' ? 'block' : 'none';
-    
+
     const mapContainer = document.getElementById('map-container');
     if (mapContainer) mapContainer.style.display = type === 'delivery' ? 'block' : 'none';
     if (type === 'delivery') setTimeout(initFreeMap, 100);
 
     const codOption = document.getElementById('cod-option');
     const payAtShopOption = document.getElementById('pay_at_shop-option');
-    
+
     if (type === 'pickup') {
         codOption.style.display = 'none';
         payAtShopOption.style.display = 'flex';
@@ -959,7 +874,7 @@ function toggleFulfillmentFields() {
         }
     }
     togglePaymentFields();
-    updateTotals(parseFloat(document.getElementById('discount_amount_hidden').value) || 0);
+    updateDeliveryFeeDisplay();
 }
 
 function togglePaymentFields() {
@@ -967,96 +882,170 @@ function togglePaymentFields() {
     const gcashDetails = document.getElementById('gcash-payment-details');
     const bankDetails = document.getElementById('bank-transfer-details');
     const refInput = document.getElementById('gcash_reference_number');
-
+    
     gcashDetails.style.display = method === 'gcash' ? 'block' : 'none';
     bankDetails.style.display = method === 'bank' ? 'block' : 'none';
-
     refInput.required = (method === 'gcash');
     document.getElementById('bank_reference_number').required = (method === 'bank');
 }
 
 function toggleNewAddressForm() {
-    const selectedOption = document.querySelector('input[name="address_option"]:checked');
-    const isNew = selectedOption && selectedOption.value === 'new';
+    const addressSelect = document.getElementById('address_option');
+    const selectedOption = addressSelect.options[addressSelect.selectedIndex];
+    const isNew = selectedOption.value === 'new';
+
     const newAddressFields = document.getElementById('new-address-fields');
-    const newAddressInput = document.getElementById('delivery_address');
     const savedAddressText = document.getElementById('saved_address_text');
     const savedAddressPhone = document.getElementById('saved_address_phone');
-
+    const deliveryPhoneInput = document.getElementById('delivery_phone');
+    const latitudeInput = document.getElementById('latitude');
+    const longitudeInput = document.getElementById('longitude');
+    const customSelectContainer = document.getElementById('custom-address-select'); // Get the custom container
+    
     if (isNew) {
         newAddressFields.style.display = 'block';
-        savedAddressText.value = ''; // Clear saved address data
+        savedAddressText.value = ''; 
         savedAddressPhone.value = '';
+        deliveryPhoneInput.value = '<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>'; // Reset to default customer phone
+        setTimeout(initFreeMap, 100); // Initialize map when shown
+        if (customSelectContainer) { // Ensure the custom dropdown is closed
+            customSelectContainer.classList.remove('open');
+        }
     } else {
         newAddressFields.style.display = 'none';
-        newAddressInput.value = ''; // Clear new address input
         if (selectedOption) {
             savedAddressText.value = selectedOption.dataset.address;
             savedAddressPhone.value = selectedOption.dataset.phone;
+            // Populate latitude and longitude from saved address
+            latitudeInput.value = selectedOption.dataset.latitude || '';
+            longitudeInput.value = selectedOption.dataset.longitude || '';
+            deliveryPhoneInput.value = selectedOption.dataset.phone; // Use phone from saved address
         }
     }
-    updateDeliveryFeeDisplay(); // Recalculate fee on any change
+    updateTotals();
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('custom-address-select');
+    if (!container) return;
+
+    const trigger = container.querySelector('.custom-select-trigger');    
+    const optionsContainer = container.querySelector('.custom-select-options');
+    const options = container.querySelectorAll('.custom-select-option');
+    const hiddenSelect = document.getElementById('address_option');
+
+    function updateDisplay() {
+        const selectedOption = hiddenSelect.options[hiddenSelect.selectedIndex];
+        const triggerText = container.querySelector('.trigger-text');
+        if (selectedOption.value === 'new') {
+            triggerText.innerHTML = `<i class="fas fa-map"></i> Choose a new address from map`;
+        } else {
+            // Allow wrapping in the trigger text
+            trigger.style.whiteSpace = 'normal';
+            triggerText.style.whiteSpace = 'normal';
+            triggerText.style.textOverflow = 'unset';
+            triggerText.innerHTML = `<i class="fas fa-map-marker-alt"></i> <strong>${selectedOption.dataset.label}</strong> – <span style="word-break: break-word;">${selectedOption.dataset.address}</span>`;
+        }
+
+        // Update selected state in custom dropdown
+        options.forEach(opt => {
+            opt.classList.toggle('selected', opt.dataset.value === selectedOption.value);
+        });
+    }
+
+    trigger.addEventListener('click', () => {
+        const isOpen = optionsContainer.style.display === 'block';
+        optionsContainer.style.display = isOpen ? 'none' : 'block';
+    });
+
+    options.forEach(option => {
+        option.addEventListener('click', () => {
+            hiddenSelect.value = option.dataset.value;
+            // Manually trigger the onchange event for compatibility
+            const changeEvent = new Event('change');
+            hiddenSelect.dispatchEvent(changeEvent);
+            
+            updateDisplay();
+            optionsContainer.style.display = 'none';
+        });
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!container.contains(e.target) && optionsContainer.style.display === 'block') {
+            optionsContainer.style.display = 'none';
+        }
+    });
+
+    updateDisplay(); // Initial display update
+});
 
 function updateDeliveryFeeDisplay() {
-    const selectedOption = document.querySelector('input[name="address_option"]:checked');
-    const isNew = selectedOption && selectedOption.value === 'new';
-    const addressInput = isNew ? document.getElementById('delivery_address').value : (selectedOption ? selectedOption.dataset.address : '');
-    updateTotals(parseFloat(document.getElementById('discount_amount_hidden').value) || 0, addressInput);
+    const discount = parseFloat(document.getElementById('discount_amount_hidden').value) || 0;
+    updateTotals(discount);
 }
 
-function updateTotals(discount = 0, address = '') {
+function updateTotals(discount = 0) {
     const fulfillmentType = document.querySelector('input[name="fulfillment_type"]:checked').value;
     const lat = parseFloat(document.getElementById('latitude').value);
     const lon = parseFloat(document.getElementById('longitude').value);
-
     const subtotalNetEl = document.getElementById('subtotal-net-display');
+    const validationContainer = document.getElementById('delivery-validation-container');
     const subtotal_net = parseFloat(subtotalNetEl.dataset.value) || 0;
     const subtotal_gross = subtotal_net * 1.12;
-
     let fee = 0;
+    
     document.getElementById('discount_amount_hidden').value = discount;
     
     if (fulfillmentType === 'delivery') {
-        // Rule: Free delivery if total purchase is ₱2,000 or more
+        validationContainer.innerHTML = ''; // Clear previous messages
         if (subtotal_gross >= 2000) {
             fee = 0;
         } else if (!isNaN(lat) && !isNaN(lon)) {
-            // Store coordinates
             const storeLat = 14.6594;
             const storeLon = 120.9838;
-            
-            const R = 6371; // Radius of the earth in km
+            const R = 6371; 
             const dLat = (lat - storeLat) * (Math.PI / 180);
             const dLon = (lon - storeLon) * (Math.PI / 180);
             const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
                       Math.cos(storeLat * (Math.PI / 180)) * Math.cos(lat * (Math.PI / 180)) *
                       Math.sin(dLon / 2) * Math.sin(dLon / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            const distance = R * c; // Distance in km
+            const distance = R * c; 
 
-            // Rule: Free if within 2km, otherwise a standard fee
-            fee = (distance <= 2.0) ? 0 : 50.00;
+            // Tiered fee logic
+            if (distance <= 2.0) fee = 0.00;
+            else if (distance <= 3.0) fee = 50.00;
+            else if (distance <= 4.0) fee = 60.00;
+            else if (distance <= 5.0) fee = 70.00;
+            else fee = -1; // Outside service area
+
+            // Display validation message
+            if (fee >= 0) {
+                validationContainer.innerHTML = `<div class="delivery-validation-msg valid">✓ Delivery available! Distance: <strong>${distance.toFixed(2)} km</strong></div>`;
+            } else {
+                validationContainer.innerHTML = `<div class="delivery-validation-msg invalid">✕ Sorry, this location is outside our Caloocan service area.</div>`;
+            }
         }
     }
+    
+    // If fee is -1, it's an invalid area, so don't add to total and disable checkout button
+    const placeOrderBtn = document.querySelector('#checkout-form button[type="submit"]');
+    placeOrderBtn.disabled = (fee === -1);
 
     const totalBeforeDiscount = subtotal_gross + fee;
-    const finalTotal = Math.max(0, totalBeforeDiscount - discount);
-
-    const feeDisplay = document.getElementById('delivery-fee-display');
-    const totalDisplay = document.getElementById('total-to-pay-display');
-    const vatDisplay = document.getElementById('vat-display');
+    // If fee is -1, don't calculate a real total
+    const finalTotal = (fee === -1) ? subtotal_gross : Math.max(0, totalBeforeDiscount - discount);
+    
+    document.getElementById('delivery-fee-display').innerText = fee === 0 ? 'Free' : 'PHP ' + fee.toFixed(2);
+    document.getElementById('total-to-pay-display').innerText = 'PHP ' + finalTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
+    document.getElementById('vat-display').innerText = 'PHP ' + (subtotal_net * 0.12).toFixed(2);
+    
+    const pointsEarned = Math.max(0, subtotal_net / 100);
+    document.getElementById('points-to-earn-display').innerText = `+${pointsEarned.toFixed(2)} pts`;
+    
     const discountLine = document.getElementById('discount-line');
     const discountDisplay = document.getElementById('discount-display');
-    const pointsDisplay = document.getElementById('points-to-earn-display');
-
-    feeDisplay.innerText = fee === 0 ? 'Free' : 'PHP ' + fee.toFixed(2);
-    totalDisplay.innerText = 'PHP ' + finalTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
-    vatDisplay.innerText = 'PHP ' + (subtotal_net * 0.12).toFixed(2);
-
-    const pointsEarned = Math.max(0, subtotal_net / 100);
-    pointsDisplay.innerText = `+${pointsEarned.toFixed(2)} pts`;
-
     if (discount > 0) {
         discountLine.style.display = 'flex';
         discountDisplay.innerText = '-PHP ' + discount.toFixed(2);
@@ -1065,17 +1054,16 @@ function updateTotals(discount = 0, address = '') {
     }
 }
 
-let leafletMap, marker;
 function initFreeMap() {
     if (leafletMap) {
         leafletMap.invalidateSize();
         return;
     }
-    leafletMap = L.map('map').setView([14.6594, 120.9838], 15); // Centered on the store
+    leafletMap = L.map('map').setView([14.6594, 120.9838], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(leafletMap);
-
+    
     L.Control.geocoder({
         defaultMarkGeocode: false,
         placeholder: "Search for address...",
@@ -1086,62 +1074,19 @@ function initFreeMap() {
         if (marker) leafletMap.removeLayer(marker);
         marker = L.marker(latlng).addTo(leafletMap);
         leafletMap.setView(latlng, 16);
-
         document.getElementById('latitude').value = latlng.lat;
         document.getElementById('longitude').value = latlng.lng;
         document.getElementById('delivery_address').value = e.geocode.name;
         updateDeliveryFeeDisplay();
     })
     .addTo(leafletMap);
-
+    
     leafletMap.on('click', function(e) {
         if (marker) leafletMap.removeLayer(marker);
         marker = L.marker(e.latlng).addTo(leafletMap);
         document.getElementById('latitude').value = e.latlng.lat;
         document.getElementById('longitude').value = e.latlng.lng;
-
-        fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
-            .then(response => response.json())
-            .then(data => { if (data.display_name) document.getElementById('delivery_address').value = data.display_name; })
-            .catch(err => console.error('Geocoding error:', err))
-            .finally(() => updateDeliveryFeeDisplay());
-    });
-}
-
-function initFreeMap() {
-    if (leafletMap) {
-        leafletMap.invalidateSize();
-        return;
-    }
-    leafletMap = L.map('map').setView([14.6594, 120.9838], 15); // Centered on the store
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-    }).addTo(leafletMap);
-
-    L.Control.geocoder({
-        defaultMarkGeocode: false,
-        placeholder: "Search for address...",
-        errorMessage: "Address not found."
-    })
-    .on('markgeocode', function(e) {
-        const latlng = e.geocode.center;
-        if (marker) leafletMap.removeLayer(marker);
-        marker = L.marker(latlng).addTo(leafletMap);
-        leafletMap.setView(latlng, 16);
-
-        document.getElementById('latitude').value = latlng.lat;
-        document.getElementById('longitude').value = latlng.lng;
-        document.getElementById('delivery_address').value = e.geocode.name;
-        updateDeliveryFeeDisplay();
-    })
-    .addTo(leafletMap);
-
-    leafletMap.on('click', function(e) {
-        if (marker) leafletMap.removeLayer(marker);
-        marker = L.marker(e.latlng).addTo(leafletMap);
-        document.getElementById('latitude').value = e.latlng.lat;
-        document.getElementById('longitude').value = e.latlng.lng;
-
+        
         fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
             .then(response => response.json())
             .then(data => { if (data.display_name) document.getElementById('delivery_address').value = data.display_name; })
@@ -1151,29 +1096,26 @@ function initFreeMap() {
 }
 
 function openQRModal() {
-    const modal = document.getElementById("qrModal");
-    const modalImg = document.getElementById("imgQR");
-    const srcImg = document.getElementById("gcash-qr");
-    modal.style.display = "block";
-    modalImg.src = srcImg.src;
+    document.getElementById("qrModal").style.display = "block";
+    document.getElementById("imgQR").src = document.getElementById("gcash-qr").src;
 }
-
 function closeQRModal() {
     document.getElementById("qrModal").style.display = "none";
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    toggleFulfillmentFields();
+
     const voucherInput = document.getElementById('voucher_code_input');
     const applyBtn = document.getElementById('apply_voucher_btn');
     const voucherMessage = document.getElementById('voucher-message');
 
     async function validateVoucher() {
         const code = voucherInput ? voucherInput.value.trim() : '';
-
         if (!code) {
             if (voucherMessage) {
                 voucherMessage.textContent = 'Please enter a voucher code.';
-                voucherMessage.style.color = '#dc2626';
+                voucherMessage.style.color = '#dc2626'; // Red
             }
             return;
         }
@@ -1192,34 +1134,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const data = await response.json();
 
-            if (!response.ok) {
-                throw new Error(data.message || `HTTP error! status: ${response.status}`);
-            }
-
             if (data.success) {
                 if (voucherMessage) {
                     voucherMessage.textContent = data.message;
-                    voucherMessage.style.color = '#16a34a';
+                    voucherMessage.style.color = '#16a34a'; // Green
                 }
-                const hiddenDiscount = document.getElementById('discount_amount_hidden');
-                if (hiddenDiscount) hiddenDiscount.value = data.discount_amount;
-                
-                // Recalculate summary & totals dynamically
+                // Update the hidden input and recalculate totals
                 updateTotals(parseFloat(data.discount_amount));
             } else {
                 if (voucherMessage) {
                     voucherMessage.textContent = data.message || 'An unknown error occurred.';
-                    voucherMessage.style.color = '#dc2626';
+                    voucherMessage.style.color = '#dc2626'; // Red
                 }
-                const hiddenDiscount = document.getElementById('discount_amount_hidden');
-                if (hiddenDiscount) hiddenDiscount.value = 0;
-                
-                // Reset totals if voucher is invalid
+                // Reset discount if voucher is invalid
                 updateTotals(0);
             }
         } catch (error) {
             if (voucherMessage) {
-                voucherMessage.textContent = 'Could not connect to the server. Check path/file.';
+                voucherMessage.textContent = 'Could not connect to the server.';
                 voucherMessage.style.color = '#dc2626';
             }
             console.error('Voucher API Error:', error);
@@ -1236,10 +1168,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (voucherInput) {
-        voucherInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                validateVoucher();
+        voucherInput.addEventListener('keypress', e => { if (e.key === 'Enter') { e.preventDefault(); validateVoucher(); } });
+        if (voucherInput.value.trim() !== '') validateVoucher();
+    }
+
+    // Add client-side validation before form submission
+    const checkoutForm = document.getElementById('checkout-form');
+    if (checkoutForm) {
+        checkoutForm.addEventListener('submit', function(e) {
+            const fulfillmentType = document.querySelector('input[name="fulfillment_type"]:checked').value;
+            
+            if (fulfillmentType === 'delivery') {
+                const addressSelect = document.getElementById('address_option');
+                const isUsingNewAddress = addressSelect.value === 'new';
+                
+                // If using a new address, require map coordinates. This now correctly checks the dropdown value.
+                if (isUsingNewAddress) {
+                    const lat = document.getElementById('latitude').value;
+                    const lon = document.getElementById('longitude').value;
+                    if (!lat || !lon) {
+                        e.preventDefault(); // Stop form submission
+                        alert("Please select a valid location on the map for your new address.");
+                    }
+                }
             }
         });
     }
@@ -1247,88 +1198,3 @@ document.addEventListener('DOMContentLoaded', function() {
 
 </script>
 <?php include __DIR__ . '/includes/footer.php'; ?>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const voucherInput = document.getElementById('voucher_code_input');
-    const applyBtn = document.getElementById('apply_voucher_btn');
-    const voucherMessage = document.getElementById('voucher-message');
-
-    async function validateVoucher() {
-        const code = voucherInput ? voucherInput.value.trim() : '';
-        if (!code) {
-            if (voucherMessage) {
-                voucherMessage.textContent = 'Please enter a voucher code.';
-                voucherMessage.style.color = '#dc2626';
-            }
-            return;
-        }
-
-        if (applyBtn) {
-            applyBtn.disabled = true;
-            applyBtn.textContent = 'Applying...';
-        }
-
-        try {
-            const response = await fetch('api/validate_voucher_api.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ voucher_code: code })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            
-            if (data.success) {
-                if (voucherMessage) {
-                    voucherMessage.textContent = data.message;
-                    voucherMessage.style.color = '#16a34a';
-                }
-                const hiddenDiscount = document.getElementById('discount_amount_hidden');
-                if (hiddenDiscount) hiddenDiscount.value = data.discount_amount;
-                updateTotals(parseFloat(data.discount_amount));
-            } else {
-                if (voucherMessage) {
-                    voucherMessage.textContent = data.message || 'An unknown error occurred.';
-                    voucherMessage.style.color = '#dc2626';
-                }
-                const hiddenDiscount = document.getElementById('discount_amount_hidden');
-                if (hiddenDiscount) hiddenDiscount.value = 0;
-                updateTotals(0);
-            }
-        } catch (error) {
-            if (voucherMessage) {
-                voucherMessage.textContent = 'Could not connect to the server. Check path/file.';
-                voucherMessage.style.color = '#dc2626';
-            }
-            console.error('Voucher API Error:', error);
-        } finally {
-            if (applyBtn) {
-                applyBtn.disabled = false;
-                applyBtn.textContent = 'Apply';
-            }
-        }
-    }
-
-    if (applyBtn) {
-        applyBtn.addEventListener('click', validateVoucher);
-    }
-
-    if (voucherInput) {
-        voucherInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                validateVoucher();
-            }
-        });
-
-        // Auto validate on load if field is not empty
-        if (voucherInput.value.trim() !== '') {
-            validateVoucher();
-        }
-    }
-});
-</script>

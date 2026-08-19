@@ -1,5 +1,5 @@
 <?php
-// Core autoloader and path definitions are now in bootstrap.php
+// The Composer autoloader is now handled by a central bootstrap file.
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 use Endroid\QrCode\QrCode;
@@ -163,6 +163,9 @@ function ensure_customer_tables(mysqli $conn): void {
     $conn->query("ALTER TABLE tbl_orders MODIFY COLUMN order_status ENUM('pending','confirmed','processing','ready_for_pickup','out_for_delivery','to_ship','to_receive','reviews','completed','cancelled') NOT NULL DEFAULT 'pending'");
     $conn->query("ALTER TABLE tbl_orders MODIFY COLUMN payment_method ENUM('cod','gcash','pay_at_shop','bank') NOT NULL DEFAULT 'cod'");
 
+    $conn->query("ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS latitude DECIMAL(10, 8) NULL AFTER phone");
+    $conn->query("ALTER TABLE customer_addresses ADD COLUMN IF NOT EXISTS longitude DECIMAL(11, 8) NULL AFTER latitude");
+
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER loyalty_points_earned");
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS voucher_code VARCHAR(100) DEFAULT NULL AFTER discount_amount");
 
@@ -180,6 +183,7 @@ function ensure_customer_tables(mysqli $conn): void {
     $conn->query("ALTER TABLE tbl_order_items ADD COLUMN IF NOT EXISTS variant_size VARCHAR(100) DEFAULT NULL AFTER product_name");
     $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS payment_proof_path VARCHAR(255) DEFAULT NULL AFTER bank_account_name");
     $conn->query("ALTER TABLE tbl_delivery ADD COLUMN IF NOT EXISTS qr_confirmation_token VARCHAR(255) DEFAULT NULL AFTER delivered_at");
+    $conn->query("ALTER TABLE tbl_orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT DEFAULT NULL AFTER order_status");
 
     // Loyalty Transactions Adjustment
     $lt_table = mysqli_query($conn, "SHOW TABLES LIKE 'loyalty_transactions'");
@@ -317,10 +321,30 @@ function get_product_stock(int $product_id): int {
     return $row ? (int)$row['stock'] : 0;
 }
 
-function deduct_product_stock(int $product_id, int $quantity): bool {
+function deduct_product_stock(int $product_id, ?int $variant_id, int $quantity): bool {
     global $customer_db;
-    $stmt = $customer_db->prepare("UPDATE tbl_product_inventory SET stock = stock - ? WHERE id = ? AND stock >= ?");
-    $stmt->bind_param('iii', $quantity, $product_id, $quantity);
+    if ($variant_id) {
+        $stmt = $customer_db->prepare("UPDATE tbl_product_variants SET stock = stock - ? WHERE id = ? AND stock >= ?");
+        $stmt->bind_param('iii', $quantity, $variant_id, $quantity);
+    } else {
+        $stmt = $customer_db->prepare("UPDATE tbl_product_inventory SET stock = stock - ? WHERE id = ? AND stock >= ?");
+        $stmt->bind_param('iii', $quantity, $product_id, $quantity);
+    }
+    $success = $stmt->execute();
+    $affected = $customer_db->affected_rows;
+    $stmt->close();
+    return $success && $affected > 0;
+}
+
+function restore_product_stock(int $product_id, ?int $variant_id, int $quantity): bool {
+    global $customer_db;
+    if ($variant_id) {
+        $stmt = $customer_db->prepare("UPDATE tbl_product_variants SET stock = stock + ? WHERE id = ?");
+        $stmt->bind_param('ii', $quantity, $variant_id);
+    } else {
+        $stmt = $customer_db->prepare("UPDATE tbl_product_inventory SET stock = stock + ? WHERE id = ?");
+        $stmt->bind_param('ii', $quantity, $product_id);
+    }
     $success = $stmt->execute();
     $affected = $customer_db->affected_rows;
     $stmt->close();
@@ -517,6 +541,30 @@ function calculate_distance_km(float $lat1, float $lon1, float $lat2, float $lon
     return $earth_radius * $c;
 }
 
+/**
+ * Checks if the given coordinates are within the Caloocan service area.
+ * Uses Nominatim reverse geocoding.
+ * @return bool True if the location is in Caloocan City.
+ */
+function is_location_in_service_area(?float $lat, ?float $lon): bool {
+    if ($lat === null || $lon === null) {
+        return false; // Cannot validate without coordinates
+    }
+
+    // Use Nominatim to get address details from coordinates
+    $url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat={$lat}&lon={$lon}&addressdetails=1";
+    $opts = ['http' => ['header' => "User-Agent: DariusPoultrySupply/1.0\r\n"]];
+    $context = stream_context_create($opts);
+    $response = @file_get_contents($url, false, $context);
+
+    if ($response) {
+        $data = json_decode($response, true);
+        $city = $data['address']['city'] ?? $data['address']['town'] ?? '';
+        return strcasecmp(trim($city), 'Caloocan') === 0;
+    }
+    return false; // Fail-safe: if geocoding fails, assume it's outside
+}
+
 function calculate_delivery_fee(string $fulfillment_type, float $subtotal, string $address = '', ?float $lat = null, ?float $lon = null): float {
     if ($fulfillment_type === 'pickup') {
         return 0.00;
@@ -527,23 +575,37 @@ function calculate_delivery_fee(string $fulfillment_type, float $subtotal, strin
         return 0.00;
     }
 
-    // --- New Distance-Based Fee Logic ---
+    // --- New Distance-Based & Service Area Fee Logic ---
     if ($lat !== null && $lon !== null) {
+        // 1. First, check if the location is inside the service area (Caloocan)
+        if (!is_location_in_service_area($lat, $lon)) {
+            return -1.0; // Use a special value to indicate "outside service area"
+        }
+
+        // 2. If inside the service area, calculate distance-based fee
         // Store coordinates (Darius Poultry Supply, 109 P. Burgos St, Caloocan)
         $store_lat = 14.6594;
         $store_lon = 120.9838;
 
         $distance = calculate_distance_km($store_lat, $store_lon, $lat, $lon);
 
-        // Rule: Free if within 2km
-        if ($distance <= 2.0) {
-            return 0.00;
+        // CRITICAL FIX: If distance calculation fails, it's an invalid area.
+        if ($distance === null) {
+            return -1.0;
         }
-        // Rule: Standard fee if over 2km
-        return 50.00; // You can adjust this standard fee
+
+        // Tiered Fee Rules
+        if ($distance <= 2.0) {
+            return 0.00; // FREE within 2km
+        }
+        if ($distance <= 3.0) return 50.00;
+        if ($distance <= 4.0) return 60.00;
+        if ($distance <= 5.0) return 70.00;
+
+        return -1.0; // If distance is beyond the max tier (e.g., > 5km), treat as outside service area
     }
 
-    // Fallback fee if no coordinates are provided
+    // Fallback fee if no coordinates are provided (should not happen with new UI)
     return 50.00;
 }
 

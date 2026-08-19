@@ -1,8 +1,10 @@
 <?php
-require_once __DIR__ . '/../../app/config/config.php';
+require_once __DIR__ . '/bootstrap.php'; // Centralized autoloader
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
+require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../customer/includes/functions.php';
 require_once __DIR__ . '/../../app/helpers/messaging_helper.php';
+require_once __DIR__ . '/qr_helper.php';
 
 $token = getJWTFromCookie();
 $payload = verifyJWT($token);
@@ -28,20 +30,40 @@ if (!$order) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
-    $allowed_statuses = ['confirmed', 'cancelled'];
-    $new_status = '';
 
     if ($action === 'approve_payment') {
-        $new_status = 'confirmed';
-    } elseif ($action === 'reject_payment') {
-        $new_status = 'cancelled';
-    }
+        $conn->begin_transaction();
+        try {
+            // 1. Deduct stock for each item in the order
+            $order_items_to_deduct = get_order_items($order_id);
+            foreach ($order_items_to_deduct as $item) {
+                $variant_id = isset($item['variant_id']) && !empty($item['variant_id']) ? (int)$item['variant_id'] : null;
+                if (!deduct_product_stock((int)$item['product_id'], $variant_id, (int)$item['quantity'])) {
+                    throw new Exception('Insufficient stock for product: ' . htmlspecialchars($item['product_name']));
+                }
+            }
 
-    if (in_array($new_status, $allowed_statuses)) {
-        $stmt = $conn->prepare("UPDATE tbl_orders SET order_status = ? WHERE id = ?");
-        $stmt->bind_param('si', $new_status, $order_id);
+            // 2. Update order status to 'confirmed'
+            $stmt = $conn->prepare("UPDATE tbl_orders SET order_status = 'confirmed' WHERE id = ?");
+            $stmt->bind_param('i', $order_id);
+            $stmt->execute();
+            $stmt->close();
+
+            $conn->commit();
+            header("Location: order_details.php?id=$order_id&status_updated=1");
+            exit();
+        } catch (Exception $e) {
+            $conn->rollback();
+            $_SESSION['error_message'] = "Error approving order: " . $e->getMessage();
+            header("Location: order_details.php?id=$order_id");
+            exit();
+        }
+    } elseif ($action === 'reject_payment') {
+        // Stock is not deducted for pending orders, so just cancel the order.
+        $stmt = $conn->prepare("UPDATE tbl_orders SET order_status = 'cancelled' WHERE id = ?");
+        $stmt->bind_param('i', $order_id);
         if ($stmt->execute()) {
-            // Redirect to refresh the page and see the new status
+            $stmt->close();
             header("Location: order_details.php?id=$order_id&status_updated=1");
             exit();
         }
@@ -51,6 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 $order_items = get_order_items($order_id);
 $customer = get_customer_by_id($order['customer_id']);
+$delivery_details = get_delivery_details_by_order_id($order_id);
 
 $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS count FROM tbl_orders WHERE order_status = 'pending'"))['count'] ?? 0;
 $user_id = (int)$payload['user_id'];
@@ -84,7 +107,6 @@ $unread_count = get_unread_count_staff($user_id);
             text-align: center;
         }
 
-        /* Ginawang scrollable ang listahan kapag mahaba */
         .nav-links {
             flex: 1;
             overflow-y: auto;
@@ -93,7 +115,6 @@ $unread_count = get_unread_count_staff($user_id);
             margin: 0;
         }
 
-        /* Subtle Scrollbar Style */
         .nav-links::-webkit-scrollbar {
             width: 5px;
         }
@@ -102,7 +123,6 @@ $unread_count = get_unread_count_staff($user_id);
             border-radius: 10px;
         }
 
-        /* Sidebar Footer para sa Logout (Pinned at the bottom) */
         .sidebar-footer {
             flex-shrink: 0;
             padding: 16px 20px;
@@ -123,6 +143,7 @@ $unread_count = get_unread_count_staff($user_id);
         .logout-link:hover {
             opacity: 0.8;
         }
+
         .order-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 25px; margin-top: 20px; }
         .info-card { background: #fff; padding: 25px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; margin-bottom: 25px; }
         .info-card h4 { margin-top: 0; margin-bottom: 20px; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; }
@@ -131,12 +152,26 @@ $unread_count = get_unread_count_staff($user_id);
         .info-value { color: #1e293b; font-weight: 700; }
         .item-img { width: 60px; height: 60px; border-radius: 10px; object-fit: cover; background: #f8fafc; border: 1px solid #eee; }
         .order-summary-box { background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px dashed #cbd5e1; }
+        
         .button-link {
             background: #eef2ff; color: #4338ca; padding: 6px 12px; border-radius: 8px;
             text-decoration: none; font-weight: 600; font-size: 0.85rem; border: 1px solid #c7d2fe;
             cursor: pointer; transition: all 0.2s ease;
         }
         .button-link:hover { background: #c7d2fe; }
+
+        /* Alert Banners */
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
 
         /* Proof Modal Styles */
         .modal {
@@ -161,11 +196,11 @@ $unread_count = get_unread_count_staff($user_id);
 </head>
 <body>
     <div class="sidebar">
-        <div class="sidebar-brand" style="text-align: center; padding: 20px 15px;">
+        <div class="sidebar-brand">
             <img src="<?php echo SYSTEM_LOGO_URL; ?>" alt="Logo" style="max-width: 160px; max-height: 80px; display: block; margin: 0 auto 10px; border-radius: 5px;">
             <h2 style="color: white; font-size: 1rem; margin: 0; line-height: 1.2;"><?php echo htmlspecialchars(SYSTEM_NAME); ?></h2>
         </div>
-        <ul class="nav-links" style="list-style: none; padding: 0;">
+        <ul class="nav-links">
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/dashboard.php"><i class="fas fa-home"></i> Dashboard</a></li>
             <?php if ($role === 'admin'): ?>
                 <li><a href="<?php echo BASE_URL; ?>/modules/admin/staff_management.php"><i class="fas fa-users-cog"></i> Staff Management</a></li>
@@ -208,6 +243,21 @@ $unread_count = get_unread_count_staff($user_id);
             <h1>Order Details</h1>
             <p>Viewing order #<?php echo htmlspecialchars($order['order_number']); ?></p>
         </div>
+
+        <!-- Notification Alerts -->
+        <?php if (isset($_SESSION['error_message'])): ?>
+            <div class="alert alert-error">
+                <i class="fas fa-exclamation-circle"></i>
+                <span><?php echo htmlspecialchars($_SESSION['error_message']); unset($_SESSION['error_message']); ?></span>
+            </div>
+        <?php endif; ?>
+
+        <?php if (isset($_GET['status_updated']) && $_GET['status_updated'] == 1): ?>
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i>
+                <span>Order status has been updated successfully.</span>
+            </div>
+        <?php endif; ?>
 
         <div class="order-grid">
             <div class="order-main">
@@ -294,6 +344,28 @@ $unread_count = get_unread_count_staff($user_id);
                         <div class="summary-row" style="color: #27ae60;"><span>Loyalty Earned</span><span>+<?php echo number_format($order['loyalty_points_earned'], 2); ?> pts</span></div>
                         <div class="summary-row summary-total"><span>Total Paid</span><span>PHP <?php echo number_format($order['total'], 2); ?></span></div>
                     </div>
+                </div>
+                <div class="info-card" style="text-align: center;">
+                    <h4><i class="fas fa-qrcode"></i> Delivery Confirmation QR</h4>
+                    <?php
+                    $qr_code_uri = '';
+                    if ($delivery_details && !empty($delivery_details['qr_confirmation_token'])) {
+                        $qr_payload = json_encode([
+                            'delivery_id' => (int)$delivery_details['id'],
+                            'order_id'    => (int)$order['id'],
+                            'token'       => $delivery_details['qr_confirmation_token']
+                        ]);
+                        $qr_code_uri = generate_qr_code_uri($qr_payload);
+                    }
+                    ?>
+                    <?php if ($qr_code_uri): ?>
+                        <img src="<?php echo $qr_code_uri; ?>" alt="Order QR Code" style="width: 180px; height: 180px; border: 4px solid #f1f5f9; border-radius: 10px;">
+                        <p style="font-size: 0.8rem; color: #64748b; margin-top: 10px;">
+                            Rider scans this to confirm delivery.
+                        </p>
+                    <?php else: ?>
+                        <p style="font-size: 0.8rem; color: #ef4444; margin-top: 10px;">QR Code could not be generated.</p>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

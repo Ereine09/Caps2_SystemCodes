@@ -3,6 +3,7 @@ header('Content-Type: application/json');
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT, DELETE");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+require_once __DIR__ . '/../app/helpers/notification_helper.php';
 
 if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     http_response_code(200);
@@ -171,7 +172,7 @@ try {
             $token_from_qr = $qr_data['token'];
 
             $stmt = $conn->prepare(
-                "SELECT dd.order_id, dd.qr_confirmation_token, o.order_status
+                "SELECT dd.order_id, dd.qr_confirmation_token, o.order_status, o.customer_id, o.subtotal, o.vat_amount
                  FROM tbl_deliveries dd
                  JOIN tbl_orders o ON dd.order_id = o.id
                  WHERE dd.id = ?"
@@ -208,6 +209,63 @@ try {
                 $update_delivery_stmt->bind_param('i', $delivery_details_id);
                 $update_delivery_stmt->execute();
                 $update_delivery_stmt->close();
+
+                // --- Loyalty Points Logic on Order Completion ---
+                $customer_id = (int)$delivery_info['customer_id'];
+                $order_subtotal_gross = (float)$delivery_info['subtotal'];
+                $order_vat = (float)$delivery_info['vat_amount'];
+                $order_subtotal_net = $order_subtotal_gross - $order_vat;
+
+                $points_earned = round($order_subtotal_net / 100, 2);
+
+                if ($points_earned > 0) {
+                    $previous_points_query = mysqli_query($conn, "SELECT loyalty_points, name, email FROM customers WHERE id = " . $customer_id);
+                    $customer_data = mysqli_fetch_assoc($previous_points_query);
+                    $previous_points = (float)($customer_data['loyalty_points'] ?? 0.00);
+                    $client_name = $customer_data['name'] ?? 'Customer';
+                    $client_email = $customer_data['email'] ?? '';
+
+                    $transaction_stmt = $conn->prepare("INSERT INTO loyalty_transactions (customer_id, user_id, product_name, quantity_kg, points_earned, order_id) VALUES (?, NULL, ?, 0.00, ?, ?)");
+                    $product_name_for_transaction = 'Online Purchase (Order #' . $delivery_info['order_id'] . ')';
+                    if ($transaction_stmt) {
+                        $transaction_stmt->bind_param("isdi", $customer_id, $product_name_for_transaction, $points_earned, $delivery_info['order_id']);
+                        $transaction_stmt->execute();
+                        $transaction_id = (int) $conn->insert_id;
+                        $transaction_stmt->close();
+                    } else {
+                        $transaction_id = 0;
+                    }
+
+                    $new_total_points = notifications_sync_customer_loyalty_points($conn, $customer_id);
+
+                    $update_points_stmt = $conn->prepare("UPDATE customers SET loyalty_points = ? WHERE id = ?");
+                    if ($update_points_stmt) {
+                        $update_points_stmt->bind_param("di", $new_total_points, $customer_id);
+                        $update_points_stmt->execute();
+                        $update_points_stmt->close();
+                    }
+
+                    notifications_create($conn, [
+                        'customer_id' => $customer_id,
+                        'type' => 'points_earned',
+                        'channel' => 'both',
+                        'title' => 'You earned ' . notifications_format_points($points_earned) . ' points!',
+                        'message' => $client_name . ' earned ' . notifications_format_points($points_earned) . ' from your purchase. New usable balance: ' . notifications_format_points($new_total_points) . ' points.',
+                        'reference_table' => 'loyalty_transactions',
+                        'reference_id' => $transaction_id,
+                        'email_to' => $client_email
+                    ]);
+
+                    foreach (notifications_crossed_thresholds($previous_points, $new_total_points) as $threshold) {
+                        notifications_create($conn, [
+                            'customer_id' => $customer_id,
+                            'type' => 'reward_redeemable',
+                            'channel' => 'in_app',
+                            'title' => 'You can now redeem a reward',
+                            'message' => $client_name . ' now has ' . notifications_format_points($new_total_points) . ' usable points and unlocked the ' . notifications_format_points($threshold) . '-point reward tier.'
+                        ]);
+                    }
+                }
 
                 $conn->commit();
             } catch (Exception $e) {

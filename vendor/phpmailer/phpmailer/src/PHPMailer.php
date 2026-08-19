@@ -769,7 +769,7 @@ class PHPMailer
      *
      * @var string
      */
-    const VERSION = '7.1.1';
+    const VERSION = '7.1.0';
 
     /**
      * Error severity: message only, continue processing.
@@ -4183,7 +4183,7 @@ class PHPMailer
     protected function validateEncoding($encoding)
     {
         return in_array(
-            strtolower($encoding),
+            $encoding,
             [
                 self::ENCODING_7BIT,
                 self::ENCODING_QUOTED_PRINTABLE,

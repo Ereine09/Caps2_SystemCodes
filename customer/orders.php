@@ -1,5 +1,49 @@
 <?php
+// The autoloader must be included before any `use` statements for vendor libraries.
+// auth.php includes functions.php, which in turn includes the Composer autoloader.
 require_once __DIR__ . '/includes/auth.php';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'cancel_order') {
+    require_customer_login();
+    $customer = current_customer();
+    $order_id_to_cancel = (int)($_POST['order_id'] ?? 0);
+    $cancellation_reason = trim($_POST['cancellation_reason'] ?? 'No reason provided.');
+
+    if ($order_id_to_cancel > 0) {
+        $order = get_order_by_id($order_id_to_cancel, (int)$customer['id']);
+
+        if ($order && in_array($order['order_status'], ['pending', 'confirmed'])) {
+            $conn->begin_transaction();
+            try {
+                // 1. Restore stock ONLY if the order was already confirmed (as stock is now deducted on confirmation)
+                if ($order['order_status'] === 'confirmed') {
+                    $order_items_to_restore = get_order_items($order_id_to_cancel);
+                    foreach ($order_items_to_restore as $item) {
+                        $variant_id = isset($item['variant_id']) && !empty($item['variant_id']) ? (int)$item['variant_id'] : null;
+                        restore_product_stock((int)$item['product_id'], $variant_id, (int)$item['quantity']);
+                    }
+                }
+
+                // 2. Update the order status to 'cancelled'
+                $update_stmt = $conn->prepare("UPDATE tbl_orders SET order_status = 'cancelled', cancellation_reason = ? WHERE id = ?");
+                $update_stmt->bind_param('si', $cancellation_reason, $order_id_to_cancel);
+                $update_stmt->execute();
+                $update_stmt->close();
+
+                $conn->commit();
+                $_SESSION['message'] = 'Your order has been successfully cancelled.';
+                $_SESSION['message_type'] = 'success';
+            } catch (Exception $e) {
+                $conn->rollback();
+                $_SESSION['message'] = 'There was an error cancelling your order. Please contact support.';
+                $_SESSION['message_type'] = 'error';
+            }
+        }
+    }
+    header('Location: ' . BASE_URL . '/customer/orders.php?id=' . $order_id_to_cancel);
+    exit();
+}
+
 require_customer_login();
 
 $customer = current_customer();
@@ -25,6 +69,7 @@ if (isset($_GET['id'])) {
     $order = get_order_by_id($order_id, (int) $customer['id']);
     $delivery_details = $order ? get_delivery_details_by_order_id($order['id']) : null;
     $delivery_proof = $order ? get_order_delivery_proof($order['id']) : null;
+
 
     // --- DYNAMICALLY ENSURE DELIVERY RECORD & QR TOKEN FOR ANY ORDER ID ---
     if ($order && $order['order_status'] !== 'cancelled') {
@@ -55,6 +100,9 @@ if (isset($_GET['id'])) {
     if ($order) {
         $order_items = get_order_items($order['id']);
     }
+
+    // Include the new QR helper
+    require_once __DIR__ . '/../modules/admin/qr_helper.php';
 } else {
     $orders = get_customer_orders((int) $customer['id']);
 }
@@ -121,6 +169,17 @@ if (isset($_GET['id'])) {
     .summary-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; color: #475569; }
     .summary-total { margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0; font-size: 1.2rem; color: #1e293b; font-weight: 800; }
 
+    /* Modal Header/Footer Styling */
+    .modal-header {
+        padding: 15px 25px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .modal-footer {
+        padding: 15px 25px;
+        border-top: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: flex-end;
+    }
     /* Status Pill Colors */
     .status-pill { display: inline-flex; align-items: center; justify-content: center; padding: 4px 12px; border-radius: 999px; font-size: 0.75rem; color: white; font-weight: 700; text-transform: uppercase; }
     .status-pending { background: #f39c12; }
@@ -158,15 +217,22 @@ if (isset($_GET['id'])) {
         ?>
 
         <div class="order-details">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; flex-wrap: wrap; gap: 15px;">
                 <h3 style="margin: 0;">Order #<?php echo htmlspecialchars($order['order_number']); ?></h3>
-                <span class="status-pill status-<?php echo $status; ?>" style="padding: 6px 15px; font-size: 0.9rem;">
-                    <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $order['order_status']))); ?>
-                </span>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <span class="status-pill status-<?php echo $status; ?>" style="padding: 6px 15px; font-size: 0.9rem;">
+                        <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $order['order_status']))); ?>
+                    </span>
+                    <?php if (in_array($order['order_status'], ['pending', 'confirmed'])): ?>
+                        <button type="button" class="button" onclick="openCancelModal()" style="background: #ef4444; color: white; padding: 8px 14px; font-size: 0.85rem;">
+                            <i class="fas fa-times-circle"></i> Cancel Order
+                        </button>
+                    <?php endif; ?>
+                </div>
             </div>
 
             <?php if ($status === 'cancelled'): ?>
-                <div class="alert-message alert-error" style="margin-bottom: 25px;">This order has been cancelled.</div>
+                <div class="alert-message alert-error" style="margin-bottom: 25px;">This order has been cancelled. Reason: <?php echo htmlspecialchars($order['cancellation_reason'] ?: 'Not provided'); ?></div>
             <?php else: ?>
                 <div class="status-tracker">
                     <?php foreach ($steps as $key => $s): ?>
@@ -334,7 +400,9 @@ if (isset($_GET['id'])) {
                     </div>
                 </div>
             </div>
-            <div style="margin-top: 30px;"><a class="button" href="<?php echo BASE_URL; ?>/customer/orders.php">Back to Orders</a></div>
+            <div style="margin-top: 30px;">
+                <a class="button" href="<?php echo BASE_URL; ?>/customer/orders.php"><i class="fas fa-arrow-left"></i> Back to All Orders</a>
+            </div>
         </div>
     <?php else: ?>
         <?php if ($orders): ?>
@@ -378,24 +446,81 @@ if (isset($_GET['id'])) {
 
     <!-- Proof of Payment Modal -->
     <div id="proofModal" class="modal">
-        <span class="close-modal" onclick="closeProofModal()">&times;</span>
-        <img class="modal-content" id="proofModalImage">
+        <div class="modal-content" style="max-width: 600px; padding: 0;">
+            <span class="close-modal" onclick="closeProofModal()" style="top: 15px; right: 25px; color: #fff; font-size: 30px;">&times;</span>
+            <img id="proofModalImage" style="width: 100%; border-radius: 12px;">
+        </div>
+    </div>
+
+    <!-- Cancellation Modal -->
+    <div id="cancellationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Cancel Order</h3>
+                <span class="close-modal" onclick="closeCancelModal()">&times;</span>
+            </div>
+            <form method="POST" onsubmit="return confirm('Are you sure you want to cancel this order? This action cannot be undone.');" id="cancel-order-form">
+                <input type="hidden" name="action" value="cancel_order">
+                <input type="hidden" name="order_id" value="<?php echo $order['id']; ?>">
+                <div class="form-group" style="padding: 25px;">
+                    <label>Order to Cancel:</label>
+                    <p style="font-weight: bold; margin-top: 5px; margin-bottom: 15px;">#<?php echo htmlspecialchars($order['order_number']); ?></p>
+
+                    <label for="cancellation_reason">Please provide a reason for cancellation:</label>
+                    <textarea name="cancellation_reason" id="cancellation_reason" required style="min-height: 80px;"></textarea>
+                    <p style="font-size: 0.85rem; color: #64748b; margin-top: 10px;">
+                        Please note: Cancelling this order is final and cannot be undone.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="button button-secondary" onclick="closeCancelModal()">Keep Order</button>
+                    <button type="submit" class="button" style="background: #ef4444; color: white;">Yes, Cancel This Order</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script>
-        const modal = document.getElementById('proofModal');
+        function toggleNewAddressForm() {
+        const selectedOption = document.querySelector('input[name="address_option"]:checked');
+        const isNew = selectedOption && selectedOption.value === 'new';
+        const newAddressFields = document.getElementById('new-address-fields');
+        const newAddressInput = document.getElementById('delivery_address');
+        const savedAddressText = document.getElementById('saved_address_text');
+        const savedAddressPhone = document.getElementById('saved_address_phone');
+        if (isNew) {
+            newAddressFields.style.display = 'block';
+            savedAddressText.value = ''; 
+            savedAddressPhone.value = '';
+        } else {
+            newAddressFields.style.display = 'none';
+            newAddressInput.value = ''; 
+            if (selectedOption) {
+                savedAddressText.value = selectedOption.dataset.address;
+                savedAddressPhone.value = selectedOption.dataset.phone;
+            }
+        } 
+        updateDeliveryFeeDisplay(); 
+    }
+
+        const proofModal = document.getElementById('proofModal');
         const modalImg = document.getElementById('proofModalImage');
+        const cancelModal = document.getElementById('cancellationModal');
 
         function openProofModal(src) {
-            modal.style.display = "flex";
+            proofModal.style.display = "flex";
             modalImg.src = src;
         }
-
         function closeProofModal() {
-            modal.style.display = "none";
+            proofModal.style.display = "none";
         }
+        function openCancelModal() { cancelModal.style.display = "flex"; }
+        function closeCancelModal() { cancelModal.style.display = "none"; }
 
-        window.onclick = (event) => event.target == modal ? closeProofModal() : null;
+        window.onclick = (event) => {
+            if (event.target == proofModal) closeProofModal();
+            if (event.target == cancelModal) closeCancelModal();
+        };
     </script>
 </section>
 <?php include __DIR__ . '/includes/footer.php'; ?>

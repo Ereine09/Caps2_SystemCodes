@@ -2,6 +2,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../../app/helpers/messaging_helper.php';
 require_once __DIR__ . '/../../app/helpers/notification_helper.php';
+require_once __DIR__ . '/background_tasks.php'; // Include the background task runner
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

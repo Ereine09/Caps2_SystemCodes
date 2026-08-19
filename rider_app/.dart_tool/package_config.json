@@ -255,7 +255,7 @@
     },
     {
       "name": "jni",
-      "rootUri": "file:///C:/Users/Ella%20Belandres/AppData/Local/Pub/Cache/hosted/pub.dev/jni-1.0.2",
+      "rootUri": "file:///C:/Users/Ella%20Belandres/AppData/Local/Pub/Cache/hosted/pub.dev/jni-1.0.3",
       "packageUri": "lib/",
       "languageVersion": "3.3"
     },
@@ -579,7 +579,7 @@
     },
     {
       "name": "vm_service",
-      "rootUri": "file:///C:/Users/Ella%20Belandres/AppData/Local/Pub/Cache/hosted/pub.dev/vm_service-15.2.0",
+      "rootUri": "file:///C:/Users/Ella%20Belandres/AppData/Local/Pub/Cache/hosted/pub.dev/vm_service-15.3.0",
       "packageUri": "lib/",
       "languageVersion": "3.5"
     },

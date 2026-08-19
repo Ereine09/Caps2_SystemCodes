@@ -106,11 +106,25 @@ $list_stmt->close();
                     $created = DateTime::createFromFormat('Y-m-d H:i:s', $n['created_at']);
                     $time = $created ? $created->format('M d, Y h:i A') : $n['created_at'];
                     $icon = 'fas fa-info-circle';
-                    if ($n['type'] === 'order_accepted') $icon = 'fas fa-motorcycle';
-                    elseif ($n['type'] === 'rider_message') $icon = 'fas fa-comment-dots';
-                    elseif ($n['type'] === 'ORDER') $icon = 'fas fa-shopping-bag';
+                    $link = '#'; // Default link
+
+                    // Determine icon and link based on notification type
+                    switch ($n['type']) {
+                        case 'order_accepted':
+                        case 'order_confirmed':
+                        case 'order_status_update':
+                            $icon = 'fas fa-shopping-bag';
+                            if (!empty($n['reference_table']) && $n['reference_table'] === 'tbl_orders' && !empty($n['reference_id'])) {
+                                $link = 'orders.php?id=' . (int)$n['reference_id'];
+                            }
+                            break;
+                        case 'rider_message':
+                            $icon = 'fas fa-comment-dots';
+                            $link = 'rider_chat.php';
+                            break;
+                    }
                 ?>
-                    <div class="notif-card <?php echo $isRead ? '' : 'unread'; ?>">
+                    <a href="<?php echo $link; ?>" class="notif-card <?php echo $isRead ? '' : 'unread'; ?>" style="text-decoration: none; display: flex;">
                         <div class="notif-icon"><i class="<?php echo $icon; ?>"></i></div>
                         <div class="notif-body">
                             <p class="notif-title"><?php echo htmlspecialchars($n['title']); ?></p>
@@ -120,7 +134,7 @@ $list_stmt->close();
                         <?php if (!$isRead): ?>
                             <div class="notif-dot"></div>
                         <?php endif; ?>
-                    </div>
+                    </a>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>

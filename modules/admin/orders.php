@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
 require_once __DIR__ . '/../../customer/includes/functions.php';
 require_once __DIR__ . '/../../app/helpers/messaging_helper.php';
 require_once __DIR__ . '/../../app/helpers/notification_helper.php';
+require_once __DIR__ . '/qr_helper.php';
 
 $token = getJWTFromCookie();
 $payload = verifyJWT($token);
@@ -486,6 +487,14 @@ $unread_count = get_unread_count_staff($user_id);
                                 </td>
                                 <td>PHP <?php echo number_format((float)$order['total'], 2); ?></td>
                                 <td><?php echo htmlspecialchars($order['created_at']); ?></td>
+                                <td>
+                                    <?php $qr_code_uri = generate_qr_code_uri(json_encode(['order_number' => $order['order_number']])); ?>
+                                    <?php if ($qr_code_uri): ?>
+                                        <img src="<?php echo $qr_code_uri; ?>" alt="Order QR Code" style="width: 50px; height: 50px; border-radius: 4px;">
+                                    <?php else: ?>
+                                        <span style="font-size: 0.7rem; color: #ef4444;">N/A</span>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if (empty($orders)): ?>
