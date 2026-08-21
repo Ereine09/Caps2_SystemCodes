@@ -80,15 +80,15 @@ class _TicketCenterScreenState extends State<TicketCenterScreen> {
   }
 
   Widget _buildEmpty() {
-    return Center(
+    return const Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.confirmation_number_outlined, size: 56, color: AppColors.textMuted),
-            const SizedBox(height: 12),
-            const Text(
+            Icon(Icons.confirmation_number_outlined, size: 56, color: AppColors.textMuted),
+            SizedBox(height: 12),
+            Text(
               'No support tickets yet.\nTap "New Ticket" to report an issue.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textMuted),

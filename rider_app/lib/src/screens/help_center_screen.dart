@@ -106,7 +106,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                 key: PageStorageKey(idx),
                 tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                leading: Icon(Icons.help_outline, color: AppColors.primary, size: 22),
+                leading: const Icon(Icons.help_outline, color: AppColors.primary, size: 22),
                 title: Text(
                   faq.q,
                   style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textMain, fontSize: 14),

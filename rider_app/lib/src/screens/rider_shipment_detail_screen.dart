@@ -17,11 +17,11 @@ class RiderShipmentDetailScreen extends StatefulWidget {
   final String token;
 
   const RiderShipmentDetailScreen({
-    Key? key,
+    super.key,
     required this.orderId,
     required this.apiClient,
     this.token = '',
-  }) : super(key: key);
+  });
 
   @override
   State<RiderShipmentDetailScreen> createState() => _RiderShipmentDetailScreenState();

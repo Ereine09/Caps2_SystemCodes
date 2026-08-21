@@ -123,7 +123,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         // Account section
-        _SectionHeader('Account'),
+        const _SectionHeader('Account'),
         _buildTile(
           icon: Icons.person_outline,
           title: 'Username',
@@ -137,7 +137,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 16),
 
         // Vehicle section
-        _SectionHeader('Vehicle'),
+        const _SectionHeader('Vehicle'),
         _buildTile(
           icon: Icons.two_wheeler,
           title: 'Vehicle Type',
@@ -151,7 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 16),
 
         // Availability
-        _SectionHeader('Availability'),
+        const _SectionHeader('Availability'),
         _buildSwitchTile(
           title: isOnDuty ? 'Online' : 'Offline',
           subtitle: isOnDuty ? 'Available for deliveries' : 'Not accepting deliveries now',
@@ -192,7 +192,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                Text(title, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
                 const SizedBox(height: 3),
                 Text(subtitle, style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 14)),
               ],

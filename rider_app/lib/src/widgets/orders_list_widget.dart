@@ -367,7 +367,7 @@ void _showOrderDetails(int orderId) {
                                   child: OutlinedButton(
                                     onPressed: () => _showOrderDetails(orderId),
                                     style: OutlinedButton.styleFrom( // Apply consistent button styling
-                                      side: BorderSide(color: AppColors.textMuted.withOpacity(0.5)), // Use AppColors.textMuted
+                                      side: BorderSide(color: AppColors.textMuted.withValues(alpha: 0.5)), // Use AppColors.textMuted
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // Keep 12
                                       padding: const EdgeInsets.symmetric(vertical: 14), // Keep padding
                                     ),

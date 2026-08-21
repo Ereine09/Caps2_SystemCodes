@@ -8,7 +8,7 @@ import 'rider_shipment_detail_screen.dart';
 
 class RiderShipmentScreen extends StatefulWidget {
   final String token;
-  const RiderShipmentScreen({Key? key, this.token = ''}) : super(key: key);
+  const RiderShipmentScreen({super.key, this.token = ''});
 
   @override
   State<RiderShipmentScreen> createState() => _RiderShipmentScreenState();
@@ -161,7 +161,7 @@ class _RiderShipmentScreenState extends State<RiderShipmentScreen> {
                       borderRadius: BorderRadius.circular(12), // Changed from 14 to 12
                       boxShadow: [
                         BoxShadow( // Consistent shadow
-                          color: Colors.black.withOpacity(0.03),
+                          color: Colors.black.withValues(alpha: 0.03),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         )
@@ -213,7 +213,7 @@ class _RiderShipmentScreenState extends State<RiderShipmentScreen> {
                     mainAxisSpacing: 10,
                     childAspectRatio: 1.5,
                     children: [ // Metric cards use REAL computed values
-                      _buildMetricCard('Orders', '${orders.length}', '${pendingCount} pending', Colors.red),
+                      _buildMetricCard('Orders', '${orders.length}', '$pendingCount pending', Colors.red),
                       _buildMetricCard('Delivered', '${orders.where((o) => o.orderStatus.toLowerCase() == 'completed').length}', 'Completed', Colors.green),
                       _buildMetricCard('Avg. Order Value', currencyFormat.format(orders.isEmpty ? 0 : totalValue / orders.length), 'From $totalValue total', Colors.teal),
                       _buildMetricCard('Total Order Value', currencyFormat.format(totalValue), 'Across all orders', Colors.green),
@@ -267,7 +267,7 @@ class _RiderShipmentScreenState extends State<RiderShipmentScreen> {
         border: Border.all(color: Colors.grey.shade200), // Keep border for subtle effect
         boxShadow: [ // Consistent shadow
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 6,
             offset: const Offset(0, 2),
           )
@@ -297,7 +297,7 @@ class _RiderShipmentScreenState extends State<RiderShipmentScreen> {
         border: Border.all(color: Colors.grey.shade200), // Keep border for subtle effect
         boxShadow: [ // Consistent shadow
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 4),
           )
@@ -353,7 +353,7 @@ class _RiderShipmentScreenState extends State<RiderShipmentScreen> {
                 onPressed: () => _navigateToDetail(order),
                 style: OutlinedButton.styleFrom( // Apply consistent button styling
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // Changed to 12
-                  side: BorderSide(color: AppColors.textMuted.withOpacity(0.5)), // Use AppColors.textMuted
+                  side: BorderSide(color: AppColors.textMuted.withValues(alpha: 0.5)), // Use AppColors.textMuted
                   padding: const EdgeInsets.symmetric(vertical: 16), // Consistent padding
                 ),
                 child: const Text('Details', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.bold)), // Use AppColors.textMain and bold

@@ -158,7 +158,7 @@ String _chartPeriod = 'monthly';
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(0.3),
+                        color: AppColors.primary.withValues(alpha: 0.3),
                         blurRadius: 16,
                         offset: const Offset(0, 6),
                       ),
@@ -240,7 +240,7 @@ String _chartPeriod = 'monthly';
                     border: Border.all(color: Colors.grey.shade200),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
+                        color: Colors.black.withValues(alpha: 0.03),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -380,7 +380,7 @@ String _chartPeriod = 'monthly';
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -422,7 +422,7 @@ String _chartPeriod = 'monthly';
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -495,7 +495,7 @@ String _chartPeriod = 'monthly';
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -506,7 +506,7 @@ String _chartPeriod = 'monthly';
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
+              color: statusColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
@@ -576,7 +576,7 @@ class _BarChartPainter extends CustomPainter {
     final safeMax = maxValue <= 0 ? 1.0 : maxValue;
 
     final chartBottom = size.height - 24; // leave room for labels
-    final chartTop = 8.0;
+    const chartTop = 8.0;
     final chartHeight = chartBottom - chartTop;
 
     final slotWidth = size.width / labels.length;
@@ -619,7 +619,7 @@ class _BarChartPainter extends CustomPainter {
         final textPainter = TextPainter(
           text: TextSpan(
             text: value.toStringAsFixed(0),
-            style: TextStyle(color: AppColors.textMain, fontSize: 9, fontWeight: FontWeight.bold),
+            style: const TextStyle(color: AppColors.textMain, fontSize: 9, fontWeight: FontWeight.bold),
           ),
 textDirection: ui.TextDirection.ltr,
         )..layout();

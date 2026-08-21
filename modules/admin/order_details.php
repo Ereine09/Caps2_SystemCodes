@@ -259,8 +259,49 @@ $unread_count = get_unread_count_staff($user_id);
             </div>
         <?php endif; ?>
 
+            <?php if ($delivery_details && $order['order_status'] !== 'cancelled'): ?>
+
+                <div class="info-card" style="margin-top: 25px; text-align: center; border-left: 5px solid #10b981;">
+                    <h4 style="justify-content: center;"><i class="fas fa-qrcode"></i> Delivery Confirmation QR</h4>
+                    <p style="font-size: 0.9rem; color: #475569; max-width: 450px; margin: 0 auto 20px;">
+                        Please present this QR code to the rider upon delivery to confirm you have received your order.
+                    </p>
+                    <?php
+                    // Dynamic JSON payload per order
+                    $qr_data = json_encode([
+                        'delivery_id' => (int)$delivery_details['id'],
+                        'order_id'    => (int)$order['id'],
+                        'token'       => $delivery_details['qr_confirmation_token']
+                    ]);
+
+                    $qr_code_uri = null;
+
+                    // Option 1: Try Endroid PHP Library
+                    if (class_exists('Endroid\\QrCode\\QrCode') && class_exists('Endroid\\QrCode\\Writer\\PngWriter')) {
+                        try {
+                            $qrCode = \Endroid\QrCode\QrCode::create($qr_data);
+                            $writer = new \Endroid\QrCode\Writer\PngWriter();
+                            $qr_code_uri = $writer->write($qrCode)->getDataUri();
+                        } catch (Throwable $t) {
+                            $qr_code_uri = null;
+                        }
+                    }
+
+                    // Option 2: Fallback to QuickChart API (Works reliably for any order)
+                    if (!$qr_code_uri) {
+                        $qr_code_uri = "https://quickchart.io/qr?size=250&text=" . urlencode($qr_data);
+                    }
+                    ?>
+                    <img src="<?php echo $qr_code_uri; ?>" alt="Delivery Confirmation QR Code" style="width: 220px; height: 220px; border: 5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px;">
+                    <p style="margin-top: 10px; font-size: 0.75rem; color: #94a3b8;">Delivery Ref ID: #<?php echo (int)$delivery_details['id']; ?></p>
+                </div>
+        <?php endif; ?>
+
         <div class="order-grid">
             <div class="order-main">
+            <div style="margin-top: 10px;">
+                <a href="orders.php" class="button button-secondary"><i class="fas fa-arrow-left"></i> Back to All Orders</a>
+            </div>
                 <div class="info-card">
                     <h4><i class="fas fa-shopping-basket"></i> Order Items</h4>
                     <table class="customer-table" style="width:100%;">
