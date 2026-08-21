@@ -241,8 +241,12 @@ if (!function_exists('notifications_update_delivery_status')) {
 }
 
 if (!function_exists('notifications_create')) {
-    function notifications_create(mysqli $conn, array $data): bool
+    function notifications_create(mysqli $conn, array $data, ?array &$delivery_result = null): bool
     {
+        $delivery_result = [
+            'saved' => false,
+            'email_sent' => false,
+        ];
         $user_id = isset($data['user_id']) ? (int) $data['user_id'] : 0;
         $customer_id = isset($data['customer_id']) ? (int) $data['customer_id'] : 0;
         $type = trim((string) ($data['type'] ?? 'general'));
@@ -313,13 +317,16 @@ if (!function_exists('notifications_create')) {
             return false;
         }
 
+        $delivery_result['saved'] = true;
+
         $notification_id = (int) $conn->insert_id;
 
         if (in_array($channel, ['email', 'both'], true)) {
             $omit_prefix = in_array($type, ['security_sim', 'security_alert'], true);
             $email_result = notifications_send_email($email_to, $title, $message, $omit_prefix);
 
-if ($email_result['success']) {
+            $delivery_result['email_sent'] = (bool) $email_result['success'];
+            if ($email_result['success']) {
                 notifications_update_delivery_status($conn, $notification_id, 'sent');
             } else {
                 notifications_update_delivery_status($conn, $notification_id, 'failed', $email_result['error']);

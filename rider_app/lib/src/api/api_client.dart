@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 
 class ApiClient {
@@ -358,12 +359,25 @@ if (response.data['success'] == true) {
   }
 
   /// Verifies the delivery confirmation QR code with the backend.
-  Future<Map<String, dynamic>> verifyDeliveryQR(String qrToken, int riderId) async {
+  Future<Map<String, dynamic>> verifyDeliveryQR(String qrToken, {required String token}) async {
+    final qrData = jsonDecode(qrToken);
+    if (qrData is! Map || qrData['delivery_id'] == null) {
+      throw Exception('Invalid QR code format.');
+    }
+
+    final deliveryId = int.tryParse(qrData['delivery_id'].toString());
+    if (deliveryId == null || deliveryId <= 0) {
+      throw Exception('Invalid delivery ID.');
+    }
+
     final response = await postJson(
-      '/rider_api.php?action=verify_delivery_qr',
+      '/modules/rider/rider_qr_confirm_api.php',
       body: {
-        'qr_token': qrToken,
-        'rider_id': riderId,
+        'delivery_id': deliveryId,
+        'qr_code': qrToken,
+      },
+      headers: {
+        'Authorization': 'Bearer $token',
       },
     );
 

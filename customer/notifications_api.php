@@ -8,6 +8,7 @@
  * GET  ?action=get_unread_count         - unread notification count
  * GET  ?action=get_list&limit=50        - recent notifications (newest first)
  * GET  ?action=mark_all_read            - mark all unread as read
+ * POST {"action":"mark_read","notification_id":123} - mark one own notification as read
  *
  * Customer JWT has role='customer' and user_id = customer id.
  */
@@ -44,6 +45,7 @@ try {
     notifications_ensure_schema($conn);
 
     $method = $_SERVER['REQUEST_METHOD'];
+    $body = [];
     $action = '';
     if ($method === 'GET') {
         $action = $_GET['action'] ?? '';
@@ -56,6 +58,30 @@ try {
     }
 
     switch ($action) {
+        case 'mark_read': {
+            $notification_id = (int)($body['notification_id'] ?? $_POST['notification_id'] ?? 0);
+            if ($notification_id <= 0) {
+                throw new Exception('Invalid notification ID.');
+            }
+
+            $stmt = $conn->prepare(
+                "UPDATE notifications SET is_read = 1, read_at = NOW()
+                 WHERE id = ? AND customer_id = ?"
+            );
+            $stmt->bind_param('ii', $notification_id, $customer_id);
+            $stmt->execute();
+            if ($stmt->affected_rows === 0) {
+                $stmt->close();
+                throw new Exception('Notification not found.');
+            }
+            $stmt->close();
+
+            $response['success'] = true;
+            $response['message'] = 'Notification marked as read.';
+            $response['data'] = ['notification_id' => $notification_id];
+            break;
+        }
+
         case 'get_unread_count': {
             $stmt = $conn->prepare(
                 "SELECT COUNT(*) AS total FROM notifications

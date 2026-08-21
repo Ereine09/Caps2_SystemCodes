@@ -16,7 +16,7 @@ const String _mobileBaseUrl = _emulatorBaseUrl;
 // This is the final URL the app will use. No need to change this line.
 final String baseUrl = kIsWeb ? _webBaseUrl : _mobileBaseUrl;
 
-/// Base URL for endpoints inside the /customer folder (e.g. customer/rider_api.php).
+/// Base URL for the existing loyalty_managements PHP backend.
 final String customerBaseUrl = '$baseUrl/customer';
 
 /// WebSocket server URL for real-time notifications.

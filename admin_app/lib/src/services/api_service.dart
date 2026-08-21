@@ -51,7 +51,11 @@ class ApiService {
     return Order.fromJson(response['data'] as Map<String, dynamic>);
   }
 
-  Future<void> updateOrderStatus({
+  Future<void> validateSession(String token) async {
+    await _post(action: 'validate_session', body: const {}, token: token);
+  }
+
+  Future<Map<String, dynamic>> updateOrderStatus({
     required int orderId,
     required String status,
     required String token,
@@ -59,7 +63,7 @@ class ApiService {
     if (!Order.allowedStatuses.contains(status)) {
       throw Exception('That status is not available.');
     }
-    await _post(
+    return _post(
       action: 'update_status',
       body: {'order_id': orderId, 'status': status},
       token: token,

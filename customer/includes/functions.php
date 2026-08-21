@@ -899,7 +899,7 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
     // --- Final Calculations after Discount ---
     $free_delivery = $delivery_fee <= 0.00 ? 1 : 0;
     $bulk_order = detect_bulk_order($subtotal_inc_vat, $total_items) ? 1 : 0;
-    $loyalty_points = calculate_loyalty_points($subtotal_ex_vat); // Points based on ex-VAT amount BEFORE discount
+    $loyalty_points = 0.00;
 
     $order_number = generate_order_number();
     error_log("DEBUG: Order #{$order_number} - Calculated Loyalty Points: {$loyalty_points} from (Subtotal ex-VAT: {$subtotal_ex_vat})");

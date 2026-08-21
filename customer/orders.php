@@ -48,17 +48,6 @@ require_customer_login();
 
 $customer = current_customer();
 
-// Ensure tbl_deliveries table exists
-$conn->query("CREATE TABLE IF NOT EXISTS tbl_deliveries (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    order_id INT NOT NULL,
-    delivery_status ENUM('pending', 'accepted', 'picked_up', 'out_for_delivery', 'delivered', 'failed_delivery', 'cancelled') NOT NULL DEFAULT 'pending',
-    qr_confirmation_token VARCHAR(255) NULL,
-    delivered_at DATETIME NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (order_id) REFERENCES tbl_orders(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 $order = null;
 $order_items = [];
 $delivery_details = null;
@@ -74,11 +63,12 @@ if (isset($_GET['id'])) {
     // --- DYNAMICALLY ENSURE DELIVERY RECORD & QR TOKEN FOR ANY ORDER ID ---
     if ($order && $order['order_status'] !== 'cancelled') {
         if (!$delivery_details) {
-            // Auto-create a delivery record if it doesn't exist yet in tbl_delivery
+            // Create the shared delivery record used by the admin and rider flows.
             $token = bin2hex(random_bytes(16));
-            $insert_stmt = $conn->prepare("INSERT INTO tbl_deliveries (order_id, delivery_status, qr_confirmation_token) VALUES (?, 'pending', ?)");
+            $insert_stmt = $conn->prepare("INSERT INTO tbl_delivery (order_id, delivery_type, status, qr_confirmation_token) VALUES (?, ?, 'pending', ?)");
             if ($insert_stmt) {
-                $insert_stmt->bind_param("is", $order['id'], $token);
+                $delivery_type = $order['fulfillment_type'] ?? 'delivery';
+                $insert_stmt->bind_param("iss", $order['id'], $delivery_type, $token);
                 $insert_stmt->execute();
                 $insert_stmt->close();
                 // Refresh details
@@ -87,7 +77,7 @@ if (isset($_GET['id'])) {
         } elseif (empty($delivery_details['qr_confirmation_token'])) {
             // Auto-generate token if record exists but token is missing
             $token = bin2hex(random_bytes(16));
-            $update_stmt = $conn->prepare("UPDATE tbl_deliveries SET qr_confirmation_token = ? WHERE id = ?");
+            $update_stmt = $conn->prepare("UPDATE tbl_delivery SET qr_confirmation_token = ? WHERE id = ?");
             if ($update_stmt) {
                 $update_stmt->bind_param("si", $token, $delivery_details['id']);
                 $update_stmt->execute();

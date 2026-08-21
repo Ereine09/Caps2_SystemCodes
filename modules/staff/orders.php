@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
 require_once __DIR__ . '/../../customer/includes/functions.php';
 require_once __DIR__ . '/../../app/helpers/messaging_helper.php';
 require_once __DIR__ . '/../../app/helpers/notification_helper.php';
+require_once __DIR__ . '/../../app/helpers/loyalty_helper.php';
 
 
 $statuses = [
@@ -40,15 +41,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'], $_POST['o
 
         if ($prev) {
             $old_order_status = (string) ($prev['order_status'] ?? '');
+            if ($old_order_status === 'cancelled' && $new_order_status === 'completed') {
+                header('Location: orders.php?error=cancelled_order');
+                exit();
+            }
 
-            // Update order status
-            $stmt = $conn->prepare("UPDATE tbl_orders SET order_status = ? WHERE id = ?");
-            $stmt->bind_param('si', $new_order_status, $order_id);
-            $stmt->execute();
-            $stmt->close();
+            $conn->begin_transaction();
+            $award_result = [];
+            try {
+                $stmt = $conn->prepare("UPDATE tbl_orders SET order_status = ? WHERE id = ?");
+                $stmt->bind_param('si', $new_order_status, $order_id);
+                $stmt->execute();
+                $stmt->close();
+                if (in_array($new_order_status, ['processing', 'ready_for_pickup', 'to_ship', 'to_receive', 'out_for_delivery', 'completed'], true)) {
+                    $award_result = loyalty_award_completed_order($conn, $order_id);
+                }
+                $conn->commit();
+            } catch (Throwable $e) {
+                $conn->rollback();
+                error_log("Error completing order $order_id: " . $e->getMessage());
+                header('Location: orders.php?error=status_update');
+                exit();
+            }
 
-            // Only notify if status actually changed and we have an email
-            if ($old_order_status !== $new_order_status && !empty($prev['email'])) {
+            // Notify the customer once when the order status changes.
+            if ($old_order_status !== $new_order_status && (int) ($prev['customer_id'] ?? 0) > 0) {
                 $order_number = $prev['order_number'] ?? ('#' . $order_id);
                 $customer_name = $prev['name'] ?? 'Customer';
                 $customer_email = $prev['email'];
@@ -56,13 +73,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'], $_POST['o
 
                 $title = "Order {$order_number} status update";
                 $message = "Hi {$customer_name},\n\nYour order {$order_number} has been updated to: {$new_status_label}.\n\nIf you have any questions, please contact us.\n";
+                if ($new_order_status === 'completed' && (float) ($award_result['points'] ?? 0) > 0) {
+                    $message .= "\nLoyalty Points Earned: " . notifications_format_points((float) $award_result['points'])
+                        . "\nCurrent Loyalty Points Balance: " . notifications_format_points((float) ($award_result['balance'] ?? 0));
+                }
 
                 // Save + send email via the existing notification helper
                 notifications_create($conn, [
                     'user_id' => NULL, // customer-initiated context
                     'customer_id' => (int) ($prev['customer_id'] ?? 0),
                     'type' => 'order_status_update',
-                    'channel' => 'email',
+                    'channel' => 'both',
                     'title' => $title,
                     'message' => $message,
                     'reference_table' => 'tbl_orders',

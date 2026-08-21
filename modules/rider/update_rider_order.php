@@ -19,6 +19,7 @@ require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
 require_once __DIR__ . '/../../app/helpers/db_schema_helper.php';
 require_once __DIR__ . '/../../app/helpers/notification_helper.php';
+require_once __DIR__ . '/../../app/helpers/loyalty_helper.php';
 
 $response = [
     'success' => false,
@@ -121,6 +122,8 @@ try {
         throw new Exception('Order not found');
     }
 
+    $old_status = (string) ($order['order_status'] ?? '');
+
     // Pickup orders are fulfilled by the customer at the shop — never assigned to a rider.
     if (($order['fulfillment_type'] ?? '') === 'pickup') {
         throw new Exception('Pickup orders are not assigned to riders.');
@@ -139,14 +142,24 @@ try {
         $new_rider_id = null;
     }
 
-if (!$stmt->execute()) {
-        throw new Exception('Failed to update order');
+    $conn->begin_transaction();
+    try {
+        if (!$stmt->execute()) {
+            throw new Exception('Failed to update order');
+        }
+        $stmt->close();
+        if (in_array($new_status, ['processing', 'ready_for_pickup', 'to_ship', 'to_receive', 'out_for_delivery', 'completed'], true)) {
+            loyalty_award_completed_order($conn, $order_id);
+        }
+        $conn->commit();
+    } catch (Throwable $e) {
+        $conn->rollback();
+        throw $e;
     }
-    $stmt->close();
 
     // --- Notify the customer when the rider ACCEPTS their order ---
     // The customer should know their order is now being delivered.
-    if ($action === 'accept') {
+    if ($action === 'accept' && $old_status !== $new_status) {
         // Look up the customer who placed this order.
         $cust_stmt = $conn->prepare("SELECT customer_id FROM tbl_orders WHERE id = ? LIMIT 1");
         $cust_stmt->bind_param('i', $order_id);

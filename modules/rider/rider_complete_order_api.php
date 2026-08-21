@@ -18,6 +18,7 @@ require_once __DIR__ . '/../../app/config/config.php';
 // Isama rito ang iyong jwt_helper kung protektado ng login ang app mo
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php'; 
 require_once __DIR__ . '/../../app/helpers/db_schema_helper.php'; // New helper for schema management
+require_once __DIR__ . '/../../app/helpers/loyalty_helper.php';
 
 $response = ['success' => false, 'message' => ''];
 
@@ -56,6 +57,11 @@ try {
     if ($order['order_status'] === 'completed') {
         throw new Exception('This order is already marked as completed.');
     }
+    if ($order['order_status'] === 'cancelled') {
+        throw new Exception('Cancelled orders cannot be completed.');
+    }
+
+    $conn->begin_transaction();
 
     // I-update ang status ng order tungo sa 'completed'
     $update_stmt = $conn->prepare("UPDATE tbl_orders SET order_status = 'completed' WHERE order_number = ?");
@@ -68,8 +74,13 @@ try {
         throw new Exception('Failed to update the database status.');
     }
     $update_stmt->close();
+    loyalty_award_completed_order($conn, (int)$order['id']);
+    $conn->commit();
 
 } catch (Exception $e) {
+    if ($conn->errno === 0) {
+        try { $conn->rollback(); } catch (Throwable $rollback_error) { }
+    }
     $response['success'] = false;
     $response['message'] = $e->getMessage();
     http_response_code(400);

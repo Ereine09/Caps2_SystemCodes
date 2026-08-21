@@ -114,14 +114,7 @@ try {
     $conn->begin_transaction();
 
     try {
-        // 1. Deduct stock
-        foreach ($server_cart as $item) {
-            if (!deduct_product_stock((int)$item['id'], (int)$item['quantity'])) {
-                throw new Exception('Failed to update stock for ' . htmlspecialchars($item['name']));
-            }
-        }
-
-        // 2. Create the order using the existing function
+        // Create the order; stock is deducted when the order is confirmed.
         $details = [
             'delivery_address' => $delivery_address,
             'delivery_phone' => trim($input['delivery_phone'] ?? ''),
@@ -148,38 +141,6 @@ try {
 
         if ($order_id === null) {
             throw new Exception('Order creation failed.');
-        }
-
-// 3. Award Loyalty Points (simplified from checkout.php) - based on raw product prices from DB (no VAT stripping needed since DB prices are already the final retail prices)
-        // Points are earned on the subtotal before any discounts.
-        // The API currently doesn't handle vouchers, but this ensures consistency.
-        $points_earned = round($subtotal / 100, 2); 
-
-        if ($points_earned > 0) {
-            $transaction_stmt = $conn->prepare("INSERT INTO loyalty_transactions (customer_id, user_id, product_name, quantity_kg, points_earned, order_id) VALUES (?, NULL, ?, 0.00, ?, ?)");
-            $product_name_for_transaction = 'Online Purchase (Order #' . $order_id . ')';
-            if ($transaction_stmt) {
-                $transaction_stmt->bind_param("isdi", $customer_id, $product_name_for_transaction, $points_earned, $order_id);
-                if (!$transaction_stmt->execute()) {
-                    error_log('[order_create_api] Failed to insert loyalty transaction: ' . $transaction_stmt->error);
-                }
-                $transaction_stmt->close();
-
-                // Sync points and update customer's total loyalty points
-                $new_total_points = notifications_sync_customer_loyalty_points($conn, $customer_id);
-                $update_points_stmt = $conn->prepare("UPDATE customers SET loyalty_points = ? WHERE id = ?");
-                if ($update_points_stmt) {
-                    $update_points_stmt->bind_param("di", $new_total_points, $customer_id);
-                    if (!$update_points_stmt->execute()) {
-                        error_log('[order_create_api] Failed to update customer loyalty points: ' . $update_points_stmt->error);
-                    }
-                    $update_points_stmt->close();
-                } else {
-                    error_log('[order_create_api] Failed to prepare update customer loyalty points statement: ' . $conn->error);
-                }
-            } else {
-                error_log('[order_create_api] Failed to prepare loyalty transaction statement: ' . $conn->error);
-            }
         }
 
         $conn->commit();

@@ -231,7 +231,7 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
       });
 
       try {
-        final response = await widget.apiClient.verifyDeliveryQR(qrCodeResult, 0);
+        final response = await widget.apiClient.verifyDeliveryQR(qrCodeResult, token: authToken);
 
         if (response['success'] == true) {
           ScaffoldMessenger.of(context).showSnackBar(

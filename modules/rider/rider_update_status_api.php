@@ -22,6 +22,7 @@ require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
 require_once __DIR__ . '/../../app/helpers/db_schema_helper.php';
 require_once __DIR__ . '/../../app/helpers/notification_helper.php';
+require_once __DIR__ . '/../../app/helpers/loyalty_helper.php';
 
 $response = [
     'success' => false,
@@ -115,6 +116,21 @@ try {
         $order_id = (int)$res['order_id'];
     }
 
+    $current_order_stmt = $conn->prepare('SELECT order_status FROM tbl_orders WHERE id = ? LIMIT 1');
+    $current_order_stmt->bind_param('i', $order_id);
+    $current_order_stmt->execute();
+    $current_order = $current_order_stmt->get_result()->fetch_assoc();
+    $current_order_stmt->close();
+    if (!$current_order) {
+        throw new Exception('Order not found');
+    }
+    if ($current_order['order_status'] === 'cancelled' && $order_status === 'completed') {
+        throw new Exception('Cancelled orders cannot be completed.');
+    }
+    $status_changed = $current_order['order_status'] !== $order_status;
+
+    $conn->begin_transaction();
+
     // Update tbl_orders
     $stmt1 = $conn->prepare("UPDATE tbl_orders SET order_status = ?, updated_at = NOW() WHERE id = ?");
     $stmt1->bind_param('si', $order_status, $order_id);
@@ -136,6 +152,11 @@ try {
         $stmt2->close();
     }
 
+    if (in_array($order_status, ['processing', 'ready_for_pickup', 'to_ship', 'to_receive', 'out_for_delivery', 'completed'], true)) {
+        loyalty_award_completed_order($conn, $order_id);
+    }
+    $conn->commit();
+
     // Notify customer
     $customer_stmt = $conn->prepare("SELECT customer_id FROM tbl_orders WHERE id = ? LIMIT 1");
     $customer_stmt->bind_param('i', $order_id);
@@ -145,7 +166,7 @@ try {
 
     $customer_id = $customer_res ? (int)$customer_res['customer_id'] : 0;
 
-    if ($customer_id > 0) {
+    if ($customer_id > 0 && $status_changed) {
         notifications_create($conn, [
             'user_id' => $rider_id,
             'customer_id' => $customer_id,

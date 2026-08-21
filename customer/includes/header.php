@@ -438,7 +438,7 @@ $current_page = $current_page ?? basename($_SERVER['PHP_SELF'], '.php');
         <?php if ($customer): ?>
         <!-- Floating Notification Bell -->
         <div class="notif-bell-wrap" id="notif-bell-wrap">
-            <button class="notif-bell-btn" id="notif-bell-btn" aria-label="Notifications" title="Notifications">
+            <button type="button" class="notif-bell-btn" id="notif-bell-btn" aria-label="Notifications" title="Notifications">
                 <i class="fas fa-bell"></i>
                 <?php if ($notif_count > 0): ?>
                     <span class="notif-bell-badge" id="notif-bell-badge"><?php echo (int)$notif_count; ?></span>
@@ -460,25 +460,4 @@ $current_page = $current_page ?? basename($_SERVER['PHP_SELF'], '.php');
             </div>
         </div>
 
-        <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const bellBtn = document.getElementById('notif-bell-btn');
-            const panel = document.getElementById('notif-panel');
-
-            if (bellBtn && panel) {
-                // Toggle notification panel on bell click
-                bellBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    panel.classList.toggle('open');
-                });
-
-                // Close panel when clicking outside
-                document.addEventListener('click', (e) => {
-                    if (!panel.contains(e.target) && !bellBtn.contains(e.target)) {
-                        panel.classList.remove('open');
-                    }
-                });
-            }
-        });
-        </script>
         <?php endif; ?>

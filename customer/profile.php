@@ -190,6 +190,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <span class="detail-label">Phone Number</span>
                 <span class="detail-value"><?php echo htmlspecialchars($customer['phone']); ?></span>
             </div>
+            <div class="detail-group">
+                <span class="detail-label">Current Loyalty Points</span>
+                <span class="detail-value"><?php echo number_format((float) ($customer['loyalty_points'] ?? 0), 2); ?> points</span>
+            </div>
             <div class="detail-group" style="grid-column: span 2;">
                 <span class="detail-label">Primary Address</span>
                 <span class="detail-value">

@@ -20,6 +20,8 @@
     }
     function iconFor(type) {
         if (type === 'order_accepted') return 'fas fa-motorcycle';
+        if (type === 'order_status_update' || type === 'order_confirmed' || type === 'order_completed' || type === 'order_cancelled') return 'fas fa-shopping-bag';
+        if (type === 'points_earned') return 'fas fa-star';
         if (type === 'rider_message') return 'fas fa-comment-dots';
         if (type === 'ORDER') return 'fas fa-shopping-bag';
         return 'fas fa-info-circle';
@@ -38,16 +40,47 @@
         var html = '';
         items.forEach(function (n) {
             var unread = String(n.is_read) !== '1';
-            html += '<div class="notif-panel-item' + (unread ? ' unread' : '') + '">' +
+            var href = 'notifications.php';
+            if (n.reference_table === 'tbl_orders' && Number(n.reference_id) > 0) {
+                href = 'orders.php?id=' + encodeURIComponent(n.reference_id);
+            }
+            html += '<a href="' + esc(href) + '" class="notif-panel-item' + (unread ? ' unread' : '') + '" data-notification-id="' + Number(n.id) + '" style="text-decoration:none;">' +
                 '<div class="notif-panel-icon"><i class="' + iconFor(n.type) + '"></i></div>' +
                 '<div style="flex:1;min-width:0;">' +
                     '<p class="notif-panel-title">' + esc(n.title) + '</p>' +
                     '<p class="notif-panel-msg">' + esc(n.message) + '</p>' +
                     '<span class="notif-panel-time">' + esc(fmtTime(n.created_at)) + '</span>' +
                 '</div>' +
-            '</div>';
+            '</a>';
         });
         body.innerHTML = html;
+        body.querySelectorAll('[data-notification-id]').forEach(function (item) {
+            item.addEventListener('click', function () {
+                if (String(item.classList.contains('unread')) !== 'true') return;
+                fetch('notifications_api.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ action: 'mark_read', notification_id: Number(item.dataset.notificationId) }),
+                    keepalive: true
+                }).catch(function () {});
+            });
+        });
+        updateBadge(items.filter(function (item) { return String(item.is_read) !== '1'; }).length);
+    }
+
+    function updateBadge(count) {
+        if (count > 0) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.id = 'notif-bell-badge';
+                badge.className = 'notif-bell-badge';
+                btn.appendChild(badge);
+            }
+            badge.textContent = count;
+            badge.style.display = 'flex';
+        } else if (badge) {
+            badge.remove();
+        }
     }
 
     btn.addEventListener('click', function (e) {
@@ -90,7 +123,7 @@
                     if (data.success) {
                         body.querySelectorAll('.notif-panel-item.unread').forEach(function (el) { el.classList.remove('unread'); });
                         markAllBtn.style.display = 'none';
-                        if (badge) badge.remove();
+                        updateBadge(0);
                     }
                 })
                 .catch(function () {})

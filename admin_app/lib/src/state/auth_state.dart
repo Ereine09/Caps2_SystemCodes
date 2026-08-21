@@ -20,10 +20,21 @@ class AuthState extends ChangeNotifier {
   }
 
   Future<void> restoreSession() async {
-    _token = await _storage.read(key: 'admin_auth_token');
-    _username = await _storage.read(key: 'admin_username');
-    _role = await _storage.read(key: 'admin_role');
-    _isAuthenticated = _token != null && _token!.isNotEmpty;
+    final storedToken = await _storage.read(key: 'admin_auth_token');
+    final storedUsername = await _storage.read(key: 'admin_username');
+    final storedRole = await _storage.read(key: 'admin_role');
+
+    if (storedToken != null && storedToken.isNotEmpty) {
+      try {
+        await _api.validateSession(storedToken);
+        _token = storedToken;
+        _username = storedUsername;
+        _role = storedRole;
+        _isAuthenticated = true;
+      } catch (_) {
+        await _clearStoredSession();
+      }
+    }
     notifyListeners();
   }
 
@@ -51,9 +62,13 @@ class AuthState extends ChangeNotifier {
     _username = null;
     _role = null;
     _isAuthenticated = false;
+    await _clearStoredSession();
+    notifyListeners();
+  }
+
+  Future<void> _clearStoredSession() async {
     await _storage.delete(key: 'admin_auth_token');
     await _storage.delete(key: 'admin_username');
     await _storage.delete(key: 'admin_role');
-    notifyListeners();
   }
 }

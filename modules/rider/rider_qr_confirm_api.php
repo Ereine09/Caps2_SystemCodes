@@ -21,6 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
 require_once __DIR__ . '/../../app/helpers/notification_helper.php';
+require_once __DIR__ . '/../../app/helpers/loyalty_helper.php';
 
 $response = [
     'success' => false,
@@ -98,6 +99,8 @@ try {
 
     $order_id = (int)$res['order_id'];
 
+    $conn->begin_transaction();
+
     // Update order status to completed
     $stmt1 = $conn->prepare("UPDATE tbl_orders SET order_status = 'completed', updated_at = NOW() WHERE id = ?");
     $stmt1->bind_param('i', $order_id);
@@ -119,6 +122,9 @@ try {
     $clear_stmt->bind_param('i', $delivery_id);
     $clear_stmt->execute();
     $clear_stmt->close();
+
+    loyalty_award_completed_order($conn, $order_id);
+    $conn->commit();
 
     // Notify Customer
     $cust_stmt = $conn->prepare("SELECT customer_id FROM tbl_orders WHERE id = ? LIMIT 1");

@@ -20,7 +20,6 @@ class Order {
     'ready_for_pickup',
     'to_ship',
     'to_receive',
-    'reviews',
     'out_for_delivery',
     'completed',
     'cancelled',

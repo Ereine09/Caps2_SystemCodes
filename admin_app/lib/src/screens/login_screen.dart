@@ -58,7 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     const Icon(Icons.qr_code_scanner, size: 42),
                     const SizedBox(height: 18),
-                    const Text('DPS Staff Scanner', textAlign: TextAlign.center, style: TextStyle(fontSize: 25, fontWeight: FontWeight.w700)),
+                    const Text('DPS Admin/Staff Scanner', textAlign: TextAlign.center, style: TextStyle(fontSize: 25, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
                     const Text('Sign in to manage customer orders', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54)),
                     const SizedBox(height: 36),

@@ -106,13 +106,16 @@ $list_stmt->close();
                     $created = DateTime::createFromFormat('Y-m-d H:i:s', $n['created_at']);
                     $time = $created ? $created->format('M d, Y h:i A') : $n['created_at'];
                     $icon = 'fas fa-info-circle';
-                    $link = '#'; // Default link
+                    $link = 'notifications.php';
 
                     // Determine icon and link based on notification type
                     switch ($n['type']) {
                         case 'order_accepted':
                         case 'order_confirmed':
                         case 'order_status_update':
+                        case 'order_completed':
+                        case 'order_cancelled':
+                        case 'points_earned':
                             $icon = 'fas fa-shopping-bag';
                             if (!empty($n['reference_table']) && $n['reference_table'] === 'tbl_orders' && !empty($n['reference_id'])) {
                                 $link = 'orders.php?id=' . (int)$n['reference_id'];
@@ -124,7 +127,7 @@ $list_stmt->close();
                             break;
                     }
                 ?>
-                    <a href="<?php echo $link; ?>" class="notif-card <?php echo $isRead ? '' : 'unread'; ?>" style="text-decoration: none; display: flex;">
+                    <a href="<?php echo htmlspecialchars($link, ENT_QUOTES, 'UTF-8'); ?>" data-notification-id="<?php echo (int)$n['id']; ?>" class="notif-card <?php echo $isRead ? '' : 'unread'; ?>" style="text-decoration: none; display: flex;">
                         <div class="notif-icon"><i class="<?php echo $icon; ?>"></i></div>
                         <div class="notif-body">
                             <p class="notif-title"><?php echo htmlspecialchars($n['title']); ?></p>
@@ -168,6 +171,20 @@ $list_stmt->close();
             } finally {
                 markAllBtn.disabled = false;
             }
+        });
+
+        document.querySelectorAll('[data-notification-id]').forEach(function (card) {
+            card.addEventListener('click', function () {
+                const notificationId = card.dataset.notificationId;
+                if (!notificationId || !card.classList.contains('unread')) return;
+                const body = JSON.stringify({ action: 'mark_read', notification_id: Number(notificationId) });
+                fetch('notifications_api.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: body,
+                    keepalive: true
+                }).catch(function () {});
+            });
         });
     });
 </script>

@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
 require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../customer/includes/functions.php';
 require_once __DIR__ . '/../../app/helpers/messaging_helper.php';
+require_once __DIR__ . '/../../app/helpers/notification_helper.php';
 require_once __DIR__ . '/qr_helper.php';
 
 $token = getJWTFromCookie();
@@ -27,6 +28,7 @@ $order = get_order_by_id($order_id);
 if (!$order) {
     die("Order not found.");
 }
+$customer = get_customer_by_id($order['customer_id']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
@@ -50,6 +52,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt->close();
 
             $conn->commit();
+            notifications_ensure_schema($conn);
+            notifications_create($conn, [
+                'customer_id' => (int) $order['customer_id'],
+                'type' => 'order_confirmed',
+                'channel' => 'both',
+                'title' => 'Order Confirmed',
+                'message' => 'Your order #' . $order['order_number'] . ' has been confirmed.',
+                'reference_table' => 'tbl_orders',
+                'reference_id' => $order_id,
+                'email_to' => (string) ($customer['email'] ?? ''),
+            ]);
             header("Location: order_details.php?id=$order_id&status_updated=1");
             exit();
         } catch (Exception $e) {
@@ -72,7 +85,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 $order_items = get_order_items($order_id);
-$customer = get_customer_by_id($order['customer_id']);
 $delivery_details = get_delivery_details_by_order_id($order_id);
 
 $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS count FROM tbl_orders WHERE order_status = 'pending'"))['count'] ?? 0;
@@ -385,28 +397,6 @@ $unread_count = get_unread_count_staff($user_id);
                         <div class="summary-row" style="color: #27ae60;"><span>Loyalty Earned</span><span>+<?php echo number_format($order['loyalty_points_earned'], 2); ?> pts</span></div>
                         <div class="summary-row summary-total"><span>Total Paid</span><span>PHP <?php echo number_format($order['total'], 2); ?></span></div>
                     </div>
-                </div>
-                <div class="info-card" style="text-align: center;">
-                    <h4><i class="fas fa-qrcode"></i> Delivery Confirmation QR</h4>
-                    <?php
-                    $qr_code_uri = '';
-                    if ($delivery_details && !empty($delivery_details['qr_confirmation_token'])) {
-                        $qr_payload = json_encode([
-                            'delivery_id' => (int)$delivery_details['id'],
-                            'order_id'    => (int)$order['id'],
-                            'token'       => $delivery_details['qr_confirmation_token']
-                        ]);
-                        $qr_code_uri = generate_qr_code_uri($qr_payload);
-                    }
-                    ?>
-                    <?php if ($qr_code_uri): ?>
-                        <img src="<?php echo $qr_code_uri; ?>" alt="Order QR Code" style="width: 180px; height: 180px; border: 4px solid #f1f5f9; border-radius: 10px;">
-                        <p style="font-size: 0.8rem; color: #64748b; margin-top: 10px;">
-                            Rider scans this to confirm delivery.
-                        </p>
-                    <?php else: ?>
-                        <p style="font-size: 0.8rem; color: #ef4444; margin-top: 10px;">QR Code could not be generated.</p>
-                    <?php endif; ?>
                 </div>
             </div>
         </div>
