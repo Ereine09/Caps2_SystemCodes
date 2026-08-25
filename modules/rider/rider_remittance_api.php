@@ -46,6 +46,7 @@ try {
         throw new Exception('Rider profile not found.');
     }
 
+    $input = [];
     $action = '';
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $action = $_GET['action'] ?? '';
@@ -55,6 +56,27 @@ try {
     }
 
     switch ($action) {
+        case 'check_reference':
+            $reference_number = trim((string)($input['reference_number'] ?? $_GET['reference_number'] ?? ''));
+            if ($reference_number === '') {
+                throw new Exception('Reference number is required.');
+            }
+
+            $reference_check = $conn->prepare(
+                "SELECT id FROM tbl_rider_remittances WHERE reference_number = ? LIMIT 1"
+            );
+            $reference_check->bind_param('s', $reference_number);
+            $reference_check->execute();
+            $exists = $reference_check->get_result()->num_rows > 0;
+            $reference_check->close();
+
+            $response['success'] = true;
+            $response['data'] = ['available' => !$exists];
+            $response['message'] = $exists
+                ? 'Reference number already exists. Please enter a different reference number.'
+                : 'Reference number is available.';
+            break;
+
         case 'get_my_balance':
             // Query total unremitted COD balance
             $balance_query = "
@@ -104,6 +126,17 @@ try {
             if ($remitted_amount <= 0) throw new Exception('Invalid remittance amount.');
             if (empty($reference_number)) throw new Exception('Reference number is required.');
             if (empty($order_ids) || !is_array($order_ids)) throw new Exception('No orders specified for remittance.');
+
+            $reference_check = $conn->prepare(
+                "SELECT id FROM tbl_rider_remittances WHERE reference_number = ? LIMIT 1"
+            );
+            $reference_check->bind_param('s', $reference_number);
+            $reference_check->execute();
+            $reference_exists = $reference_check->get_result()->num_rows > 0;
+            $reference_check->close();
+            if ($reference_exists) {
+                throw new Exception('Reference number already exists. Please enter a different reference number.');
+            }
 
             $order_ids = array_values(array_unique(array_map('intval', $order_ids)));
             $order_ids = array_values(array_filter($order_ids, static fn($order_id) => $order_id > 0));
@@ -183,6 +216,15 @@ try {
                 $response['success'] = true;
                 $response['message'] = 'Remittance submitted successfully! Awaiting Admin verification.';
                 $response['data'] = ['remittance_id' => $remittance_id];
+            } catch (mysqli_sql_exception $e) {
+                $conn->rollback();
+                if ($e->getCode() === 1062) {
+                    $message = strpos($e->getMessage(), 'uniq_remittance_order') !== false
+                        ? 'One of the selected orders is already included in a remittance.'
+                        : 'Reference number already exists. Please enter a different reference number.';
+                    throw new Exception($message);
+                }
+                throw $e;
             } catch (Exception $e) {
                 $conn->rollback();
                 throw $e;

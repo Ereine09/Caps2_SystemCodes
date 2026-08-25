@@ -234,7 +234,7 @@ $unread_count = get_unread_count_staff($user_id);
                 <?php endif; ?>
             </a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php"><i class="fas fa-money-bill-wave"></i> Remittance</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php"><i class="fas fa-money-bill-wave"></i> Remittance<?php require_once __DIR__ . '/../../app/helpers/admin_badge_helper.php'; echo render_pending_remittance_badge($conn); ?></a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php"><i class="fas fa-gift"></i> Reward Redemption</a></li>

@@ -310,6 +310,16 @@ void _showOrderDetails(int orderId) {
                                 ),
                               ],
                             ),
+                            if (order['order_status']?.toString() == 'to_ship') ...[
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Ready to Pick Up - Shop / Warehouse',
+                                style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 14),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -194,6 +194,12 @@ try {
                 $response['success'] = true;
                 $response['message'] = 'Remittance approved! Orders marked as settled and balance credited.';
 
+            } catch (mysqli_sql_exception $e) {
+                $conn->rollback();
+                if ($e->getCode() === 1062 && strpos($e->getMessage(), 'uniq_remittance_order') !== false) {
+                    throw new Exception('One of the selected orders is already included in this remittance.');
+                }
+                throw $e;
             } catch (Exception $e) {
                 $conn->rollback();
                 throw new Exception('Database transaction failed: ' . $e->getMessage());

@@ -65,16 +65,16 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: AppColors.background, // Fixed getter reference
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
             child: Card(
-              elevation: 4,
+              elevation: 0,
               shadowColor: Colors.black12,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               color: Colors.white,
               child: Padding(
-                padding: const EdgeInsets.all(28.0),
+                padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -84,10 +84,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
+                          color: AppColors.primarySoftBg,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.delivery_dining, size: 48, color: AppColors.primary),
+                        child: const Icon(Icons.delivery_dining, size: 48, color: AppColors.accent),
                       ),
                       const SizedBox(height: 16),
                       const Text(

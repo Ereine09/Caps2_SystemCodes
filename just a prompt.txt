@@ -1,48 +1,93 @@
-Can you show me which files and database the admin system and customer portal's loyalty points are connected to?
+## What the Online Ordering Feature Does
 
-  [Admin]                              [Customer]
-     |                                      |
-modules/customers/loyalty_points.php    customer/checkout.php
-modules/customers/reward_redemption.php customer/reward_redemption.php
-modules/admin/analytics.php             customer/order_create_api.php
-     |                                      |
-     +------------------+-------------------+
-                        |
-           app/helpers/notification_helper.php
-            (sync_customer_loyalty_points)
-                        |
-              ┌─────────┴──────────┐
-              │    capstone_db     │
-              │                    │
-              │  customers         │
-              │  loyalty_transactions
-              │  reward_redemptions│
-              │  rewards           │
-              │  tbl_vouchers      │
-              │  notifications     │
-              │  activity_logs     │
-              └────────────────────┘
+Your system is a __Darius Poultry Supply__ pet supply store with a full online ordering flow spanning a PHP web storefront, a Flutter rider app, and an admin panel. Here's the complete flow:
 
+### 1. Customer Web Storefront
 
+__`customer/products.php`__ — Product catalog
 
-So since you've already seen their databases, can you connect them all or just make my customer loyalty points database connected to the admin's points?
+- Lists products sorted by popularity (most purchased first via a `sales_count` LEFT JOIN)
+- Filter groups: Product Category, Lifestage, Food Type, Health Needs, Brand (dynamically merged with custom categories from `tbl_custom_categories`)
+- Search by name/description, zoomable product detail modal with reviews, and an "Ask about this product" inquiry modal
+- Product variants (size-based pricing), AJAX add-to-cart (no page refresh), and a recommendation box per product
+- Uses `ml_api.php` (ML helper) for "Frequently Bought" recommendations
 
-Are they really connected? Why is it that when I add points in the admin system, like for example I add 5 points and the customer currently has 53 points, what happens is it gets overwritten and their balance points become just 5. When I add points in the admin system, it needs to be fixed because when it's working, it should just add the points, like 5 + 53 = 58 points should be the updated points.
+__`customer/cart.php`__ — Shopping cart
 
+- Shows items, quantity update, remove item, subtotal (net + VAT), and estimated loyalty points
+- Cart totals include VAT (12%) and points = net/100
 
+__`customer/checkout.php`__ — Checkout
 
-can you explain me this area at loyalty_managements/modules/customers/loyalty_points.php Maybe I just input this wrong or I'm confused, can this part be fixed so it's not confusing?
-Manage Customer Points
+- Fulfillment: __Pick-up__ (choose date/time) or __Delivery__ (map-based address via Leaflet.js + Nominatim geocoding)
+- Live E-Bike rider availability indicator
+- Payment methods: __GCash__ (QR + 13-digit reference number validation), __COD__ (delivery only), __Pay at Shop__ (pickup only), __Bank Transfer__ (BDO account, reference number + proof-of-payment upload)
+- Voucher code application (validated via `validate_voucher_api.php`)
+- Distance-based tiered delivery fees ($2km free, $3km ₱50, $4km ₱60, $5km ₱70, outside = disallowed)
+- `calculate_delivery_fee()` validates coordinates against Caloocan service area using Nominatim reverse geocoding
 
-Elaisa Reine Belandres (Current: 53.00 pts)
-Adjust Points (Manual)
-Points Value (+/- e.g., -5 or 10)
+__`customer/orders.php`__ — Order history & tracking
 
-System Correction
-Process Points
-*Note: Use negative sign (e.g., -5) to deduct points.
+- Status tracker (Placed → Confirmed → Processing → Shipping → Delivered)
+- Order cancellation with reason (pending/confirmed orders only, restores stock)
+- Address change for delivery orders (pending/confirmed/processing only)
+- __Delivery Confirmation QR code__ presented to the rider for scan-to-confirm
+- Proof-of-delivery photo display, product review submission on completed orders
 
+### 2. Order Creation & Processing (Backend)
 
-sige basta yung points na ilalagay ko mag aadd lang ha hindi yung mag ooveright
+__`customer/includes/functions.php`__ — Core logic
 
-loyalty_managements/customer/orders.php why yung sa dito bakit pag nag pupurchase ako sa customer hindi na nag add ng points? dapat kada check out ko don nag add ng points e
+- `create_customer_order()` creates the order in `tbl_orders`, order items in `tbl_order_items`, a delivery record in `tbl_delivery`, sends an e-receipt email (PHPMailer), and records an in-app notification
+- Generates a unique `order_number` and QR confirmation token
+- Calculates loyalty points (net/100), VAT, bulk-order detection, and voucher discounts
+- Stock is __not deducted__ at creation — it's deducted on __confirmation__
+
+__`customer/auto_confirm_orders.php`__ — Scheduled task
+
+- Auto-confirms COD/Pay-at-Shop orders after 2 minutes (deducts stock, notifies customer)
+- Run via `customer/includes/background_tasks.php`
+
+__`modules/admin/order_details.php`__ — Admin order management
+
+- Admin/staff approve or reject GCash/Bank payments (deducts stock on approval)
+- View customer info, fulfillment details, payment proof, summary
+
+### 3. Rider App (Flutter) Integration
+
+__`customer/rider_api.php`__ — REST API for the Flutter rider app
+
+- `get_deliveries` — list of delivery orders
+- `get_delivery_details` — order items + customer info
+- `update_delivery_status` — accepted / picked_up / out_for_delivery / delivered / failed_delivery (with proof-of-delivery photo upload to `/uploads/pod/`)
+- `verify_delivery_qr` — scans the customer's QR code to mark order as `completed` and award loyalty points
+
+---
+
+## Suggested Improvements / Issues Found
+
+### 🔴 Bugs
+
+1. __`rider_api.php` → `verify_delivery_qr`__ references `tbl_deliveries` (plural), but the schema table is `tbl_delivery` (singular — see `functions.php`). This query will fail at runtime. Fix the table name to `tbl_delivery`.
+2. __`send_payment_confirmation_email()` in functions.php__ references columns `qr_code_path` and `payment_confirmation_token` on `tbl_orders`, but those columns are never added in `ensure_customer_tables()`. It will error on the `UPDATE`.
+3. __`order_create_api.php`__ ignores the cart's `variant_id` entirely — it rebuilds the cart using only `product_id` and base price, so variant-specific pricing is lost for mobile/Flutter orders. It also doesn't validate `delivery_phone` for delivery, and offers no `bank` payment method (only cod/gcash/pay_at_shop).
+
+### 🟡 Security / Data Integrity
+
+4. __`order_create_api.php` AUTH is commented out__ — `customer_id` is trusted blindly from the client. Anyone can create orders for any customer. Restore JWT verification.
+5. __Delivery fee logic is duplicated__ — checkout.php uses distance-based fees via JS, `calculate_delivery_fee()` in functions.php re-implements it (slightly differently), and `order_create_api.php` has a __third, inconsistent__ version (string-based address checks). These three can disagree on the same order. Consolidate into one function.
+6. __Voucher re-validation on order creation is inconsistent__ — `create_customer_order()` re-validates the voucher, but in `checkout.php` the discount is calculated twice (once client-side via API, once server-side). If they diverge, the order total can be wrong.
+7. __`create_customer_order()` SQL has a fragile `bind_param` string__ — `'isssssssdddiisdssssssss'` is 26 type chars for 23 params. Any param reordering breaks it silently. Use named placeholders or build it more safely.
+
+### 🟢 UX / Features
+
+8. __No live order tracking for the rider__ via WebSocket — you have a `ws/` directory with `ChatServer.php`, but orders are polled via REST. Consider pushing status updates in real time.
+9. __`get_deliveries` excludes `pending` orders__ — riders won't see COD orders until they're auto-confirmed (2 min). That's likely intentional, but GCash/Bank orders will never show until admin approves, so riders have no visibility of "waiting for payment" orders.
+10. __No order confirmation page__ — after checkout, customers are redirected to orders.php, but there's no dedicated "Order Placed Successfully" confirmation screen showing the QR for immediate use.
+11. __`products.php` has a large inline `<style>` block__ and the page mixes PHP+JS heavily. Consider extracting CSS to `assets/css/` for maintainability (it's ~470 lines).
+12. __`cart.php` still uses an emoji `🛒`__ in the heading — per good practice, replace with an icon (e.g., `fa-shopping-cart`) for consistency.
+
+### 🟠 Minor
+
+13. __`tbl_delivery` vs `tbl_deliveries` naming inconsistency__ across the codebase — pick one and stick to it.
+14. __`is_free_delivery_area()` / `is_nearby_delivery_area()`__ appear unused now that distance-based fees are in place; remove or document them.

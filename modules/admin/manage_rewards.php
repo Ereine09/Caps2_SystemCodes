@@ -226,6 +226,10 @@ $rewards = mysqli_query($conn, "SELECT * FROM rewards ORDER BY points DESC");
             text-decoration: none !important;
         }
     </style>
+    <?php if ($role === 'staff'): ?>
+        <?php include __DIR__ . '/../staff/sidebar.php'; ?>
+    <?php endif; ?>
+    <?php if ($role === 'admin'): ?>
     <div class="sidebar">
         <div class="sidebar-brand" style="text-align: center; padding: 20px 15px;">
             <img src="<?php echo SYSTEM_LOGO_URL; ?>" alt="Logo" style="max-width: 160px; max-height: 80px; display: block; margin: 0 auto 10px; border-radius: 5px;">
@@ -254,7 +258,7 @@ $rewards = mysqli_query($conn, "SELECT * FROM rewards ORDER BY points DESC");
                 <?php endif; ?>
             </a></li>            
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance</a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
+            <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" <?php echo basename($_SERVER['PHP_SELF']) === 'remittance_management.php' ? 'class="active"' : ''; ?>><i class="fas fa-money-bill-wave"></i> Remittance<?php require_once __DIR__ . '/../../app/helpers/admin_badge_helper.php'; echo render_pending_remittance_badge($conn); ?></a></li>            <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'customers.php' || basename($_SERVER['PHP_SELF']) == 'customer_details.php') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'loyalty_points.php') ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'reward_redemption.php') ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>
             <?php if ($role === 'admin'): ?>
@@ -267,6 +271,7 @@ $rewards = mysqli_query($conn, "SELECT * FROM rewards ORDER BY points DESC");
             </a>
         </div>
     </div>
+    <?php endif; ?>
 
     <div class="main-content">
         <div class="welcome-header">

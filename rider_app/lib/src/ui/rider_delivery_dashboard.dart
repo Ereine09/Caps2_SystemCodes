@@ -400,8 +400,8 @@ drawer: RiderDrawer(scaffoldKey: _scaffoldKey),
 
   Widget _buildStatusTabs() {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      color: AppColors.cardBg,
+      padding: const EdgeInsets.only(top: 6),
       child: Row(
         children: _tabs.map((tab) {
           final label = tab['label']!;
@@ -465,7 +465,7 @@ drawer: RiderDrawer(scaffoldKey: _scaffoldKey),
               label: const Text('Prioritise', style: TextStyle(color: AppColors.primary)),
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(vertical: 8),
               ),
             ),
@@ -476,7 +476,8 @@ drawer: RiderDrawer(scaffoldKey: _scaffoldKey),
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
                 border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(12),
+                color: AppColors.cardBg,
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
@@ -567,7 +568,7 @@ class _ParcelCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2)),

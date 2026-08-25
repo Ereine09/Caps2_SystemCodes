@@ -1,4 +1,8 @@
 <?php
+require_once __DIR__ . '/../../app/helpers/admin_badge_helper.php';
+if (!isset($pending_remittances_count)) {
+    $pending_remittances_count = get_pending_remittance_count($conn);
+}
 // This file is included in various admin pages.
 // Ensure necessary variables are defined in the parent script before including this file.
 // Expected variables: $user_role, $pending_orders_count, $unread_count, $current_page (optional, for active state)
@@ -44,7 +48,12 @@ $current_page = $current_page ?? basename($_SERVER['PHP_SELF'], '.php');
             <?php endif; ?>
         </a></li>            
         <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php" class="<?php echo $current_page === 'reviews' ? 'active' : ''; ?>"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
-        <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" class="<?php echo $current_page === 'remittance_management' ? 'active' : ''; ?>"><i class="fas fa-money-bill-wave"></i> Remittance</a></li>            
+        <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" class="<?php echo $current_page === 'remittance_management' ? 'active' : ''; ?>">
+            <i class="fas fa-money-bill-wave"></i> Remittance
+            <?php if ($pending_remittances_count > 0): ?>
+                <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: auto; font-weight: bold;"><?php echo $pending_remittances_count; ?></span>
+            <?php endif; ?>
+        </a></li>
         <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php" class="<?php echo ($current_page == 'customers' || $current_page == 'customer_details') ? 'active' : ''; ?>"><i class="fas fa-user-friends"></i> Customers</a></li>
         <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php" class="<?php echo $current_page === 'loyalty_points' ? 'active' : ''; ?>"><i class="fas fa-star"></i> Loyalty Points</a></li>
         <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php" class="<?php echo $current_page === 'reward_redemption' ? 'active' : ''; ?>"><i class="fas fa-gift"></i> Reward Redemption</a></li>

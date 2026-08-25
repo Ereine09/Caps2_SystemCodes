@@ -66,6 +66,24 @@ class ApiClient {
     return _dio.get<T>(path, options: Options(headers: headers));
   }
 
+  Future<bool> isRemittanceReferenceAvailable({
+    required String referenceNumber,
+    required String token,
+  }) async {
+    final response = await postJson(
+      '/modules/rider/rider_remittance_api.php',
+      body: {
+        'action': 'check_reference',
+        'reference_number': referenceNumber,
+      },
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.data['success'] == true) {
+      return response.data['data']?['available'] == true;
+    }
+    throw Exception(response.data['message'] ?? 'Could not validate reference number.');
+  }
+
   /// Fetches the list of assigned deliveries for the authenticated rider.
   ///
   /// Uses `rider_orders_api.php` and passes the JWT so the backend knows which
@@ -163,6 +181,27 @@ class ApiClient {
       throw Exception(
           response.data['message'] ?? 'Failed to update rider order');
     }
+  }
+
+  Future<Map<String, dynamic>> updateDeliveryStatus({
+    required int orderId,
+    required int deliveryId,
+    required String status,
+    required String qrCode,
+    required String token,
+  }) async {
+    final response = await postJson(
+      '/modules/rider/rider_update_status_api.php',
+      body: {
+        'order_id': orderId,
+        'delivery_id': deliveryId,
+        'status': status,
+        'qr_code': qrCode,
+      },
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.data['success'] == true) return Map<String, dynamic>.from(response.data);
+    throw Exception(response.data['message'] ?? 'Failed to update delivery status');
   }
 
   /// Uploads a proof-of-delivery photo (base64) + optional notes for an order.

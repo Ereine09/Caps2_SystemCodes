@@ -97,7 +97,7 @@ try {
         throw new Exception('QR code does not match this delivery');
     }
 
-    $stmt = $conn->prepare("SELECT order_id, qr_confirmation_token FROM tbl_delivery WHERE id = ? LIMIT 1");
+    $stmt = $conn->prepare("SELECT order_id, rider_id AS delivery_rider_id, qr_confirmation_token FROM tbl_delivery WHERE id = ? LIMIT 1");
     $stmt->bind_param('i', $delivery_id);
     $stmt->execute();
     $res = $stmt->get_result()->fetch_assoc();
@@ -113,13 +113,17 @@ try {
 
     $order_stmt = $conn->prepare(
         "SELECT o.order_number, o.order_status, o.rider_id, o.customer_id, c.name AS customer_name,
-                CASE WHEN o.rider_id = ? THEN 1 ELSE 0 END AS assigned_by_rider_id,
-                CASE WHEN o.rider_id = ? THEN 1 ELSE 0 END AS assigned_by_user_id
+                d.rider_id AS delivery_rider_id,
+                CASE WHEN o.rider_id = r.id OR o.rider_id = r.user_id
+                          OR d.rider_id = r.id OR d.rider_id = r.user_id
+                     THEN 1 ELSE 0 END AS assigned_to_authenticated_rider
          FROM tbl_orders o
+         LEFT JOIN tbl_delivery d ON d.id = ? AND d.order_id = o.id
+         LEFT JOIN riders r ON r.user_id = ?
          LEFT JOIN customers c ON c.id = o.customer_id
          WHERE o.id = ? LIMIT 1"
     );
-    $order_stmt->bind_param('iii', $rider_id, $rider_user_id, $order_id);
+    $order_stmt->bind_param('iii', $delivery_id, $rider_user_id, $order_id);
     $order_stmt->execute();
     $order = $order_stmt->get_result()->fetch_assoc();
     $order_stmt->close();
@@ -131,13 +135,24 @@ try {
     if (($order['order_status'] ?? '') === 'cancelled') {
         throw new Exception('This order has been cancelled.');
     }
-    $eligible_statuses = ['out_for_delivery', 'to_ship', 'to_receive'];
+    $eligible_statuses = ['to_ship', 'to_receive', 'out_for_delivery'];
     if (!in_array(($order['order_status'] ?? ''), $eligible_statuses, true)) {
         throw new Exception('Order is not yet eligible for delivery confirmation.');
     }
-    if ((int)($order['assigned_by_rider_id'] ?? 0) !== 1
-        && (int)($order['assigned_by_user_id'] ?? 0) !== 1) {
+    $is_authenticated_rider = (int)($order['assigned_to_authenticated_rider'] ?? 0) === 1;
+    $is_available_for_pickup = ($order['order_status'] ?? '') === 'to_ship'
+        && (int)($order['rider_id'] ?? 0) <= 0
+        && (int)($order['delivery_rider_id'] ?? 0) <= 0;
+
+    // A physical parcel QR authorizes the pickup claim for an unassigned To Ship
+    // order. Later stages still require the rider assignment above.
+    if (!$is_authenticated_rider && !$is_available_for_pickup) {
         throw new Exception('You are not authorized to confirm this delivery.');
+    }
+
+    if ($action === 'confirm' && (!$is_authenticated_rider
+        || ($order['order_status'] ?? '') !== 'out_for_delivery')) {
+        throw new Exception('This order must be Out for Delivery before it can be completed.');
     }
 
     if ($action !== 'confirm') {
@@ -157,9 +172,8 @@ try {
     $conn->begin_transaction();
     $transaction_started = true;
 
-    // Confirm only the assigned rider's active delivery order.
-    $stmt1 = $conn->prepare("UPDATE tbl_orders SET order_status = 'completed', updated_at = NOW() WHERE id = ? AND (rider_id = ? OR rider_id = ?) AND order_status IN ('out_for_delivery', 'to_ship', 'to_receive')");
-    $stmt1->bind_param('iii', $order_id, $rider_id, $rider_user_id);
+    $stmt1 = $conn->prepare("UPDATE tbl_orders SET order_status = 'completed', rider_id = ?, updated_at = NOW() WHERE id = ? AND order_status IN ('out_for_delivery', 'to_ship', 'to_receive')");
+    $stmt1->bind_param('ii', $rider_id, $order_id);
     $stmt1->execute();
     if ($stmt1->affected_rows !== 1) {
         $stmt1->close();
@@ -197,7 +211,7 @@ try {
     $customer_id = $cust_res ? (int)$cust_res['customer_id'] : 0;
 
     notifications_create($conn, [
-        'user_id' => $rider_id,
+        'user_id' => $customer_id,
         'customer_id' => $customer_id,
         'type' => 'rider_qr_confirm',
         'channel' => 'in_app',

@@ -826,7 +826,8 @@ CREATE TABLE `tbl_rider_remittances` (
   `requested_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `remitted_at` timestamp NULL DEFAULT NULL,
   `processed_by_user_id` int(11) DEFAULT NULL,
-  `processed_at` datetime DEFAULT NULL
+  `processed_at` datetime DEFAULT NULL,
+  UNIQUE KEY `uniq_remittance_reference` (`reference_number`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------

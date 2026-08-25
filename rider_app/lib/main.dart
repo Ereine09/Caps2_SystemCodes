@@ -40,35 +40,63 @@ class _MyAppState extends State<MyApp> {
       title: 'Rider App',
       debugShowCheckedModeBanner: false, // Removes the DEBUG banner in the corner
       theme: ThemeData(
+        useMaterial3: true,
         scaffoldBackgroundColor: AppColors.background,
-        primaryColor: AppColors.primary, // Set primary color for general use
+        primaryColor: AppColors.primary,
         colorScheme: ColorScheme.fromSwatch(
-          primarySwatch: Colors.teal, // Fallback for some widgets
+          primarySwatch: Colors.blueGrey,
         ).copyWith(
           primary: AppColors.primary,
           secondary: AppColors.accent,
         ),
         cardTheme: CardThemeData(
           color: AppColors.cardBg,
-          elevation: 4,
-          shadowColor: Colors.black12,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          elevation: 1,
+          shadowColor: const Color(0x1A142235),
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFE3EAF0)),
+          ),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: AppColors.cardBg,
+          foregroundColor: AppColors.textMain,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: false,
         ),
         inputDecorationTheme: InputDecorationTheme(
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          filled: true,
+          fillColor: AppColors.backgroundGrey,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFDCE5EC)),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.primary),
+            borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
           ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            minimumSize: const Size.fromHeight(52),
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          backgroundColor: AppColors.textMain,
         ),
       ),
       home: const _SessionGate(),

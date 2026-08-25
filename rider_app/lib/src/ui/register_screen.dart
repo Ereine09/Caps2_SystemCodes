@@ -103,16 +103,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400), // Max width for the card
             child: Card(
-              elevation: 4,
+              elevation: 0,
               shadowColor: Colors.black12,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               color: AppColors.cardBg,
               child: Padding(
-                padding: const EdgeInsets.all(28.0), // Consistent padding with login_screen
+                padding: const EdgeInsets.fromLTRB(28, 30, 28, 22),
                 child: Form(
                   key: _formKey,
                   child: Column(

@@ -2,10 +2,11 @@
 require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
 require_once __DIR__ . '/../../app/helpers/remittance_schema_helper.php';
+require_once __DIR__ . '/../../app/helpers/admin_badge_helper.php';
 require_once __DIR__ . '/../../app/helpers/messaging_helper.php';
 
 $token = getJWTFromCookie();
-if (!$token || !($payload = verifyJWT($token)) || !in_array($payload['role'], ['admin', 'staff'])) {
+if (!$token || !($payload = verifyJWT($token)) || strtolower(trim($payload['role'] ?? '')) !== 'admin') {
     header("Location: " . BASE_URL . "/modules/auth/login.php");
     exit();
 }
@@ -15,6 +16,7 @@ $user_id = (int)$payload['user_id'];
 
 // Fetch counts for sidebar badges
 $pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS count FROM tbl_orders WHERE order_status = 'pending'"))['count'] ?? 0;
+$pending_remittances_count = get_pending_remittance_count($conn);
 $unread_count = get_unread_count_staff($user_id);
 
 // Ensure DB schema is ready
@@ -405,7 +407,11 @@ try {
                 <?php endif; ?>
             </a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/admin/reviews.php"><i class="fas fa-star-half-alt"></i> Reviews</a></li>
-            <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" class="active"><i class="fas fa-money-bill-wave"></i> Remittance</a></li>
+                    <li><a href="<?php echo BASE_URL; ?>/modules/admin/remittance_management.php" class="active"><i class="fas fa-money-bill-wave"></i> Remittance
+                        <?php if ($pending_remittances_count > 0): ?>
+                            <span style="background: #e74c3c; color: white; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; margin-left: 5px; font-weight: bold;"><?php echo $pending_remittances_count; ?></span>
+                        <?php endif; ?>
+                    </a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/customers.php"><i class="fas fa-user-friends"></i> Customers</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/loyalty_points.php"><i class="fas fa-star"></i> Loyalty Points</a></li>
             <li><a href="<?php echo BASE_URL; ?>/modules/customers/reward_redemption.php"><i class="fas fa-gift"></i> Reward Redemption</a></li>

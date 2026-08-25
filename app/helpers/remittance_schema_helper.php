@@ -43,6 +43,21 @@ function ensure_remittance_schema(mysqli $conn): void
         }
     }
 
+    // Reference numbers are receipt identifiers and must be unique globally.
+    // Keep NULL values allowed for legacy/admin-created records without a reference.
+    $reference_index = $conn->query("SHOW INDEX FROM `tbl_rider_remittances` WHERE Key_name = 'uniq_remittance_reference'");
+    if ($reference_index && $reference_index->num_rows === 0) {
+        $duplicate_refs = $conn->query(
+            "SELECT reference_number FROM tbl_rider_remittances
+             WHERE reference_number IS NOT NULL AND reference_number <> ''
+             GROUP BY reference_number HAVING COUNT(*) > 1 LIMIT 1"
+        );
+        if ($duplicate_refs && $duplicate_refs->num_rows > 0) {
+            throw new RuntimeException('Duplicate remittance reference numbers already exist. Resolve the existing duplicates before enabling global reference validation.');
+        }
+        $conn->query("ALTER TABLE `tbl_rider_remittances` ADD UNIQUE KEY `uniq_remittance_reference` (`reference_number`)");
+    }
+
     // 3. Add a column to tbl_orders to track if the COD payment has been settled by the rider
     $check_col_sql = "SHOW COLUMNS FROM `tbl_orders` LIKE 'payment_settled'";
     $res = $conn->query($check_col_sql);

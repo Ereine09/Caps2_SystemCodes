@@ -316,8 +316,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
           style:
               TextStyle(fontWeight: FontWeight.bold, color: AppColors.textMain),
         ),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        backgroundColor: AppColors.cardBg,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textMain),
           onPressed: () => Navigator.of(context).pop(),
@@ -568,7 +568,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
                 ),
               ),
               // --- Action Button Area ---
-              if (order.orderStatus == 'out_for_delivery') ...[
+                if (['to_ship', 'to_receive', 'out_for_delivery']
+                  .contains(order.orderStatus)) ...[
                 _buildConfirmButton(),
                 _buildProofButton(order.id),
               ],
@@ -810,7 +811,7 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
                   child: CircularProgressIndicator(
                       color: Colors.white, strokeWidth: 2.0))
               : const Icon(Icons.qr_code_scanner),
-          label: Text(_isVerifyingQR ? 'Verifying...' : 'Confirm with QR Code'),
+          label: Text(_isVerifyingQR ? 'Verifying...' : 'Scan Parcel QR Code'),
           onPressed: _isVerifyingQR ? null : _navigateToQRScanner,
         ),
       ),

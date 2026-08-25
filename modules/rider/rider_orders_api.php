@@ -194,9 +194,15 @@ $cust_name = '';
          JOIN tbl_orders o ON d.order_id = o.id
          LEFT JOIN tbl_order_items oi ON o.id = oi.order_id
          LEFT JOIN customers c ON o.customer_id = c.id
-WHERE d.status IN ('pending','in_transit')
-           AND o.fulfillment_type = 'delivery'
-           AND (o.rider_id = ? OR o.rider_id IS NULL OR o.rider_id = 0)
+WHERE o.fulfillment_type = 'delivery'
+         AND (
+             (d.status IN ('pending','in_transit')
+              AND o.order_status IN ('to_ship', 'to_receive', 'out_for_delivery')
+              AND (o.rider_id = ? OR (o.rider_id IS NULL AND o.order_status = 'to_ship')
+                  OR (o.rider_id = 0 AND o.order_status = 'to_ship')))
+             OR
+             (d.status = 'delivered' AND o.order_status = 'completed' AND o.rider_id = ?)
+         )
          GROUP BY d.id, d.order_id, d.address, d.phone, d.instructions, d.status, d.delivered_at,
                   o.order_number, o.order_status, o.total, o.fulfillment_type, o.payment_method,
                   o.created_at, o.rider_id, c.id, c.name, c.phone, c.email
@@ -204,7 +210,7 @@ WHERE d.status IN ('pending','in_transit')
          LIMIT 50"
     );
 
-    $stmt->bind_param("i", $rider_id);
+    $stmt->bind_param("ii", $rider_id, $rider_id);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -233,6 +239,7 @@ WHERE d.status IN ('pending','in_transit')
             'customer_email' => $row['customer_email'] ?? '',
             'created_at' => $row['created_at'] ?? '',
             'rider_id' => (int)($row['rider_id'] ?? 0)
+            , 'pickup_label' => $orderStatusKey === 'to_ship' ? 'Ready to Pick Up' : ''
         ];
     }
 

@@ -21,7 +21,7 @@ $username = $payload['username'];
 $user_id = (int) ($payload['user_id'] ?? 0);
 $role = strtolower(trim($payload['role'] ?? 'staff'));
 if ($role !== 'admin') {
-    header("Location: dashboard.php?error=access_denied");
+    header("Location: " . BASE_URL . "/modules/staff/dashboard.php?error=access_denied");
     exit();
 }
 

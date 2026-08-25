@@ -156,16 +156,26 @@ class _RemittanceScreenState extends State<RemittanceScreen> {
               padding: const EdgeInsets.all(16.0),
               children: [
                 Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: Color(0xFFDCE5EC)),
+                  ),
                   color: AppColors.primary, // Ensure primary color is used
                   child: Padding(
                     padding: const EdgeInsets.all(24.0),
                     child: Column(
                       children: [
-                        const Text(
-                          'Total Cash on Hand',
-                          style: TextStyle(fontSize: 18, color: Colors.white70),
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.account_balance_wallet_outlined, color: Colors.white70, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              'Total Cash on Hand',
+                              style: TextStyle(fontSize: 18, color: Colors.white70),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -183,13 +193,17 @@ class _RemittanceScreenState extends State<RemittanceScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                Text('Pending Orders (${orders.length})', style: Theme.of(context).textTheme.titleLarge),
+                Text('Pending Orders (${orders.length})', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 8),
-                ...orders.map((order) => ListTile(
+                ...orders.map((order) => Card(
+                      elevation: 0,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
                       title: Text('Order #${order['order_number']}'),
                       trailing: Text(currencyFormat.format(double.tryParse(order['total'].toString()) ?? 0)),
                       subtitle: Text(DateFormat('MMM d, yyyy - hh:mm a').format(DateTime.parse(order['created_at']))),
-                    )),
+                    ),
+                  )),
               ],
             ),
           );
@@ -233,7 +247,7 @@ class _RemittanceScreenState extends State<RemittanceScreen> {
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Submit Remittance'),
           content: Form(
@@ -277,8 +291,26 @@ class _RemittanceScreenState extends State<RemittanceScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 if (formKey.currentState!.validate()) {
+                  final reference = referenceController.text.trim();
+                  try {
+                    final available = await _apiClient.isRemittanceReferenceAvailable(
+                      referenceNumber: reference,
+                      token: widget.token,
+                    );
+                    if (!available) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Reference number already exists. Please enter a different reference number.'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                      return;
+                    }
+
                   // Clean string before parsing to double
                   final cleanedAmount = amountController.text
                       .replaceAll('PHP', '')
@@ -287,10 +319,20 @@ class _RemittanceScreenState extends State<RemittanceScreen> {
                       
                   _submitRemittance(
                     double.parse(cleanedAmount),
-                    referenceController.text.trim(),
+                    reference,
                     orderIds, // Pass the collected order IDs
                   );
-                  Navigator.of(context).pop();
+                  if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        SnackBar(
+                          content: Text(e.toString().replaceFirst('Exception: ', '')),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
                 }
               },
               child: const Text('Submit'),

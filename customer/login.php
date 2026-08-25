@@ -45,6 +45,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         input::-ms-clear {
             display: none;
         }
+        .password-container input {
+            padding-right: 48px;
+        }
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 2;
+            padding: 6px;
+            background: transparent;
+            color: #6b7280;
+            border: 0;
+            cursor: pointer;
+            appearance: none;
+            transition: none;
+        }
+        .password-toggle:hover,
+        .password-toggle:focus {
+            transform: translateY(-50%);
+            box-shadow: none;
+        }
+        .input-box input,
+        .input-box.button input {
+            transition: none;
+        }
     </style>
 </head>
 <body>
@@ -62,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
         <div class="input-box password-container">
             <input type="password" name="password" placeholder="Password" id="password" required />
-            <span id="togglePassword" class="fa fa-eye toggle"></span>
+            <button type="button" id="togglePassword" class="password-toggle" aria-label="Show password"><i class="fas fa-eye" aria-hidden="true"></i></button>
         </div>
         <div class="input-box button">
             <input type="submit" value="Login" />
@@ -74,16 +100,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/js/all.min.js"></script>
 <script>
-    const password = document.getElementById('password');
-    const toggle = document.getElementById('togglePassword');
-    if (toggle) {
+    document.addEventListener('DOMContentLoaded', function () {
+        const password = document.getElementById('password');
+        const toggle = document.getElementById('togglePassword');
+        if (!password || !toggle) return;
+        const icon = toggle.querySelector('svg, i');
+
         toggle.addEventListener('click', function () {
-            const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
-            password.setAttribute('type', type);
-            toggle.classList.toggle('fa-eye');
-            toggle.classList.toggle('fa-eye-slash');
+            const isHidden = password.type === 'password';
+            password.type = isHidden ? 'text' : 'password';
+            if (icon) {
+                icon.classList.toggle('fa-eye', !isHidden);
+                icon.classList.toggle('fa-eye-slash', isHidden);
+            }
+            toggle.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+            toggle.setAttribute('aria-pressed', String(isHidden));
         });
-    }
+    });
 </script>
 </body>
 </html>
