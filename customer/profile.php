@@ -16,12 +16,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $label = mysqli_real_escape_string($conn, $_POST['label']);
         $addr = mysqli_real_escape_string($conn, $_POST['address']);
         $phone = mysqli_real_escape_string($conn, $_POST['phone']);
-        $latitude = isset($_POST['latitude']) && is_numeric($_POST['latitude']) ? (float)$_POST['latitude'] : null;
-        $longitude = isset($_POST['longitude']) && is_numeric($_POST['longitude']) ? (float)$_POST['longitude'] : null;
+        $latitude = null;
+        $longitude = null;
+
+        if (trim($label) === '' || trim($addr) === '') {
+            $error_message = 'Address label and address are required.';
+        } elseif (trim($phone) === '') {
+            $error_message = 'Contact number is required.';
+        }
 
         // Start transaction
-        mysqli_begin_transaction($conn);
+        if ($error_message === '') {
+            mysqli_begin_transaction($conn);
+        }
         try {
+            if ($error_message !== '') {
+                throw new Exception($error_message);
+            }
             // 1. Set all existing addresses for this customer to not default
             $count_res = mysqli_query($conn, "SELECT COUNT(*) as total FROM customer_addresses WHERE customer_id = $customer_id");
             $is_first_address = (int)mysqli_fetch_assoc($count_res)['total'] === 0;
@@ -38,8 +49,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mysqli_commit($conn);
             $success_message = "New address added and set as primary successfully!";
         } catch (Exception $e) {
-            mysqli_rollback($conn);
-            $error_message = "Error adding address: " . $e->getMessage();
+            if ($error_message === '') {
+                mysqli_rollback($conn);
+                $error_message = "Error adding address: " . $e->getMessage();
+            }
         }
     } elseif (isset($_POST['set_default_address'])) {
         $address_id = (int)$_POST['address_id'];
@@ -76,23 +89,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $label = mysqli_real_escape_string($conn, $_POST['label']);
         $addr = mysqli_real_escape_string($conn, $_POST['address']);
         $phone = mysqli_real_escape_string($conn, $_POST['phone']);
-        $latitude = isset($_POST['latitude']) && is_numeric($_POST['latitude']) ? (float)$_POST['latitude'] : null;
-        $longitude = isset($_POST['longitude']) && is_numeric($_POST['longitude']) ? (float)$_POST['longitude'] : null;
+        $existing_stmt = $conn->prepare("SELECT latitude, longitude FROM customer_addresses WHERE id = ? AND customer_id = ? LIMIT 1");
+        $existing_stmt->bind_param('ii', $address_id, $customer_id);
+        $existing_stmt->execute();
+        $existing_address = $existing_stmt->get_result()->fetch_assoc();
+        $existing_stmt->close();
 
-        $stmt_update = $conn->prepare("UPDATE customer_addresses SET label = ?, full_address = ?, phone = ?, latitude = ?, longitude = ? WHERE id = ? AND customer_id = ?");
-        $stmt_update->bind_param('sssddii', $label, $addr, $phone, $latitude, $longitude, $address_id, $customer_id);
-        $stmt_update->execute();
-        $stmt_update->close();
-        $success_message = "Address updated successfully!";
+        if (trim($label) === '' || trim($addr) === '' || trim($phone) === '' || !$existing_address) {
+            $error_message = !$existing_address ? 'Address not found.' : 'Address label, address, and contact number are required.';
+        } else {
+            $latitude = is_numeric($existing_address['latitude']) ? (float)$existing_address['latitude'] : null;
+            $longitude = is_numeric($existing_address['longitude']) ? (float)$existing_address['longitude'] : null;
+            $stmt_update = $conn->prepare("UPDATE customer_addresses SET label = ?, full_address = ?, phone = ?, latitude = ?, longitude = ? WHERE id = ? AND customer_id = ?");
+            $stmt_update->bind_param('sssddii', $label, $addr, $phone, $latitude, $longitude, $address_id, $customer_id);
+            $stmt_update->execute();
+            $stmt_update->close();
+            $success_message = "Address updated successfully!";
+        }
     }
 }
 ?>
 <?php $page_title = 'My Account'; ?>
 <?php include __DIR__ . '/includes/header.php'; ?>
-
-<!-- Leaflet CSS & JS for the map -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
     .profile-card { background: white; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 30px; border: 1px solid #f1f5f9; }
@@ -221,12 +239,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <input type="text" name="phone" placeholder="Contact Phone" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px;">
                         </div>
                         <div class="input-box" style="margin-top:0; grid-column: 1 / -1;">
-                            <textarea name="address" id="new_address_text" placeholder="Full Address Details" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; height: 60px;"></textarea>
+                            <textarea name="address" placeholder="Full Address Details" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; height: 60px;"></textarea>
                         </div>
                     </div>
-                    <div id="map-add-address" style="height: 250px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #cbd5e1;"></div>
-                    <input type="hidden" name="latitude" id="new_address_lat">
-                    <input type="hidden" name="longitude" id="new_address_lon">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: #334155;">
                             <input type="checkbox" name="is_default" value="1"> Set as primary address
@@ -297,10 +312,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <label for="edit_address">Full Address</label>
                 <textarea name="address" id="edit_address" required style="height: 80px;"></textarea>
             </div>
-            <div id="map-edit-address" style="height: 250px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #cbd5e1;"></div>
-            <input type="hidden" name="latitude" id="edit_address_lat">
-            <input type="hidden" name="longitude" id="edit_address_lon">
-
             <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
                 <button type="button" onclick="closeEditModal()" class="button button-secondary">Cancel</button>
                 <button type="submit" name="update_address" class="button">Save Changes</button>
@@ -311,7 +322,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <script>
     const editModal = document.getElementById('editAddressModal');
-    let addMap, editMap, addMarker, editMarker;
 
     document.querySelectorAll('.edit-address-btn').forEach(button => {
         button.addEventListener('click', function() {
@@ -320,50 +330,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             document.getElementById('edit_label').value = addressData.label;
             document.getElementById('edit_phone').value = addressData.phone;
             document.getElementById('edit_address').value = addressData.full_address;
-            document.getElementById('edit_address_lat').value = addressData.latitude || '';
-            document.getElementById('edit_address_lon').value = addressData.longitude || '';
             editModal.style.display = 'flex';
-            setTimeout(() => initMap('edit', addressData.latitude, addressData.longitude), 100);
         });
     });
-
-    function initMap(type, lat, lon) {
-        const mapId = `map-${type}-address`;
-        let mapInstance = type === 'add' ? addMap : editMap;
-        let markerInstance = type === 'add' ? addMarker : editMarker;
-        const latInputId = `${type}_address_lat`;
-        const lonInputId = `${type}_address_lon`;
-        const addressInputId = type === 'add' ? 'new_address_text' : 'edit_address';
-
-        if (mapInstance) {
-            mapInstance.invalidateSize();
-            return;
-        }
-
-        const initialCoords = (lat && lon) ? [lat, lon] : [14.6594, 120.9838];
-        mapInstance = L.map(mapId).setView(initialCoords, 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapInstance);
-
-        if (lat && lon) {
-            markerInstance = L.marker(initialCoords).addTo(mapInstance);
-        }
-
-        mapInstance.on('click', function(e) {
-            if (markerInstance) mapInstance.removeLayer(markerInstance);
-            markerInstance = L.marker(e.latlng).addTo(mapInstance);
-            document.getElementById(latInputId).value = e.latlng.lat;
-            document.getElementById(lonInputId).value = e.latlng.lng;
-
-            // Reverse geocode to get address string
-            fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.display_name) document.getElementById(addressInputId).value = data.display_name;
-                });
-        });
-
-        if (type === 'add') addMap = mapInstance; else editMap = mapInstance;
-    }
 
     function closeEditModal() {
         editModal.style.display = 'none';
@@ -371,7 +340,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     window.onclick = (event) => event.target == editModal ? closeEditModal() : null;
 
-    document.addEventListener('DOMContentLoaded', () => initMap('add'));
 </script>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>

@@ -105,8 +105,34 @@ try {
             if (empty($reference_number)) throw new Exception('Reference number is required.');
             if (empty($order_ids) || !is_array($order_ids)) throw new Exception('No orders specified for remittance.');
 
+            $order_ids = array_values(array_unique(array_map('intval', $order_ids)));
+            $order_ids = array_values(array_filter($order_ids, static fn($order_id) => $order_id > 0));
+            if (empty($order_ids)) throw new Exception('No valid orders specified for remittance.');
+
             $conn->begin_transaction();
             try {
+                $order_placeholders = implode(',', array_fill(0, count($order_ids), '?'));
+                $eligible_stmt = $conn->prepare(
+                    "SELECT id, total FROM tbl_orders
+                     WHERE rider_id = ? AND payment_method = 'cod'
+                       AND order_status = 'completed' AND payment_settled = 0
+                       AND id IN ($order_placeholders)"
+                );
+                $eligible_types = 'i' . str_repeat('i', count($order_ids));
+                $eligible_params = array_merge([$rider_id], $order_ids);
+                $eligible_stmt->bind_param($eligible_types, ...$eligible_params);
+                $eligible_stmt->execute();
+                $eligible_rows = $eligible_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                $eligible_stmt->close();
+
+                if (count($eligible_rows) !== count($order_ids)) {
+                    throw new Exception('One or more orders are not eligible for remittance.');
+                }
+                $eligible_total = array_sum(array_map(static fn($row) => (float)$row['total'], $eligible_rows));
+                if (abs($eligible_total - $remitted_amount) > 0.01) {
+                    throw new Exception('Remittance amount does not match the selected COD orders.');
+                }
+
                 // Auto-fix missing columns dynamically if old schema exists
                 $check_ref = $conn->query("SHOW COLUMNS FROM `tbl_rider_remittances` LIKE 'reference_number'");
                 if ($check_ref && $check_ref->num_rows === 0) {
@@ -123,12 +149,12 @@ try {
                     $conn->query("ALTER TABLE `tbl_rider_remittances` ADD COLUMN `status` ENUM('pending', 'approved', 'rejected') DEFAULT 'pending'");
                 }
 
-                // --- FIX: Insert the correct rider_id from the riders table ---
+                // tbl_rider_remittances.rider_id references users.id, not riders.id.
                 $stmt_remit = $conn->prepare(
                     "INSERT INTO tbl_rider_remittances (rider_id, amount, reference_number, status, remitted_at) 
                      VALUES (?, ?, ?, 'pending', NOW())"
                 );
-                $stmt_remit->bind_param('ids', $rider_id, $remitted_amount, $reference_number);
+                $stmt_remit->bind_param('ids', $rider_user_id, $remitted_amount, $reference_number);
                 $stmt_remit->execute();
                 $remittance_id = $conn->insert_id;
                 $stmt_remit->close();

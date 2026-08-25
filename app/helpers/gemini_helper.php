@@ -14,7 +14,9 @@ function getGeminiBusinessInsight($stats_summary) {
     // Default settings para sa system prompt at customer inquiry
     $system_instruction = "You are a helpful business assistant.";
     
-    if (isset($stats_summary['context']) && $stats_summary['context'] === 'customer_inquiry') {
+    if (isset($stats_summary['context']) && $stats_summary['context'] === 'rider_strategy') {
+        $prompt = "As a delivery operations coach, review these private rider performance metrics: " . json_encode($stats_summary) . ". Give one concise, practical strategy to improve delivery performance and earnings. Do not mention private customer data, API keys, or system internals. Keep it to 2 sentences.";
+    } elseif (isset($stats_summary['context']) && $stats_summary['context'] === 'customer_inquiry') {
         $persona = $stats_summary['persona'] ?? "A helpful assistant";
         $instructions = $stats_summary['instructions'] ?? "Respond to the customer.";
         

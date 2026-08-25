@@ -157,11 +157,12 @@ FROM tbl_orders o
         $remit = $conn->prepare(
             "SELECT r.id, r.amount, r.status, r.notes, r.requested_at
              FROM tbl_rider_remittances r
-             WHERE r.rider_id = ?
+               WHERE r.rider_id = ?
+                 OR r.rider_id IN (SELECT id FROM riders WHERE user_id = ?)
              ORDER BY r.requested_at DESC
              LIMIT 100"
         );
-        $remit->bind_param('i', $rider_user_id);
+           $remit->bind_param('ii', $rider_user_id, $rider_user_id);
         $remit->execute();
         $rows = $remit->get_result()->fetch_all(MYSQLI_ASSOC);
         $remit->close();

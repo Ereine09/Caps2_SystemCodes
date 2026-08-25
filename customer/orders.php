@@ -7,9 +7,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     require_customer_login();
     $customer = current_customer();
     $order_id_to_cancel = (int)($_POST['order_id'] ?? 0);
-    $cancellation_reason = trim($_POST['cancellation_reason'] ?? 'No reason provided.');
+    $cancellation_reason = trim($_POST['cancellation_reason'] ?? '');
 
-    if ($order_id_to_cancel > 0) {
+    if ($order_id_to_cancel <= 0 || $cancellation_reason === '') {
+        $_SESSION['message'] = 'Please provide a reason for cancelling the order.';
+        $_SESSION['message_type'] = 'error';
+    } else {
         $order = get_order_by_id($order_id_to_cancel, (int)$customer['id']);
 
         if ($order && in_array($order['order_status'], ['pending', 'confirmed'])) {
@@ -38,6 +41,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $_SESSION['message'] = 'There was an error cancelling your order. Please contact support.';
                 $_SESSION['message_type'] = 'error';
             }
+        } else {
+            $_SESSION['message'] = 'This order can no longer be cancelled.';
+            $_SESSION['message_type'] = 'error';
         }
     }
     header('Location: ' . BASE_URL . '/customer/orders.php?id=' . $order_id_to_cancel);
@@ -48,14 +54,63 @@ require_customer_login();
 
 $customer = current_customer();
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'change_delivery_address') {
+    $order_id_to_update = (int)($_POST['order_id'] ?? 0);
+    $address_id = (int)($_POST['address_id'] ?? 0);
+    $address = '';
+    $phone = '';
+    $latitude = null;
+    $longitude = null;
+
+    if ($address_id > 0) {
+        $address_stmt = $conn->prepare(
+            "SELECT full_address, phone, latitude, longitude
+             FROM customer_addresses WHERE id = ? AND customer_id = ? LIMIT 1"
+        );
+        $address_stmt->bind_param('ii', $address_id, $customer['id']);
+        $address_stmt->execute();
+        $saved_address = $address_stmt->get_result()->fetch_assoc();
+        $address_stmt->close();
+        if ($saved_address) {
+            $address = trim($saved_address['full_address']);
+            $phone = trim($saved_address['phone'] ?? '');
+            $latitude = is_numeric($saved_address['latitude']) ? (float)$saved_address['latitude'] : null;
+            $longitude = is_numeric($saved_address['longitude']) ? (float)$saved_address['longitude'] : null;
+        }
+    } else {
+        $address = trim($_POST['new_delivery_address'] ?? '');
+        $phone = trim($_POST['new_delivery_phone'] ?? '');
+        $latitude = is_numeric($_POST['latitude'] ?? null) ? (float)$_POST['latitude'] : null;
+        $longitude = is_numeric($_POST['longitude'] ?? null) ? (float)$_POST['longitude'] : null;
+    }
+
+    $address_update = update_customer_order_delivery(
+        $order_id_to_update,
+        (int)$customer['id'],
+        $address,
+        $phone,
+        $latitude,
+        $longitude
+    );
+    $_SESSION['message'] = $address_update['message'];
+    $_SESSION['message_type'] = $address_update['success'] ? 'success' : 'error';
+    header('Location: ' . BASE_URL . '/customer/orders.php?id=' . $order_id_to_update);
+    exit();
+}
+
 $order = null;
 $order_items = [];
 $delivery_details = null;
 $delivery_proof = null;
 $orders = [];
+$customer_addresses = [];
+$address_change_allowed = false;
 if (isset($_GET['id'])) {
     $order_id = (int) $_GET['id'];
     $order = get_order_by_id($order_id, (int) $customer['id']);
+    $address_change_allowed = $order
+        && $order['fulfillment_type'] === 'delivery'
+        && in_array($order['order_status'], ['pending', 'confirmed', 'processing'], true);
     $delivery_details = $order ? get_delivery_details_by_order_id($order['id']) : null;
     $delivery_proof = $order ? get_order_delivery_proof($order['id']) : null;
 
@@ -91,6 +146,18 @@ if (isset($_GET['id'])) {
         $order_items = get_order_items($order['id']);
     }
 
+    $customer_addresses = [];
+    if ($order && $order['fulfillment_type'] === 'delivery') {
+        $address_stmt = $conn->prepare(
+            "SELECT id, label, full_address, phone, latitude, longitude
+             FROM customer_addresses WHERE customer_id = ? ORDER BY is_default DESC, created_at DESC"
+        );
+        $address_stmt->bind_param('i', $customer['id']);
+        $address_stmt->execute();
+        $customer_addresses = $address_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $address_stmt->close();
+    }
+
     // Include the new QR helper
     require_once __DIR__ . '/../modules/admin/qr_helper.php';
 } else {
@@ -99,6 +166,12 @@ if (isset($_GET['id'])) {
 ?>
 <?php $page_title = 'Your Orders'; ?>
 <?php include __DIR__ . '/includes/header.php'; ?>
+<?php if (!empty($address_change_allowed)): ?>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+<?php endif; ?>
 
 <style>
     .status-tracker {
@@ -163,13 +236,84 @@ if (isset($_GET['id'])) {
     .modal-header {
         padding: 15px 25px;
         border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .modal-header h3 { margin: 0; }
+    .modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+        padding: 15px;
+        background: rgba(15, 23, 42, 0.55);
+    }
+    .modal-content {
+        background: #fff;
+        border-radius: 12px;
+        width: 600px;
+        max-width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+    }
+    .cancel-modal-content .close-modal {
+        position: static;
+        border: 0;
+        background: transparent;
+        color: #64748b;
+        font-size: 26px;
+        line-height: 1;
+        cursor: pointer;
     }
     .modal-footer {
         padding: 15px 25px;
         border-top: 1px solid #e2e8f0;
         display: flex;
         justify-content: flex-end;
+        gap: 10px;
+        flex-wrap: wrap;
     }
+    .cancel-modal-content {
+        width: min(560px, calc(100% - 30px));
+    }
+    .cancellation-warning {
+        margin: 15px 0 0;
+        padding: 12px 14px;
+        color: #92400e;
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        font-size: 0.9rem;
+    }
+    #cancellation_reason {
+        display: block;
+        width: 100%;
+        min-height: 130px;
+        box-sizing: border-box;
+        padding: 12px 14px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font: inherit;
+        line-height: 1.5;
+        resize: vertical;
+    }
+    #cancellation_reason:focus {
+        outline: 2px solid rgba(99, 102, 241, 0.2);
+        border-color: #6366f1;
+    }
+    .delivery-address-value { overflow-wrap: anywhere; line-height: 1.5; }
+    .delivery-address-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; }
+    .address-change-modal-content { width: min(620px, calc(100% - 30px)); }
+    .address-change-body { padding: 25px; }
+    .address-change-body select, .address-change-body input[type="text"] { width: 100%; box-sizing: border-box; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; }
+    .address-change-body label { display: block; margin: 0 0 6px; color: #475569; font-weight: 600; font-size: 0.9rem; }
+    .address-change-map { height: 280px; margin-top: 15px; border: 1px solid #cbd5e1; border-radius: 8px; }
+    .address-change-divider { margin: 18px 0; text-align: center; color: #94a3b8; font-weight: 700; }
+    .address-change-status { margin-top: 10px; font-size: 0.9rem; }
     /* Status Pill Colors */
     .status-pill { display: inline-flex; align-items: center; justify-content: center; padding: 4px 12px; border-radius: 999px; font-size: 0.75rem; color: white; font-weight: 700; text-transform: uppercase; }
     .status-pending { background: #f39c12; }
@@ -189,6 +333,16 @@ if (isset($_GET['id'])) {
         <p>Track fulfillment status, delivery details, and order history.</p>
     </div>
     <?php if ($order): ?>
+        <?php
+            $address_change_allowed = $order['fulfillment_type'] === 'delivery'
+                && in_array($order['order_status'], ['pending', 'confirmed', 'processing'], true);
+            $flash_message = $_SESSION['message'] ?? '';
+            $flash_type = $_SESSION['message_type'] ?? 'success';
+            unset($_SESSION['message'], $_SESSION['message_type']);
+        ?>
+        <?php if ($flash_message): ?>
+            <div class="alert-message alert-<?php echo $flash_type === 'error' ? 'error' : 'success'; ?>" style="margin-bottom: 20px;"><?php echo htmlspecialchars($flash_message); ?></div>
+        <?php endif; ?>
         <?php 
             $status = $order['order_status'];
             $steps = [
@@ -213,7 +367,7 @@ if (isset($_GET['id'])) {
                     <span class="status-pill status-<?php echo $status; ?>" style="padding: 6px 15px; font-size: 0.9rem;">
                         <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $order['order_status']))); ?>
                     </span>
-                    <?php if (in_array($order['order_status'], ['pending', 'confirmed'])): ?>
+                    <?php if (in_array($order['order_status'], ['pending', 'confirmed'], true)): ?>
                         <button type="button" class="button" onclick="openCancelModal()" style="background: #ef4444; color: white; padding: 8px 14px; font-size: 0.85rem;">
                             <i class="fas fa-times-circle"></i> Cancel Order
                         </button>
@@ -349,7 +503,18 @@ if (isset($_GET['id'])) {
                             <div class="info-item"><span class="info-label">Date</span><span class="info-value"><?php echo htmlspecialchars($order['pickup_date']); ?></span></div>
                             <div class="info-item"><span class="info-label">Time</span><span class="info-value"><?php echo htmlspecialchars($order['pickup_time']); ?></span></div>
                         <?php else: ?>
-                            <div class="info-item" style="flex-direction: column; gap: 5px;"><span class="info-label">Address</span><span class="info-value" style="font-weight: 500; font-size: 0.85rem;"><?php echo htmlspecialchars($order['delivery_address']); ?></span></div>
+                            <div class="info-item" style="flex-direction: column; gap: 5px;">
+                                <span class="info-label">Delivery Address</span>
+                                <span class="info-value delivery-address-value" style="font-weight: 500; font-size: 0.85rem;"><?php echo htmlspecialchars($order['delivery_address']); ?></span>
+                                <?php if ($address_change_allowed): ?>
+                                    <div class="delivery-address-actions">
+                                        <button type="button" class="button" onclick="confirmDeliveryAddress()"><i class="fas fa-check"></i> Confirm Address</button>
+                                        <button type="button" class="button button-secondary" onclick="openAddressChangeModal()"><i class="fas fa-edit"></i> Change Address</button>
+                                    </div>
+                                <?php else: ?>
+                                    <small style="color: #64748b;">Address changes are no longer available because this order is already being fulfilled.</small>
+                                <?php endif; ?>
+                            </div>
                             <div class="info-item"><span class="info-label">Phone</span><span class="info-value"><?php echo htmlspecialchars($order['delivery_phone']); ?></span></div>
                         <?php endif; ?>
                         <?php if (!empty($order['order_notes'])): ?>
@@ -442,25 +607,21 @@ if (isset($_GET['id'])) {
         </div>
     </div>
 
-    <!-- Cancellation Modal -->
-    <div id="cancellationModal" class="modal">
-        <div class="modal-content">
+    <?php if ($order && in_array($order['order_status'], ['pending', 'confirmed'], true)): ?>
+    <div id="cancellationModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="cancellation-title" aria-hidden="true">
+        <div class="modal-content cancel-modal-content">
             <div class="modal-header">
-                <h3>Cancel Order</h3>
-                <span class="close-modal" onclick="closeCancelModal()">&times;</span>
+                <h3 id="cancellation-title">Cancel Order</h3>
+                <button type="button" class="close-modal" onclick="closeCancelModal()" aria-label="Close cancellation dialog">&times;</button>
             </div>
-            <form method="POST" onsubmit="return confirm('Are you sure you want to cancel this order? This action cannot be undone.');" id="cancel-order-form">
+            <form method="POST" id="cancel-order-form" onsubmit="return confirm('Are you sure you want to cancel this order? This action cannot be undone.');">
                 <input type="hidden" name="action" value="cancel_order">
-                <input type="hidden" name="order_id" value="<?php echo $order['id']; ?>">
+                <input type="hidden" name="order_id" value="<?php echo (int)$order['id']; ?>">
                 <div class="form-group" style="padding: 25px;">
-                    <label>Order to Cancel:</label>
-                    <p style="font-weight: bold; margin-top: 5px; margin-bottom: 15px;">#<?php echo htmlspecialchars($order['order_number']); ?></p>
-
-                    <label for="cancellation_reason">Please provide a reason for cancellation:</label>
-                    <textarea name="cancellation_reason" id="cancellation_reason" required style="min-height: 80px;"></textarea>
-                    <p style="font-size: 0.85rem; color: #64748b; margin-top: 10px;">
-                        Please note: Cancelling this order is final and cannot be undone.
-                    </p>
+                    <p style="font-weight: 700; margin: 0 0 20px;">Order #<?php echo htmlspecialchars($order['order_number']); ?></p>
+                    <label for="cancellation_reason">Why do you want to cancel this order?</label>
+                    <textarea name="cancellation_reason" id="cancellation_reason" required maxlength="1000" style="min-height: 100px;" placeholder="Please tell us why you want to cancel."></textarea>
+                    <p class="cancellation-warning"><i class="fas fa-exclamation-triangle"></i> Please note: Cancelling this order is final and cannot be undone.</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="button button-secondary" onclick="closeCancelModal()">Keep Order</button>
@@ -469,8 +630,142 @@ if (isset($_GET['id'])) {
             </form>
         </div>
     </div>
+    <?php endif; ?>
+
+    <?php if ($order && $address_change_allowed): ?>
+    <div id="addressChangeModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="address-change-title" aria-hidden="true">
+        <div class="modal-content address-change-modal-content">
+            <div class="modal-header">
+                <h3 id="address-change-title">Change Delivery Address</h3>
+                <button type="button" class="close-modal" onclick="closeAddressChangeModal()" aria-label="Close address dialog">&times;</button>
+            </div>
+            <form method="POST" id="address-change-form">
+                <input type="hidden" name="action" value="change_delivery_address">
+                <input type="hidden" name="order_id" value="<?php echo (int)$order['id']; ?>">
+                <div class="address-change-body">
+                    <label for="change_address_id">Select Saved Address</label>
+                    <select name="address_id" id="change_address_id">
+                        <option value="">Choose a saved address</option>
+                        <?php foreach ($customer_addresses as $address): ?>
+                            <option value="<?php echo (int)$address['id']; ?>" data-phone="<?php echo htmlspecialchars($address['phone'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                <?php echo htmlspecialchars($address['label'] . ' - ' . $address['full_address']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="address-change-divider">OR</div>
+                    <button type="button" class="button button-secondary" onclick="showNewAddressMap()"><i class="fas fa-map"></i> Choose a new address from map</button>
+                    <div id="change-map-section" style="display:none;">
+                        <div id="change-address-map" class="address-change-map"></div>
+                        <input type="hidden" name="latitude" id="change_address_latitude">
+                        <input type="hidden" name="longitude" id="change_address_longitude">
+                        <div id="change-address-status" class="address-change-status"></div>
+                        <div style="margin-top: 15px;">
+                            <label for="new_delivery_address">Selected Address</label>
+                            <input type="text" name="new_delivery_address" id="new_delivery_address" readonly placeholder="Pin a location on the map">
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <label for="new_delivery_phone">Contact Number</label>
+                            <input type="text" name="new_delivery_phone" id="new_delivery_phone" value="<?php echo htmlspecialchars($order['delivery_phone'] ?? $customer['phone'] ?? ''); ?>" maxlength="50">
+                        </div>
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <label for="change_delivery_phone">Contact Number</label>
+                        <input type="text" id="change_delivery_phone" readonly value="<?php echo htmlspecialchars($order['delivery_phone'] ?? ''); ?>">
+                    </div>
+                    <div style="margin-top: 15px; display:flex; justify-content:space-between; gap:15px; flex-wrap:wrap;">
+                        <span class="info-label">Estimated Delivery Fee</span>
+                        <strong id="change_delivery_fee">Select an address</strong>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="button button-secondary" onclick="closeAddressChangeModal()">Cancel</button>
+                    <button type="submit" class="button">Save Address Change</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <script>
+        let changeAddressMap = null;
+        let changeAddressMarker = null;
+        const addressChangeModal = document.getElementById('addressChangeModal');
+
+        function confirmDeliveryAddress() {
+            const status = document.querySelector('.delivery-address-actions');
+            if (status) status.insertAdjacentHTML('afterend', '<small style="display:block;color:#16a34a;margin-top:8px;">Address confirmed for this order.</small>');
+        }
+
+        function openAddressChangeModal() {
+            if (!addressChangeModal) return;
+            addressChangeModal.style.display = 'flex';
+            addressChangeModal.setAttribute('aria-hidden', 'false');
+            updateChangeAddressSelection();
+        }
+
+        function closeAddressChangeModal() {
+            if (!addressChangeModal) return;
+            addressChangeModal.style.display = 'none';
+            addressChangeModal.setAttribute('aria-hidden', 'true');
+        }
+
+        function showNewAddressMap() {
+            const section = document.getElementById('change-map-section');
+            const select = document.getElementById('change_address_id');
+            section.style.display = 'block';
+            select.value = '';
+            document.getElementById('change_delivery_phone').value = document.getElementById('new_delivery_phone').value;
+            if (!changeAddressMap) {
+                changeAddressMap = L.map('change-address-map').setView([14.6594, 120.9838], 15);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(changeAddressMap);
+                L.Control.geocoder({ defaultMarkGeocode: false, placeholder: 'Search for address...' })
+                    .on('markgeocode', e => setChangeAddressLocation(e.geocode.center, e.geocode.name))
+                    .addTo(changeAddressMap);
+                changeAddressMap.on('click', e => {
+                    fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
+                        .then(response => response.json())
+                        .then(data => setChangeAddressLocation(e.latlng, data.display_name || ''))
+                        .catch(() => document.getElementById('change-address-status').textContent = 'Address lookup failed. Please try again.')
+                });
+            }
+            setTimeout(() => changeAddressMap.invalidateSize(), 100);
+        }
+
+        function setChangeAddressLocation(latlng, address) {
+            if (changeAddressMarker) changeAddressMap.removeLayer(changeAddressMarker);
+            changeAddressMarker = L.marker(latlng).addTo(changeAddressMap);
+            changeAddressMap.setView(latlng, 16);
+            document.getElementById('change_address_latitude').value = latlng.lat;
+            document.getElementById('change_address_longitude').value = latlng.lng;
+            document.getElementById('new_delivery_address').value = address;
+            document.getElementById('change_delivery_phone').value = document.getElementById('new_delivery_phone').value;
+            updateChangeFee(latlng.lat, latlng.lng);
+        }
+
+        function updateChangeAddressSelection() {
+            const select = document.getElementById('change_address_id');
+            if (!select) return;
+            const option = select.options[select.selectedIndex];
+            const section = document.getElementById('change-map-section');
+            section.style.display = select.value ? 'none' : section.style.display;
+            document.getElementById('change_delivery_phone').value = select.value ? option.dataset.phone : document.getElementById('new_delivery_phone').value;
+            document.getElementById('change_delivery_fee').textContent = select.value ? 'Calculated when saved' : 'Select an address';
+        }
+
+        function updateChangeFee(lat, lon) {
+            const storeLat = 14.6594, storeLon = 120.9838;
+            const toRadians = value => value * Math.PI / 180;
+            const dLat = toRadians(lat - storeLat), dLon = toRadians(lon - storeLon);
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(storeLat)) * Math.cos(toRadians(lat)) * Math.sin(dLon / 2) ** 2;
+            const distance = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const fee = distance <= 2 ? 0 : distance <= 3 ? 50 : distance <= 4 ? 60 : distance <= 5 ? 70 : -1;
+            document.getElementById('change_delivery_fee').textContent = fee < 0 ? 'Outside supported delivery area' : (fee === 0 ? 'Free' : 'PHP ' + fee.toFixed(2));
+            document.getElementById('change-address-status').textContent = fee < 0 ? 'This location is beyond the supported delivery range.' : `Selected location: ${distance.toFixed(2)} km from the store.`;
+        }
+
+        const changeAddressSelect = document.getElementById('change_address_id');
+        if (changeAddressSelect) changeAddressSelect.addEventListener('change', updateChangeAddressSelection);
+
         function toggleNewAddressForm() {
         const selectedOption = document.querySelector('input[name="address_option"]:checked');
         const isNew = selectedOption && selectedOption.value === 'new';
@@ -504,12 +799,22 @@ if (isset($_GET['id'])) {
         function closeProofModal() {
             proofModal.style.display = "none";
         }
-        function openCancelModal() { cancelModal.style.display = "flex"; }
-        function closeCancelModal() { cancelModal.style.display = "none"; }
+        function openCancelModal() {
+            if (!cancelModal) return;
+            cancelModal.style.display = "flex";
+            cancelModal.setAttribute('aria-hidden', 'false');
+            document.getElementById('cancellation_reason').focus();
+        }
+        function closeCancelModal() {
+            if (!cancelModal) return;
+            cancelModal.style.display = "none";
+            cancelModal.setAttribute('aria-hidden', 'true');
+        }
 
         window.onclick = (event) => {
             if (event.target == proofModal) closeProofModal();
-            if (event.target == cancelModal) closeCancelModal();
+            if (cancelModal && event.target == cancelModal) closeCancelModal();
+            if (event.target == addressChangeModal) closeAddressChangeModal();
         };
     </script>
 </section>

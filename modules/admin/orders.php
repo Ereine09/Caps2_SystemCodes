@@ -162,18 +162,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'], $_POST['o
 }
 
 // Order Metrics
-$order_summary = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total_orders, SUM(total) AS total_sales, SUM(CASE WHEN order_status = 'pending' THEN 1 ELSE 0 END) AS pending_orders, SUM(CASE WHEN order_status = 'completed' THEN 1 ELSE 0 END) AS completed_orders FROM tbl_orders"));
-if (!$order_summary) {
-    $order_summary = [
-        'total_orders' => 0,
-        'total_sales' => 0,
-        'pending_orders' => 0,
-        'completed_orders' => 0,
-    ];
-}
-$order_summary = array_map(function ($value) {
-    return $value === null ? 0 : $value;
-}, $order_summary);
+$order_summary = $conn->query(
+    "SELECT COUNT(*) AS total_orders,
+            COALESCE(SUM(CASE WHEN order_status <> 'cancelled' THEN total ELSE 0 END), 0) AS total_sales,
+            COALESCE(SUM(CASE WHEN order_status = 'pending' THEN 1 ELSE 0 END), 0) AS pending_orders,
+            COALESCE(SUM(CASE WHEN order_status = 'completed' THEN 1 ELSE 0 END), 0) AS completed_orders
+     FROM tbl_orders"
+)->fetch_assoc() ?: [
+    'total_orders' => 0,
+    'total_sales' => 0,
+    'pending_orders' => 0,
+    'completed_orders' => 0,
+];
 
 // Fetch Recent Orders
 $order_result = mysqli_query($conn, "SELECT o.id, o.order_number, o.order_status, o.fulfillment_type, o.subtotal, o.delivery_fee, o.loyalty_points_earned, o.total, o.created_at, o.payment_method, o.payment_reference, c.name AS customer_name, c.email AS customer_email,
@@ -508,14 +508,6 @@ $unread_count = get_unread_count_staff($user_id);
                                 </td>
                                 <td>PHP <?php echo number_format((float)$order['total'], 2); ?></td>
                                 <td><?php echo htmlspecialchars($order['created_at']); ?></td>
-                                <td>
-                                    <?php $qr_code_uri = generate_qr_code_uri(json_encode(['order_number' => $order['order_number']])); ?>
-                                    <?php if ($qr_code_uri): ?>
-                                        <img src="<?php echo $qr_code_uri; ?>" alt="Order QR Code" style="width: 50px; height: 50px; border-radius: 4px;">
-                                    <?php else: ?>
-                                        <span style="font-size: 0.7rem; color: #ef4444;">N/A</span>
-                                    <?php endif; ?>
-                                </td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if (empty($orders)): ?>

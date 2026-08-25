@@ -2,6 +2,7 @@
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../app/config/config.php';
 require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
+require_once __DIR__ . '/../../app/helpers/remittance_schema_helper.php';
 
 $response = ['success' => false, 'message' => 'An error occurred.', 'data' => null];
 
@@ -12,6 +13,7 @@ try {
         throw new Exception('Unauthorized access.');
     }
     $staff_user_id = (int)$payload['user_id'];
+    ensure_remittance_schema($conn);
 
     $action = $_GET['action'] ?? '';
 
@@ -85,6 +87,12 @@ try {
                 throw new Exception('Invalid data for approval.');
             }
 
+            $order_ids = array_values(array_unique(array_map('intval', $order_ids)));
+            $order_ids = array_values(array_filter($order_ids, static fn($order_id) => $order_id > 0));
+            if (empty($order_ids)) {
+                throw new Exception('No valid orders supplied for approval.');
+            }
+
             // Get user_id corresponding to rider_id for tbl_rider_remittances lookup
             $user_stmt = $conn->prepare("SELECT user_id FROM riders WHERE id = ? LIMIT 1");
             $user_stmt->bind_param('i', $rider_id);
@@ -96,6 +104,28 @@ try {
             $conn->begin_transaction();
 
             try {
+                $order_placeholders = implode(',', array_fill(0, count($order_ids), '?'));
+                $eligible_stmt = $conn->prepare(
+                    "SELECT id, total FROM tbl_orders
+                     WHERE rider_id = ? AND payment_method = 'cod'
+                       AND order_status = 'completed' AND payment_settled = 0
+                       AND id IN ($order_placeholders)"
+                );
+                $eligible_types = 'i' . str_repeat('i', count($order_ids));
+                $eligible_params = array_merge([$rider_id], $order_ids);
+                $eligible_stmt->bind_param($eligible_types, ...$eligible_params);
+                $eligible_stmt->execute();
+                $eligible_rows = $eligible_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                $eligible_stmt->close();
+
+                if (count($eligible_rows) !== count($order_ids)) {
+                    throw new Exception('One or more orders are no longer eligible for approval.');
+                }
+                $eligible_total = array_sum(array_map(static fn($row) => (float)$row['total'], $eligible_rows));
+                if (abs($eligible_total - $remitted_amount) > 0.01) {
+                    throw new Exception('Approval amount does not match the selected COD orders.');
+                }
+
                 // 1. Look up any pending remittance submitted by this rider
                 $stmt_find = $conn->prepare(
                     "SELECT id FROM tbl_rider_remittances 
@@ -132,9 +162,10 @@ try {
 
                 // 2. NOW mark the orders as payment_settled = 1 to credit the rider's balance
                 $order_ids_placeholders = implode(',', array_fill(0, count($order_ids), '?'));
-                $stmt2 = $conn->prepare("UPDATE tbl_orders SET payment_settled = 1 WHERE id IN ($order_ids_placeholders)");
-                $types = str_repeat('i', count($order_ids));
-                $stmt2->bind_param($types, ...$order_ids);
+                $stmt2 = $conn->prepare("UPDATE tbl_orders SET payment_settled = 1 WHERE rider_id = ? AND payment_method = 'cod' AND order_status = 'completed' AND payment_settled = 0 AND id IN ($order_ids_placeholders)");
+                $types = 'i' . str_repeat('i', count($order_ids));
+                $update_params = array_merge([$rider_id], $order_ids);
+                $stmt2->bind_param($types, ...$update_params);
                 $stmt2->execute();
                 $stmt2->close();
 

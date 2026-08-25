@@ -24,14 +24,33 @@ if ($user_role !== 'admin') {
     exit();
 }
 
-$total_staff = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as total FROM users"))['total'];
-$total_customers = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as total FROM customers"))['total'];
-$total_orders = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM tbl_orders"))['total'];
-$total_sales = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(total), 0) AS total_sales FROM tbl_orders"))['total_sales'] ?? 0);
-$unremitted_cod = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(total), 0) AS total FROM tbl_orders WHERE payment_method = 'cod' AND payment_settled = 0"))['total'] ?? 0);
-$pending_orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS count FROM tbl_orders WHERE order_status = 'pending'"))['count'] ?? 0;
-$total_loyalty_points = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT SUM(loyalty_points) AS total FROM customers"))['total'] ?? 0);
-$total_gross_points = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT SUM(points_earned) AS total FROM loyalty_transactions"))['total'] ?? 0);
+$total_staff = (int)($conn->query("SELECT COUNT(*) AS total FROM users")->fetch_assoc()['total'] ?? 0);
+$total_customers = (int)($conn->query("SELECT COUNT(*) AS total FROM customers")->fetch_assoc()['total'] ?? 0);
+
+$order_metrics = $conn->query(
+    "SELECT COUNT(*) AS total_orders,
+            COALESCE(SUM(CASE WHEN order_status <> 'cancelled' THEN total ELSE 0 END), 0) AS total_sales,
+            COALESCE(SUM(CASE WHEN order_status = 'pending' THEN 1 ELSE 0 END), 0) AS pending_orders
+     FROM tbl_orders"
+)->fetch_assoc() ?: [];
+$total_orders = (int)($order_metrics['total_orders'] ?? 0);
+$total_sales = (float)($order_metrics['total_sales'] ?? 0);
+$pending_orders_count = (int)($order_metrics['pending_orders'] ?? 0);
+
+$unremitted_cod = (float)($conn->query(
+    "SELECT COALESCE(SUM(total), 0) AS total
+     FROM tbl_orders
+     WHERE rider_id IS NOT NULL
+       AND order_status = 'completed'
+       AND payment_method = 'cod'
+       AND payment_settled = 0"
+)->fetch_assoc()['total'] ?? 0);
+$total_loyalty_points = (float)($conn->query(
+    "SELECT COALESCE(SUM(loyalty_points), 0) AS total FROM customers"
+)->fetch_assoc()['total'] ?? 0);
+$total_gross_points = (float)($conn->query(
+    "SELECT COALESCE(SUM(points_earned), 0) AS total FROM loyalty_transactions"
+)->fetch_assoc()['total'] ?? 0);
 $username = $payload['username'];
 $user_id = $payload['user_id'];
 $unread_count = get_unread_count_staff($user_id);

@@ -37,7 +37,7 @@ $net_points_circulation = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELEC
 
 // Fetch Total Sales and Order Count from Orders
 $total_sales = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(total), 0) AS total_sales FROM tbl_orders WHERE DATE(created_at) BETWEEN '$date_from' AND '$date_to'"))['total_sales'] ?? 0);
-$unremitted_cod = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(total), 0) AS total FROM tbl_orders WHERE DATE(created_at) BETWEEN '$date_from' AND '$date_to' AND payment_method = 'cod' AND payment_settled = 0"))['total'] ?? 0);
+$unremitted_cod = (float) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(total), 0) AS total FROM tbl_orders WHERE DATE(created_at) BETWEEN '$date_from' AND '$date_to' AND rider_id IS NOT NULL AND order_status = 'completed' AND payment_method = 'cod' AND payment_settled = 0"))['total'] ?? 0);
 $total_orders_count = (int) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as total FROM tbl_orders WHERE DATE(created_at) BETWEEN '$date_from' AND '$date_to'"))['total'] ?? 0);
 $date_to_inclusive = date('Y-m-d', strtotime($date_to . ' +1 day')); // For queries that need to include the end date
 
@@ -60,16 +60,23 @@ $ai_insight = getGeminiBusinessInsight($stats_summary);
 $top_customers = [];
 $customers_query = "
     SELECT c.id, c.name, c.email, c.loyalty_points, 
-           COUNT(lt.id) as trans_count, 
-           MAX(lt.created_at) as last_activity
+           MAX(lt.created_at) as last_activity,
+           COALESCE(purchase_summary.purchased_count, 0) as purchased_count
     FROM customers c
     LEFT JOIN loyalty_transactions lt ON c.id = lt.customer_id
+    LEFT JOIN (
+        SELECT o.customer_id, SUM(oi.quantity) as purchased_count
+        FROM tbl_orders o
+        INNER JOIN tbl_order_items oi ON oi.order_id = o.id
+        WHERE o.order_status <> 'cancelled'
+        GROUP BY o.customer_id
+    ) purchase_summary ON purchase_summary.customer_id = c.id
     GROUP BY c.id
     ORDER BY c.loyalty_points DESC
     LIMIT 10";
 $res_top = mysqli_query($conn, $customers_query);
 while ($row = mysqli_fetch_assoc($res_top)) {
-    $ml = getMLCustomerClassification($row['loyalty_points'], $row['trans_count'], $row['last_activity'], $all_points);
+    $ml = getMLCustomerClassification($row['loyalty_points'], $row['purchased_count'], $row['last_activity'], $all_points);
     $row['ml_label'] = $ml['label'];
     $row['ml_class'] = $ml['class'];
     $top_customers[] = $row;
@@ -388,7 +395,7 @@ while ($s_row = mysqli_fetch_assoc($summary_res)) { $daily_summary_data[] = $s_r
                     <tr style="background: #f8f9fa; border-bottom: 2px solid #eee;">
                         <th style="padding: 12px; text-align: left;">Customer</th>
                         <th style="padding: 12px; text-align: left;">Usable Points</th>
-                        <th style="padding: 12px; text-align: left;">Engagement</th>
+                        <th style="padding: 12px; text-align: left;">Purchased</th>
                         <th style="padding: 12px; text-align: left;">Segment</th>
                     </tr>
                 </thead>
@@ -400,7 +407,7 @@ while ($s_row = mysqli_fetch_assoc($summary_res)) { $daily_summary_data[] = $s_r
                                 <small style="color: #777;"><?php echo htmlspecialchars($c['email']); ?></small>
                             </td>
                             <td style="padding: 12px; font-weight: bold; color: #4a3e94;"><?php echo number_format($c['loyalty_points'], 2); ?></td>
-                            <td style="padding: 12px;"><?php echo $c['trans_count']; ?> transactions</td>
+                            <td style="padding: 12px;"><?php echo (int)$c['purchased_count']; ?> items</td>
                             <td style="padding: 12px;">
                                 <span class="badge <?php echo $c['ml_class']; ?>">
                                     <?php echo $c['ml_label']; ?>

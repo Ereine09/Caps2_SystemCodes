@@ -200,7 +200,6 @@ $unread_count = get_unread_count_staff($user_id);
             position: absolute; top: 25px; right: 45px; color: #f1f1f1;
             font-size: 40px; font-weight: bold; cursor: pointer;
         }
-
         .summary-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; color: #475569; }
         .summary-total { margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0; font-size: 1.2rem; color: #1e293b; font-weight: 800; }
         @media (max-width: 900px) { .order-grid { grid-template-columns: 1fr; } }
@@ -314,6 +313,19 @@ $unread_count = get_unread_count_staff($user_id);
             <div style="margin-top: 10px;">
                 <a href="orders.php" class="button button-secondary"><i class="fas fa-arrow-left"></i> Back to All Orders</a>
             </div>
+                <?php if ($order['order_status'] === 'cancelled'): ?>
+                    <div class="info-card">
+                        <h4 style="color: #dc2626;"><i class="fas fa-ban"></i> Order Cancellation</h4>
+                        <table class="customer-table" style="width:100%;">
+                            <tbody>
+                                <tr>
+                                    <td style="font-weight: 700;">Cancellation Reason</td>
+                                    <td><?php echo htmlspecialchars($order['cancellation_reason'] ?: 'Not provided'); ?></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
                 <div class="info-card">
                     <h4><i class="fas fa-shopping-basket"></i> Order Items</h4>
                     <table class="customer-table" style="width:100%;">
@@ -400,9 +412,6 @@ $unread_count = get_unread_count_staff($user_id);
                 </div>
             </div>
         </div>
-        <div style="margin-top: 10px;">
-            <a href="orders.php" class="button button-secondary"><i class="fas fa-arrow-left"></i> Back to All Orders</a>
-        </div>
     </div>
 
     <!-- Proof of Payment Modal -->
@@ -424,7 +433,9 @@ $unread_count = get_unread_count_staff($user_id);
             modal.style.display = "none";
         }
 
-        window.onclick = (event) => event.target == modal ? closeProofModal() : null;
+        window.onclick = (event) => {
+            if (event.target == modal) closeProofModal();
+        };
     </script>
 </body>
 </html>

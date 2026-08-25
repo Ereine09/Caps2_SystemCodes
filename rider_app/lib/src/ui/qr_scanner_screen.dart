@@ -8,7 +8,9 @@ import '../constants/colors.dart';
 
 class QRScannerScreen extends StatefulWidget {
   final String token;
-  const QRScannerScreen({super.key, required this.token});
+  final bool returnToCaller;
+  const QRScannerScreen(
+      {super.key, required this.token, this.returnToCaller = false});
 
   @override
   State<QRScannerScreen> createState() => _QRScannerScreenState();
@@ -19,54 +21,110 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   final MobileScannerController cameraController = MobileScannerController();
   final String _baseUrl = baseUrl;
 
-  Future<void> _confirmDelivery(String qrCodeData) async {
+  String _statusLabel(dynamic status) {
+    switch (status.toString().toLowerCase()) {
+      case 'out_for_delivery':
+        return 'Out for Delivery';
+      case 'completed':
+        return 'Completed';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return status.toString().replaceAll('_', ' ');
+    }
+  }
+
+  Future<void> _handleScan(String qrCodeData) async {
     setState(() => isProcessing = true);
-    cameraController.stop();
+    await cameraController.stop();
 
     try {
-      final Map<String, dynamic> qrData = jsonDecode(qrCodeData);
-      final int? deliveryId = qrData['delivery_id'];
-
-      if (deliveryId == null) {
-        throw Exception('Invalid QR code data. Missing delivery_id.');
+      final qrData = jsonDecode(qrCodeData);
+      if (qrData is! Map || qrData['delivery_id'] == null) {
+        throw Exception('Invalid QR code format.');
       }
 
       final api = ApiClient(baseUrl: _baseUrl);
-      final res = await api.postJson<Map<String, dynamic>>(
-        '/modules/rider/rider_qr_confirm_api.php',
-        body: {
-          'delivery_id': deliveryId,
-          'qr_code': qrCodeData,
-        },
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-        },
+      final preview =
+          await api.verifyDeliveryQR(qrCodeData, token: widget.token);
+      final previewData = Map<String, dynamic>.from(preview['data'] ?? {});
+
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Confirm Delivery'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Order #${previewData['order_number'] ?? 'Unknown'}'),
+              const SizedBox(height: 8),
+              Text(
+                  'Customer: ${previewData['customer_name'] ?? 'Unknown customer'}'),
+              Text(
+                  'Order Status: ${_statusLabel(previewData['order_status'])}'),
+              const SizedBox(height: 16),
+              const Text(
+                  'Are you sure you want to mark this order as delivered?'),
+              const SizedBox(height: 8),
+              const Text(
+                  'This action will update the order status to Completed.'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Confirm Delivery'),
+            ),
+          ],
+        ),
       );
 
-      final body = res.data ?? {};
-      if (body['success'] != true) {
-        throw Exception(body['message'] ?? 'Failed to confirm delivery');
+      if (confirmed != true) {
+        if (mounted) {
+          setState(() => isProcessing = false);
+          await cameraController.start();
+        }
+        return;
       }
+
+      final result = await api.verifyDeliveryQR(
+        qrCodeData,
+        token: widget.token,
+        confirm: true,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(body['message'] ?? 'Delivery Confirmed!'),
+          content:
+              Text(result['message'] ?? 'Delivery confirmed successfully.'),
           backgroundColor: Colors.green,
         ),
       );
-      Navigator.of(context).pop();
+      if (widget.returnToCaller) {
+        Navigator.of(context).pop(true);
+      } else {
+        setState(() => isProcessing = false);
+        await cameraController.start();
+      }
     } catch (e) {
-      String errMsg = e.toString().replaceAll('Exception: ', '');
+      var errorMessage = e.toString().replaceAll('Exception: ', '');
       if (e is DioException) {
-        errMsg = e.error?.toString() ?? 'Server update failed';
+        errorMessage = e.error?.toString() ?? 'Server update failed';
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errMsg), backgroundColor: Colors.red),
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
       );
       setState(() => isProcessing = false);
-      cameraController.start();
+      await cameraController.start();
     }
   }
 
@@ -91,11 +149,10 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
             controller: cameraController,
             onDetect: (capture) {
               if (isProcessing) return;
-              final List<Barcode> barcodes = capture.barcodes;
-              for (final barcode in barcodes) {
-                final String? rawValue = barcode.rawValue;
-                if (rawValue != null && rawValue.isNotEmpty) {
-                  _confirmDelivery(rawValue.trim());
+              for (final barcode in capture.barcodes) {
+                final rawValue = barcode.rawValue;
+                if (rawValue != null && rawValue.trim().isNotEmpty) {
+                  _handleScan(rawValue.trim());
                   break;
                 }
               }
@@ -124,8 +181,11 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                     CircularProgressIndicator(color: Colors.white),
                     SizedBox(height: 16),
                     Text(
-                      'Confirming Delivery...',
-                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      'Checking scanned order...',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),

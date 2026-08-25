@@ -24,12 +24,13 @@ class RiderShipmentDetailScreen extends StatefulWidget {
   });
 
   @override
-  State<RiderShipmentDetailScreen> createState() => _RiderShipmentDetailScreenState();
+  State<RiderShipmentDetailScreen> createState() =>
+      _RiderShipmentDetailScreenState();
 }
 
 class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
   late Future<Order> _detailsFuture;
-  bool _isVerifyingQR = false;
+  final bool _isVerifyingQR = false;
   bool _isUploadingProof = false;
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -54,7 +55,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
               onTap: () => Navigator.of(context).pop(ImageSource.camera),
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library, color: AppColors.primary),
+              leading:
+                  const Icon(Icons.photo_library, color: AppColors.primary),
               title: const Text('Choose from Gallery'),
               onTap: () => Navigator.of(context).pop(ImageSource.gallery),
             ),
@@ -76,7 +78,9 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open camera/gallery: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Could not open camera/gallery: $e'),
+              backgroundColor: Colors.red),
         );
       }
       return;
@@ -92,7 +96,9 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
     }
     if (bytes == null || bytes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not read the captured image.'), backgroundColor: Colors.red),
+        const SnackBar(
+            content: Text('Could not read the captured image.'),
+            backgroundColor: Colors.red),
       );
       return;
     }
@@ -115,13 +121,18 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Proof of delivery uploaded successfully.'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Proof of delivery uploaded successfully.'),
+              backgroundColor: Colors.green),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(
+                  'Upload failed: ${e.toString().replaceFirst("Exception: ", "")}'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -165,7 +176,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
 
   Future<Order> _fetchDetails() async {
     try {
-      final data = await widget.apiClient.getDeliveryDetails(widget.orderId, token: widget.token);
+      final data = await widget.apiClient
+          .getDeliveryDetails(widget.orderId, token: widget.token);
       return Order.fromJson(data);
     } catch (e) {
       throw Exception('Failed to load order details: $e');
@@ -177,7 +189,9 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
     final number = phone?.trim() ?? '';
     if (number.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No customer contact number available.'), backgroundColor: Colors.red),
+        const SnackBar(
+            content: Text('No customer contact number available.'),
+            backgroundColor: Colors.red),
       );
       return;
     }
@@ -190,7 +204,10 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to call: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text(
+                'Unable to call: ${e.toString().replaceFirst("Exception: ", "")}'),
+            backgroundColor: Colors.red),
       );
     }
   }
@@ -200,63 +217,46 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
     final query = address.trim();
     if (query.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No delivery address available.'), backgroundColor: Colors.red),
+        const SnackBar(
+            content: Text('No delivery address available.'),
+            backgroundColor: Colors.red),
       );
       return;
     }
 
-    final mapsUri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeQueryComponent(query)}');
+    final mapsUri = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=${Uri.encodeQueryComponent(query)}');
     try {
-      final launched = await launchUrl(mapsUri, mode: LaunchMode.externalApplication);
+      final launched =
+          await launchUrl(mapsUri, mode: LaunchMode.externalApplication);
       if (!launched) {
         throw Exception('Could not open maps');
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to open maps: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text(
+                'Unable to open maps: ${e.toString().replaceFirst("Exception: ", "")}'),
+            backgroundColor: Colors.red),
       );
     }
   }
 
   void _navigateToQRScanner() async {
-    final authToken = widget.token.isNotEmpty ? widget.token : (context.read<AuthState>().token ?? '');
+    final authToken = widget.token.isNotEmpty
+        ? widget.token
+        : (context.read<AuthState>().token ?? '');
 
-    final qrCodeResult = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (context) => QRScannerScreen(token: authToken)),
+    final qrConfirmed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+          builder: (context) => QRScannerScreen(
+                token: authToken,
+                returnToCaller: true,
+              )),
     );
 
-    if (qrCodeResult != null && qrCodeResult.isNotEmpty) {
-      setState(() {
-        _isVerifyingQR = true;
-      });
-
-      try {
-        final response = await widget.apiClient.verifyDeliveryQR(qrCodeResult, token: authToken);
-
-        if (response['success'] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(response['message']), backgroundColor: Colors.green),
-          );
-          // Pop back to the list screen with a 'true' result to trigger a refresh.
-          Navigator.of(context).pop(true);
-        } else {
-          // The API returned success: false, show the specific error message.
-          throw Exception(response['message']);
-        }
-      } catch (e) {
-        // This catches both network errors from Dio and logical errors thrown above.
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: Colors.red),
-        );
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isVerifyingQR = false;
-          });
-        }
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('QR scanning cancelled.')));
+    if (qrConfirmed == true) {
+      if (mounted) Navigator.of(context).pop(true);
     }
   }
 
@@ -297,7 +297,10 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
     if (s == 'cancelled') {
       return (AppColors.statusDanger, AppColors.statusDangerText);
     }
-    if (s == 'out_for_delivery' || s == 'ready_for_pickup' || s == 'to_ship' || s == 'to_receive') {
+    if (s == 'out_for_delivery' ||
+        s == 'ready_for_pickup' ||
+        s == 'to_ship' ||
+        s == 'to_receive') {
       return (AppColors.statusTransit, AppColors.statusTransitText);
     }
     return (AppColors.statusProcess, AppColors.statusProcessText);
@@ -310,7 +313,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
       appBar: AppBar(
         title: const Text(
           'Shipment Details',
-          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textMain),
+          style:
+              TextStyle(fontWeight: FontWeight.bold, color: AppColors.textMain),
         ),
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -332,7 +336,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline, color: AppColors.statusDangerText, size: 48),
+                    const Icon(Icons.error_outline,
+                        color: AppColors.statusDangerText, size: 48),
                     const SizedBox(height: 12),
                     Text(
                       '${snapshot.error}',
@@ -341,7 +346,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
-                      onPressed: () => setState(() => _detailsFuture = _fetchDetails()),
+                      onPressed: () =>
+                          setState(() => _detailsFuture = _fetchDetails()),
                       child: const Text('Retry'),
                     ),
                   ],
@@ -354,7 +360,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
           }
 
           final order = snapshot.data!;
-          final currencyFormat = NumberFormat.currency(locale: 'en_PH', symbol: '₱');
+          final currencyFormat =
+              NumberFormat.currency(locale: 'en_PH', symbol: '₱');
           final (badgeBg, badgeText) = _statusBadge(order.orderStatus);
           final statusLabel = _statusLabel(order.orderStatus);
 
@@ -371,7 +378,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       // --- Hero summary card ---
-                      _buildHeroCard(order, currencyFormat, badgeBg, badgeText, statusLabel),
+                      _buildHeroCard(order, currencyFormat, badgeBg, badgeText,
+                          statusLabel),
                       const SizedBox(height: 16),
 
                       // --- Customer & Delivery card ---
@@ -379,7 +387,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
                         title: 'Customer & Delivery',
                         icon: Icons.person_outline,
                         children: [
-                          _buildInfoRow(Icons.person_outline, 'Customer', order.customerName),
+                          _buildInfoRow(Icons.person_outline, 'Customer',
+                              order.customerName),
                           _buildInfoRow(
                             Icons.phone_outlined,
                             'Contact',
@@ -391,7 +400,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
                             order.deliveryAddress,
                             isAddress: true,
                           ),
-                          if (order.deliveryPhone != null && order.deliveryPhone!.isNotEmpty)
+                          if (order.deliveryPhone != null &&
+                              order.deliveryPhone!.isNotEmpty)
                             _buildInfoRow(
                               Icons.phone_forwarded_outlined,
                               'Delivery Phone',
@@ -404,12 +414,18 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
                                 child: OutlinedButton.icon(
                                   icon: const Icon(Icons.phone, size: 18),
                                   label: const Text('Call'),
-                                  onPressed: () => _callCustomer(order.customerPhone),
+                                  onPressed: () =>
+                                      _callCustomer(order.customerPhone),
                                   style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    side: const BorderSide(color: AppColors.statusDeliveredText),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    foregroundColor: AppColors.statusDeliveredText,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
+                                    side: const BorderSide(
+                                        color: AppColors.statusDeliveredText),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12)),
+                                    foregroundColor:
+                                        AppColors.statusDeliveredText,
                                   ),
                                 ),
                               ),
@@ -418,11 +434,16 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
                                 child: OutlinedButton.icon(
                                   icon: const Icon(Icons.navigation, size: 18),
                                   label: const Text('Navigate'),
-                                  onPressed: () => _navigateToDelivery(order.deliveryAddress),
+                                  onPressed: () => _navigateToDelivery(
+                                      order.deliveryAddress),
                                   style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    side: const BorderSide(color: AppColors.primary),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
+                                    side: const BorderSide(
+                                        color: AppColors.primary),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12)),
                                     foregroundColor: AppColors.primary,
                                   ),
                                 ),
@@ -451,7 +472,9 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
                           _buildInfoRow(
                             Icons.category_outlined,
                             'Type',
-                            order.fulfillmentType.replaceAll('_', ' ').toUpperCase(),
+                            order.fulfillmentType
+                                .replaceAll('_', ' ')
+                                .toUpperCase(),
                           ),
                         ],
                       ),
@@ -473,11 +496,13 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
                           else
                             ...order.items.map((item) {
                               return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 6),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 6),
                                 child: Row(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 6),
                                       decoration: BoxDecoration(
                                         color: AppColors.primarySoftBg,
                                         borderRadius: BorderRadius.circular(8),
@@ -584,7 +609,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.inventory_2_outlined, color: Colors.white70, size: 20),
+              const Icon(Icons.inventory_2_outlined,
+                  color: Colors.white70, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -599,7 +625,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
               ),
               // Status badge (light chip on gradient)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
@@ -633,7 +660,8 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: badgeBg,
                   borderRadius: BorderRadius.circular(20),
@@ -707,11 +735,13 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
   }
 
   /// Row with a leading icon, label, and value.
-  Widget _buildInfoRow(IconData icon, String label, String value, {bool isAddress = false}) {
+  Widget _buildInfoRow(IconData icon, String label, String value,
+      {bool isAddress = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
-        crossAxisAlignment: isAddress ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+        crossAxisAlignment:
+            isAddress ? CrossAxisAlignment.start : CrossAxisAlignment.center,
         children: [
           SizedBox(
             width: 30,
@@ -746,14 +776,20 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
         width: double.infinity,
         child: OutlinedButton.icon(
           icon: _isUploadingProof
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.0))
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2.0))
               : const Icon(Icons.photo_camera_outlined),
-          label: Text(_isUploadingProof ? 'Uploading...' : 'Upload Proof of Delivery'),
-          onPressed: _isUploadingProof ? null : () => _captureProofOfDelivery(orderId),
+          label: Text(
+              _isUploadingProof ? 'Uploading...' : 'Upload Proof of Delivery'),
+          onPressed:
+              _isUploadingProof ? null : () => _captureProofOfDelivery(orderId),
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 16),
             side: const BorderSide(color: AppColors.primary),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             foregroundColor: AppColors.primary,
           ),
         ),
@@ -768,7 +804,11 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
         width: double.infinity,
         child: ElevatedButton.icon(
           icon: _isVerifyingQR
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.0))
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2.0))
               : const Icon(Icons.qr_code_scanner),
           label: Text(_isVerifyingQR ? 'Verifying...' : 'Confirm with QR Code'),
           onPressed: _isVerifyingQR ? null : _navigateToQRScanner,
@@ -777,4 +817,3 @@ class _RiderShipmentDetailScreenState extends State<RiderShipmentDetailScreen> {
     );
   }
 }
-

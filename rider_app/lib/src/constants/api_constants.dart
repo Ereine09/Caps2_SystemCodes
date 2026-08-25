@@ -14,7 +14,7 @@ const String _physicalDeviceBaseUrl = 'http://192.168.1.84/loyalty_managements';
 const String _mobileBaseUrl = _emulatorBaseUrl;
 
 // This is the final URL the app will use. No need to change this line.
-final String baseUrl = kIsWeb ? _webBaseUrl : _mobileBaseUrl;
+const String baseUrl = kIsWeb ? _webBaseUrl : _mobileBaseUrl;
 
 /// Base URL for the existing loyalty_managements PHP backend.
 final String customerBaseUrl = '$baseUrl/customer';

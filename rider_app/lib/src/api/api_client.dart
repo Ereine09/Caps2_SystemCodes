@@ -8,7 +8,8 @@ class ApiClient {
   ApiClient({required this.baseUrl}) : _dio = Dio() {
     _dio.options = BaseOptions(
       baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 15), // May limit na para hindi mag-hang forever
+      connectTimeout: const Duration(
+          seconds: 15), // May limit na para hindi mag-hang forever
       receiveTimeout: const Duration(seconds: 15),
       contentType: Headers.jsonContentType,
       responseType: ResponseType.json,
@@ -29,7 +30,8 @@ class ApiClient {
             } else if (data != null) {
               errorMessage = data.toString();
             } else {
-              errorMessage = "Server returned status code: ${e.response?.statusCode}";
+              errorMessage =
+                  "Server returned status code: ${e.response?.statusCode}";
             }
           } else {
             // Kung walang response (e.g. offline o hindi gumagana ang local server)
@@ -55,7 +57,8 @@ class ApiClient {
     );
   }
 
-  Future<Response<T>> postJson<T>(String path, {required Map<String, dynamic> body, Map<String, dynamic>? headers}) {
+  Future<Response<T>> postJson<T>(String path,
+      {required Map<String, dynamic> body, Map<String, dynamic>? headers}) {
     return _dio.post<T>(path, data: body, options: Options(headers: headers));
   }
 
@@ -68,12 +71,13 @@ class ApiClient {
   /// Uses `rider_orders_api.php` and passes the JWT so the backend knows which
   /// rider is asking. No hardcoded rider id is required.
   Future<List<dynamic>> getDeliveries({String token = ''}) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await getJson(
       '/modules/rider/rider_orders_api.php',
       headers: headers,
     );
-if (response.data['success'] == true) {
+    if (response.data['success'] == true) {
       final data = (response.data['data'] as Map?) ?? {};
       final assignments = (data['assignments'] as List?) ?? [];
       return assignments;
@@ -87,7 +91,8 @@ if (response.data['success'] == true) {
   /// Returns the full `data` map from `rider_earnings_api.php`, which contains
   /// `summary`, `earnings_history`, `remittance_history`, and `chart`.
   Future<Map<String, dynamic>> getEarnings({String token = ''}) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await getJson(
       '/modules/rider/rider_earnings_api.php',
       headers: headers,
@@ -96,7 +101,24 @@ if (response.data['success'] == true) {
       final data = (response.data['data'] as Map?) ?? {};
       return Map<String, dynamic>.from(data);
     } else {
-      throw Exception(response.data['message'] ?? 'Failed to load earnings data');
+      throw Exception(
+          response.data['message'] ?? 'Failed to load earnings data');
+    }
+  }
+
+  /// Fetches a short AI performance strategy for the authenticated rider.
+  Future<String> getRiderAiInsight({String token = ''}) async {
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final response = await getJson(
+      '/modules/rider/rider_ai_insight_api.php',
+      headers: headers,
+    );
+    if (response.data['success'] == true) {
+      final data = (response.data['data'] as Map?) ?? {};
+      return data['insight']?.toString() ?? '';
+    } else {
+      throw Exception(response.data['message'] ?? 'Failed to load AI insight');
     }
   }
 
@@ -106,7 +128,8 @@ if (response.data['success'] == true) {
     String period = 'monthly',
     String token = '',
   }) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await getJson(
       '/modules/rider/rider_earnings_api.php?action=get_chart&period=$period',
       headers: headers,
@@ -137,11 +160,12 @@ if (response.data['success'] == true) {
     if (response.data['success'] == true) {
       return response.data;
     } else {
-      throw Exception(response.data['message'] ?? 'Failed to update rider order');
+      throw Exception(
+          response.data['message'] ?? 'Failed to update rider order');
     }
   }
 
-/// Uploads a proof-of-delivery photo (base64) + optional notes for an order.
+  /// Uploads a proof-of-delivery photo (base64) + optional notes for an order.
   ///
   /// POSTs to `rider_proof_api.php` with the rider JWT. The backend saves the
   /// image to `uploads/proofs/` and logs it into `delivery_tracking`.
@@ -152,7 +176,8 @@ if (response.data['success'] == true) {
     int deliveryId = 0,
     String token = '',
   }) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await postJson(
       '/modules/rider/rider_proof_api.php',
       body: {
@@ -166,13 +191,16 @@ if (response.data['success'] == true) {
     if (response.data['success'] == true) {
       return Map<String, dynamic>.from(response.data['data'] ?? {});
     } else {
-      throw Exception(response.data['message'] ?? 'Failed to upload proof of delivery');
+      throw Exception(
+          response.data['message'] ?? 'Failed to upload proof of delivery');
     }
   }
 
   /// Fetches the full details for a single order.
-  Future<Map<String, dynamic>> getDeliveryDetails(int orderId, {String token = ''}) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+  Future<Map<String, dynamic>> getDeliveryDetails(int orderId,
+      {String token = ''}) async {
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await getJson(
       '/modules/rider/rider_orders_api.php?action=get_order_details&id=$orderId',
       headers: headers,
@@ -180,16 +208,18 @@ if (response.data['success'] == true) {
     if (response.data['success'] == true) {
       return Map<String, dynamic>.from(response.data['data']);
     } else {
-      throw Exception('Failed to load delivery details: ${response.data['message']}');
+      throw Exception(
+          'Failed to load delivery details: ${response.data['message']}');
     }
   }
 
-/// Fetches the current on-duty status of the authenticated rider.
+  /// Fetches the current on-duty status of the authenticated rider.
   ///
   /// GETs `rider_status_api.php` and passes the JWT so the backend knows which
   /// rider is asking. Returns the parsed `data` map.
   Future<Map<String, dynamic>> getRiderStatus({String token = ''}) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await getJson(
       '/modules/rider/rider_status_api.php',
       headers: headers,
@@ -197,7 +227,8 @@ if (response.data['success'] == true) {
     if (response.data['success'] == true) {
       return Map<String, dynamic>.from(response.data['data'] ?? {});
     } else {
-      throw Exception(response.data['message'] ?? 'Failed to fetch rider status');
+      throw Exception(
+          response.data['message'] ?? 'Failed to fetch rider status');
     }
   }
 
@@ -208,7 +239,8 @@ if (response.data['success'] == true) {
     required bool isOnDuty,
     String token = '',
   }) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await postJson(
       '/modules/rider/rider_status_api.php',
       body: {'is_on_duty': isOnDuty},
@@ -217,13 +249,15 @@ if (response.data['success'] == true) {
     if (response.data['success'] == true) {
       return Map<String, dynamic>.from(response.data['data'] ?? {});
     } else {
-      throw Exception(response.data['message'] ?? 'Failed to update rider status');
+      throw Exception(
+          response.data['message'] ?? 'Failed to update rider status');
     }
   }
 
-/// Fetches the unread notification count for the authenticated rider.
+  /// Fetches the unread notification count for the authenticated rider.
   Future<int> getUnreadNotificationCount({String token = ''}) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await getJson(
       '/modules/rider/rider_notifications_api.php?action=get_unread_count',
       headers: headers,
@@ -232,13 +266,16 @@ if (response.data['success'] == true) {
       final data = (response.data['data'] as Map?) ?? {};
       return int.tryParse(data['unread_count']?.toString() ?? '0') ?? 0;
     } else {
-      throw Exception(response.data['message'] ?? 'Failed to fetch unread count');
+      throw Exception(
+          response.data['message'] ?? 'Failed to fetch unread count');
     }
   }
 
   /// Fetches the list of notifications for the authenticated rider.
-  Future<List<dynamic>> getNotifications({String token = '', int limit = 50}) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+  Future<List<dynamic>> getNotifications(
+      {String token = '', int limit = 50}) async {
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await getJson(
       '/modules/rider/rider_notifications_api.php?action=get_list&limit=$limit',
       headers: headers,
@@ -247,7 +284,8 @@ if (response.data['success'] == true) {
       final data = (response.data['data'] as Map?) ?? {};
       return (data['notifications'] as List?) ?? [];
     } else {
-      throw Exception(response.data['message'] ?? 'Failed to fetch notifications');
+      throw Exception(
+          response.data['message'] ?? 'Failed to fetch notifications');
     }
   }
 
@@ -260,14 +298,16 @@ if (response.data['success'] == true) {
       headers: headers,
     );
     if (response.data['success'] != true) {
-      throw Exception(response.data['message'] ?? 'Failed to mark notifications as read');
+      throw Exception(
+          response.data['message'] ?? 'Failed to mark notifications as read');
     }
   }
 
   /// Fetches the authenticated rider's profile (username, email, vehicle type,
   /// plate number, on-duty status) from `rider_profile_api.php`.
   Future<Map<String, dynamic>> getRiderProfile({String token = ''}) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await getJson(
       '/modules/rider/rider_profile_api.php',
       headers: headers,
@@ -275,7 +315,8 @@ if (response.data['success'] == true) {
     if (response.data['success'] == true) {
       return Map<String, dynamic>.from(response.data['data'] ?? {});
     } else {
-      throw Exception(response.data['message'] ?? 'Failed to fetch rider profile');
+      throw Exception(
+          response.data['message'] ?? 'Failed to fetch rider profile');
     }
   }
 
@@ -285,7 +326,8 @@ if (response.data['success'] == true) {
     required String plateNumber,
     String token = '',
   }) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await postJson(
       '/modules/rider/rider_profile_api.php',
       body: {
@@ -297,14 +339,16 @@ if (response.data['success'] == true) {
     if (response.data['success'] == true) {
       return Map<String, dynamic>.from(response.data['data'] ?? {});
     } else {
-      throw Exception(response.data['message'] ?? 'Failed to update rider profile');
+      throw Exception(
+          response.data['message'] ?? 'Failed to update rider profile');
     }
   }
 
   /// Fetches the list of customer conversations for the rider from
   /// `rider_messaging_api.php`.
   Future<List<dynamic>> getMessagingConversations({String token = ''}) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await getJson(
       '/modules/rider/rider_messaging_api.php?action=get_conversations',
       headers: headers,
@@ -313,7 +357,8 @@ if (response.data['success'] == true) {
       final data = (response.data['data'] as Map?) ?? {};
       return (data['conversations'] as List?) ?? [];
     } else {
-      throw Exception(response.data['message'] ?? 'Failed to load conversations');
+      throw Exception(
+          response.data['message'] ?? 'Failed to load conversations');
     }
   }
 
@@ -322,7 +367,8 @@ if (response.data['success'] == true) {
     required int customerId,
     String token = '',
   }) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await getJson(
       '/modules/rider/rider_messaging_api.php?action=get_conversation&customer_id=$customerId',
       headers: headers,
@@ -331,7 +377,8 @@ if (response.data['success'] == true) {
       final data = (response.data['data'] as Map?) ?? {};
       return (data['messages'] as List?) ?? [];
     } else {
-      throw Exception(response.data['message'] ?? 'Failed to load conversation');
+      throw Exception(
+          response.data['message'] ?? 'Failed to load conversation');
     }
   }
 
@@ -341,7 +388,8 @@ if (response.data['success'] == true) {
     required String message,
     String token = '',
   }) async {
-    final headers = token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+    final headers =
+        token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
     final response = await postJson(
       '/modules/rider/rider_messaging_api.php',
       body: {
@@ -358,8 +406,9 @@ if (response.data['success'] == true) {
     }
   }
 
-  /// Verifies the delivery confirmation QR code with the backend.
-  Future<Map<String, dynamic>> verifyDeliveryQR(String qrToken, {required String token}) async {
+  /// Previews or confirms the delivery confirmation QR code.
+  Future<Map<String, dynamic>> verifyDeliveryQR(String qrToken,
+      {required String token, bool confirm = false}) async {
     final qrData = jsonDecode(qrToken);
     if (qrData is! Map || qrData['delivery_id'] == null) {
       throw Exception('Invalid QR code format.');
@@ -375,6 +424,7 @@ if (response.data['success'] == true) {
       body: {
         'delivery_id': deliveryId,
         'qr_code': qrToken,
+        'action': confirm ? 'confirm' : 'preview',
       },
       headers: {
         'Authorization': 'Bearer $token',
@@ -386,7 +436,8 @@ if (response.data['success'] == true) {
       return response.data;
     } else {
       // Throw an exception with the specific error message from the backend.
-      throw Exception(response.data['message'] ?? 'QR code verification failed.');
+      throw Exception(
+          response.data['message'] ?? 'QR code verification failed.');
     }
   }
 }

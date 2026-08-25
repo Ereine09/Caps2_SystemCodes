@@ -28,6 +28,7 @@ $response = [
     'message' => '',
     'data' => null
 ];
+$transaction_started = false;
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -58,14 +59,25 @@ try {
         throw new Exception('Unauthorized role');
     }
 
-    $rider_id = (int)($payload['user_id'] ?? 0);
-    if ($rider_id <= 0) {
+    $rider_user_id = (int)($payload['user_id'] ?? 0);
+    if ($rider_user_id <= 0) {
         throw new Exception('Invalid rider account session');
+    }
+
+    $rider_stmt = $conn->prepare("SELECT id FROM riders WHERE user_id = ? LIMIT 1");
+    $rider_stmt->bind_param('i', $rider_user_id);
+    $rider_stmt->execute();
+    $rider_row = $rider_stmt->get_result()->fetch_assoc();
+    $rider_stmt->close();
+    $rider_id = (int)($rider_row['id'] ?? 0);
+    if ($rider_id <= 0) {
+        throw new Exception('Rider profile not found.');
     }
 
     $input = json_decode(file_get_contents('php://input'), true);
     if (!is_array($input)) $input = [];
 
+    $action = strtolower(trim((string)($input['action'] ?? 'preview')));
     $delivery_id = (int)($input['delivery_id'] ?? 0);
     $qr_code_content = trim((string)($input['qr_code'] ?? ''));
 
@@ -99,12 +111,60 @@ try {
 
     $order_id = (int)$res['order_id'];
 
-    $conn->begin_transaction();
+    $order_stmt = $conn->prepare(
+        "SELECT o.order_number, o.order_status, o.rider_id, o.customer_id, c.name AS customer_name,
+                CASE WHEN o.rider_id = ? THEN 1 ELSE 0 END AS assigned_by_rider_id,
+                CASE WHEN o.rider_id = ? THEN 1 ELSE 0 END AS assigned_by_user_id
+         FROM tbl_orders o
+         LEFT JOIN customers c ON c.id = o.customer_id
+         WHERE o.id = ? LIMIT 1"
+    );
+    $order_stmt->bind_param('iii', $rider_id, $rider_user_id, $order_id);
+    $order_stmt->execute();
+    $order = $order_stmt->get_result()->fetch_assoc();
+    $order_stmt->close();
 
-    // Update order status to completed
-    $stmt1 = $conn->prepare("UPDATE tbl_orders SET order_status = 'completed', updated_at = NOW() WHERE id = ?");
-    $stmt1->bind_param('i', $order_id);
+    if (!$order) throw new Exception('Order not found.');
+    if (($order['order_status'] ?? '') === 'completed') {
+        throw new Exception('Order is already completed.');
+    }
+    if (($order['order_status'] ?? '') === 'cancelled') {
+        throw new Exception('This order has been cancelled.');
+    }
+    $eligible_statuses = ['out_for_delivery', 'to_ship', 'to_receive'];
+    if (!in_array(($order['order_status'] ?? ''), $eligible_statuses, true)) {
+        throw new Exception('Order is not yet eligible for delivery confirmation.');
+    }
+    if ((int)($order['assigned_by_rider_id'] ?? 0) !== 1
+        && (int)($order['assigned_by_user_id'] ?? 0) !== 1) {
+        throw new Exception('You are not authorized to confirm this delivery.');
+    }
+
+    if ($action !== 'confirm') {
+        $response['success'] = true;
+        $response['data'] = [
+            'delivery_id' => $delivery_id,
+            'order_id' => $order_id,
+            'order_number' => $order['order_number'],
+            'order_status' => $order['order_status'],
+            'customer_name' => $order['customer_name'] ?? '',
+            'confirmed' => false,
+        ];
+        echo json_encode($response);
+        exit;
+    }
+
+    $conn->begin_transaction();
+    $transaction_started = true;
+
+    // Confirm only the assigned rider's active delivery order.
+    $stmt1 = $conn->prepare("UPDATE tbl_orders SET order_status = 'completed', updated_at = NOW() WHERE id = ? AND (rider_id = ? OR rider_id = ?) AND order_status IN ('out_for_delivery', 'to_ship', 'to_receive')");
+    $stmt1->bind_param('iii', $order_id, $rider_id, $rider_user_id);
     $stmt1->execute();
+    if ($stmt1->affected_rows !== 1) {
+        $stmt1->close();
+        throw new Exception('The order status changed before confirmation. Please scan again.');
+    }
     $stmt1->close();
 
     // Update delivery status to delivered
@@ -125,6 +185,7 @@ try {
 
     loyalty_award_completed_order($conn, $order_id);
     $conn->commit();
+    $transaction_started = false;
 
     // Notify Customer
     $cust_stmt = $conn->prepare("SELECT customer_id FROM tbl_orders WHERE id = ? LIMIT 1");
@@ -148,6 +209,7 @@ try {
     ]);
 
     $response['success'] = true;
+    $response['message'] = 'Order #' . $order['order_number'] . ' successfully marked as Completed.';
     $response['data'] = [
         'delivery_id' => $delivery_id,
         'order_id' => $order_id,
@@ -155,6 +217,9 @@ try {
     ];
 
 } catch (Exception $e) {
+    if ($transaction_started) {
+        $conn->rollback();
+    }
     $response['success'] = false;
     $response['message'] = $e->getMessage();
     http_response_code(400);

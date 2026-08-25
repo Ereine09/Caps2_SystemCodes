@@ -19,8 +19,9 @@ class EarningsScreen extends StatefulWidget {
 
 class _EarningsScreenState extends State<EarningsScreen> {
   late Future<Map<String, dynamic>> _earningsFuture;
+  late Future<String?> _aiInsightFuture;
   late final ApiClient _apiClient;
-String _chartPeriod = 'monthly';
+  String _chartPeriod = 'monthly';
   Map<String, dynamic> _chart = {};
 
   @override
@@ -28,6 +29,16 @@ String _chartPeriod = 'monthly';
     super.initState();
     _apiClient = ApiClient(baseUrl: baseUrl);
     _earningsFuture = _fetchEarnings();
+    _aiInsightFuture = _fetchAiInsight();
+  }
+
+  Future<String?> _fetchAiInsight() async {
+    try {
+      final insight = await _apiClient.getRiderAiInsight(token: widget.token);
+      return insight.trim().isEmpty ? null : insight.trim();
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<Map<String, dynamic>> _fetchEarnings() async {
@@ -45,6 +56,7 @@ String _chartPeriod = 'monthly';
   Future<void> _refresh() async {
     setState(() {
       _earningsFuture = _fetchEarnings();
+      _aiInsightFuture = _fetchAiInsight();
     });
   }
 
@@ -83,7 +95,8 @@ String _chartPeriod = 'monthly';
         backgroundColor: Colors.transparent,
         title: const Text(
           'Earnings Dashboard',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 22),
+          style: TextStyle(
+              color: Colors.black, fontWeight: FontWeight.bold, fontSize: 22),
         ),
         actions: [
           IconButton(
@@ -107,7 +120,8 @@ String _chartPeriod = 'monthly';
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                      const Icon(Icons.error_outline,
+                          color: Colors.red, size: 48),
                       const SizedBox(height: 12),
                       Text(
                         'Failed to load earnings data.',
@@ -118,10 +132,12 @@ String _chartPeriod = 'monthly';
                       Text(
                         '${snapshot.error}',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                        style: TextStyle(
+                            color: Colors.grey.shade500, fontSize: 12),
                       ),
                       const SizedBox(height: 16),
-                      ElevatedButton(onPressed: _refresh, child: const Text('Retry')),
+                      ElevatedButton(
+                          onPressed: _refresh, child: const Text('Retry')),
                     ],
                   ),
                 ),
@@ -131,10 +147,14 @@ String _chartPeriod = 'monthly';
             final data = snapshot.data ?? {};
             final summary = Map<String, dynamic>.from(data['summary'] ?? {});
             final earningsHistory = List<Map<String, dynamic>>.from(
-              (data['earnings_history'] as List?)?.map((e) => Map<String, dynamic>.from(e)) ?? [],
+              (data['earnings_history'] as List?)
+                      ?.map((e) => Map<String, dynamic>.from(e)) ??
+                  [],
             );
             final remittanceHistory = List<Map<String, dynamic>>.from(
-              (data['remittance_history'] as List?)?.map((e) => Map<String, dynamic>.from(e)) ?? [],
+              (data['remittance_history'] as List?)
+                      ?.map((e) => Map<String, dynamic>.from(e)) ??
+                  [],
             );
 
             final totalEarnings = _asDouble(summary['total_earnings']);
@@ -183,7 +203,8 @@ String _chartPeriod = 'monthly';
                       const SizedBox(height: 6),
                       Text(
                         '$totalDeliveries completed deliveries',
-                        style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 13),
                       ),
                     ],
                   ),
@@ -222,12 +243,61 @@ String _chartPeriod = 'monthly';
                     ),
                     _buildMetricCard(
                       'Avg / Delivery',
-                      currencyFormat.format(totalDeliveries == 0 ? 0 : totalEarnings / totalDeliveries),
+                      currencyFormat.format(totalDeliveries == 0
+                          ? 0
+                          : totalEarnings / totalDeliveries),
                       'Per completion',
                       Colors.deepPurple,
                       Icons.trending_up,
                     ),
                   ],
+                ),
+                const SizedBox(height: 20),
+
+                FutureBuilder<String?>(
+                  future: _aiInsightFuture,
+                  builder: (context, insightSnapshot) {
+                    final insight = insightSnapshot.data;
+                    if (insight == null || insight.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F5F3),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.auto_awesome,
+                              color: AppColors.primary),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'AI Performance Strategy',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  insight,
+                                  style: TextStyle(
+                                      color: Colors.grey.shade700, height: 1.4),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 20),
 
@@ -254,7 +324,8 @@ String _chartPeriod = 'monthly';
                         children: [
                           const Text(
                             'Earnings Trend',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                           _buildPeriodToggle(),
                         ],
@@ -265,8 +336,11 @@ String _chartPeriod = 'monthly';
                         child: _chart.isEmpty
                             ? const Center(child: CircularProgressIndicator())
                             : _EarningsBarChart(
-                                labels: List<String>.from(_chart['labels'] ?? []),
-                                values: (List.from(_chart['values'] ?? [])).map((v) => _asDouble(v)).toList(),
+                                labels:
+                                    List<String>.from(_chart['labels'] ?? []),
+                                values: (List.from(_chart['values'] ?? []))
+                                    .map((v) => _asDouble(v))
+                                    .toList(),
                               ),
                       ),
                     ],
@@ -279,18 +353,21 @@ String _chartPeriod = 'monthly';
                   children: [
                     const Text(
                       'Earnings History',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade300,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         '${earningsHistory.length}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -302,7 +379,8 @@ String _chartPeriod = 'monthly';
                     child: Center(child: Text('No completed deliveries yet.')),
                   )
                 else
-                  ...earningsHistory.map((e) => _buildEarningsEntry(e, currencyFormat)),
+                  ...earningsHistory
+                      .map((e) => _buildEarningsEntry(e, currencyFormat)),
                 const SizedBox(height: 24),
 
                 // --- Remittance history ---
@@ -310,18 +388,21 @@ String _chartPeriod = 'monthly';
                   children: [
                     const Text(
                       'Remittance History',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade300,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         '${remittanceHistory.length}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -333,7 +414,8 @@ String _chartPeriod = 'monthly';
                     child: Center(child: Text('No remittance history yet.')),
                   )
                 else
-                  ...remittanceHistory.map((r) => _buildRemittanceEntry(r, currencyFormat)),
+                  ...remittanceHistory
+                      .map((r) => _buildRemittanceEntry(r, currencyFormat)),
                 const SizedBox(height: 24),
               ],
             );
@@ -355,7 +437,8 @@ String _chartPeriod = 'monthly';
             decoration: BoxDecoration(
               color: isSelected ? AppColors.primary : AppColors.cardBg,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: isSelected ? AppColors.primary : Colors.grey.shade300),
+              border: Border.all(
+                  color: isSelected ? AppColors.primary : Colors.grey.shade300),
             ),
             child: Text(
               p[0].toUpperCase() + p.substring(1),
@@ -371,7 +454,8 @@ String _chartPeriod = 'monthly';
     );
   }
 
-  Widget _buildMetricCard(String title, String value, String subtext, Color color, IconData icon) {
+  Widget _buildMetricCard(
+      String title, String value, String subtext, Color color, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -394,13 +478,18 @@ String _chartPeriod = 'monthly';
             children: [
               Icon(icon, size: 16, color: color),
               const SizedBox(width: 6),
-              Text(title, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+              Text(title,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
             ],
           ),
           const SizedBox(height: 6),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          Text(value,
+              style:
+                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           const SizedBox(height: 4),
-          Text(subtext, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w500)),
+          Text(subtext,
+              style: TextStyle(
+                  color: color, fontSize: 10, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -436,7 +525,8 @@ String _chartPeriod = 'monthly';
               color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.check_circle_outline, color: AppColors.primary, size: 22),
+            child: const Icon(Icons.check_circle_outline,
+                color: AppColors.primary, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -445,7 +535,8 @@ String _chartPeriod = 'monthly';
               children: [
                 Text(
                   'Order #$orderNumber',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -454,7 +545,9 @@ String _chartPeriod = 'monthly';
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  createdAt != null ? DateFormat('MMM d, yyyy').format(createdAt) : '',
+                  createdAt != null
+                      ? DateFormat('MMM d, yyyy').format(createdAt)
+                      : '',
                   style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
                 ),
               ],
@@ -462,7 +555,10 @@ String _chartPeriod = 'monthly';
           ),
           Text(
             fmt.format(earnings),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.primary),
+            style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                color: AppColors.primary),
           ),
         ],
       ),
@@ -511,7 +607,10 @@ String _chartPeriod = 'monthly';
             ),
             child: Text(
               status,
-              style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                  color: statusColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(width: 12),
@@ -520,7 +619,9 @@ String _chartPeriod = 'monthly';
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  requestedAt != null ? DateFormat('MMM d, yyyy').format(requestedAt) : '',
+                  requestedAt != null
+                      ? DateFormat('MMM d, yyyy').format(requestedAt)
+                      : '',
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                 ),
                 if ((r['notes'] ?? '').toString().isNotEmpty)
@@ -542,7 +643,8 @@ String _chartPeriod = 'monthly';
     );
   }
 
-  static double _asDouble(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+  static double _asDouble(dynamic v) =>
+      double.tryParse(v?.toString() ?? '') ?? 0.0;
   static int _asInt(dynamic v) => int.tryParse(v?.toString() ?? '') ?? 0;
 }
 
@@ -570,9 +672,8 @@ class _BarChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (labels.isEmpty) return;
 
-    final maxValue = values.isEmpty
-        ? 0.0
-        : values.reduce((a, b) => a > b ? a : b);
+    final maxValue =
+        values.isEmpty ? 0.0 : values.reduce((a, b) => a > b ? a : b);
     final safeMax = maxValue <= 0 ? 1.0 : maxValue;
 
     final chartBottom = size.height - 24; // leave room for labels
@@ -619,9 +720,12 @@ class _BarChartPainter extends CustomPainter {
         final textPainter = TextPainter(
           text: TextSpan(
             text: value.toStringAsFixed(0),
-            style: const TextStyle(color: AppColors.textMain, fontSize: 9, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+                color: AppColors.textMain,
+                fontSize: 9,
+                fontWeight: FontWeight.bold),
           ),
-textDirection: ui.TextDirection.ltr,
+          textDirection: ui.TextDirection.ltr,
         )..layout();
         textPainter.paint(
           canvas,
@@ -635,7 +739,7 @@ textDirection: ui.TextDirection.ltr,
           text: labels[i],
           style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
         ),
-textDirection: ui.TextDirection.ltr,
+        textDirection: ui.TextDirection.ltr,
       )..layout();
       labelPainter.paint(
         canvas,

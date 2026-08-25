@@ -609,6 +609,97 @@ function calculate_delivery_fee(string $fulfillment_type, float $subtotal, strin
     return 50.00;
 }
 
+function update_customer_order_delivery(int $order_id, int $customer_id, string $address, string $phone, ?float $latitude, ?float $longitude): array {
+    global $customer_db;
+
+    $address = trim($address);
+    $phone = trim($phone);
+    if ($order_id <= 0 || $customer_id <= 0 || $address === '' || $phone === '') {
+        return ['success' => false, 'message' => 'A complete delivery address and contact number are required.'];
+    }
+    if (($latitude === null) !== ($longitude === null)
+        || ($latitude !== null && ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180))) {
+        return ['success' => false, 'message' => 'The selected map location is invalid.'];
+    }
+
+    $order_stmt = $customer_db->prepare(
+        "SELECT id, order_status, fulfillment_type, subtotal, vat_amount, discount_amount
+         FROM tbl_orders
+         WHERE id = ? AND customer_id = ? LIMIT 1"
+    );
+    $order_stmt->bind_param('ii', $order_id, $customer_id);
+    $order_stmt->execute();
+    $order = $order_stmt->get_result()->fetch_assoc();
+    $order_stmt->close();
+
+    if (!$order) {
+        return ['success' => false, 'message' => 'Order not found.'];
+    }
+    if ($order['fulfillment_type'] !== 'delivery') {
+        return ['success' => false, 'message' => 'A delivery address cannot be changed for a pickup order.'];
+    }
+    if (!in_array($order['order_status'], ['pending', 'confirmed', 'processing'], true)) {
+        return ['success' => false, 'message' => 'Address changes are no longer available because this order is already being fulfilled.'];
+    }
+
+    if ($latitude !== null && $longitude !== null) {
+        if (!is_location_in_service_area($latitude, $longitude)) {
+            return ['success' => false, 'message' => 'This location is outside the supported Caloocan delivery area.'];
+        }
+        $delivery_fee = calculate_delivery_fee(
+            'delivery',
+            (float)$order['subtotal'] + (float)$order['vat_amount'],
+            $address,
+            $latitude,
+            $longitude
+        );
+        if ($delivery_fee < 0) {
+            return ['success' => false, 'message' => 'This location is outside the supported Caloocan delivery area or delivery range.'];
+        }
+    } elseif (!is_delivery_area_allowed($address)) {
+        return ['success' => false, 'message' => 'Please select a saved address in the supported Caloocan delivery area or choose a location from the map.'];
+    } else {
+        $delivery_fee = calculate_delivery_fee(
+            'delivery',
+            (float)$order['subtotal'] + (float)$order['vat_amount'],
+            $address
+        );
+    }
+
+    $discount = (float)$order['discount_amount'];
+    $total = max(0, (float)$order['subtotal'] + (float)$order['vat_amount'] + $delivery_fee - $discount);
+    $free_delivery = $delivery_fee <= 0 ? 1 : 0;
+
+    $customer_db->begin_transaction();
+    try {
+        $update_order = $customer_db->prepare(
+            "UPDATE tbl_orders
+             SET delivery_address = ?, delivery_phone = ?, delivery_fee = ?, free_delivery = ?, total = ?, updated_at = NOW()
+             WHERE id = ? AND customer_id = ? AND order_status IN ('pending', 'confirmed', 'processing')"
+        );
+        $update_order->bind_param('ssdidii', $address, $phone, $delivery_fee, $free_delivery, $total, $order_id, $customer_id);
+        if (!$update_order->execute()) {
+            $update_order->close();
+            throw new Exception('The order could not be updated because its status changed.');
+        }
+        $update_order->close();
+
+        $update_delivery = $customer_db->prepare(
+            "UPDATE tbl_delivery SET address = ?, phone = ? WHERE order_id = ?"
+        );
+        $update_delivery->bind_param('ssi', $address, $phone, $order_id);
+        $update_delivery->execute();
+        $update_delivery->close();
+
+        $customer_db->commit();
+        return ['success' => true, 'message' => 'Delivery address updated successfully.'];
+    } catch (Throwable $e) {
+        $customer_db->rollback();
+        error_log('[update_customer_order_delivery] failed: ' . $e->getMessage());
+        return ['success' => false, 'message' => 'The delivery address could not be updated. Please try again.'];
+    }
+}
+
 function calculate_loyalty_points(float $amount): float {
     return round($amount / 100, 2);
 }
@@ -825,7 +916,13 @@ function create_customer_order(int $customer_id, string $fulfillment_type, array
     $vat_amount = round($subtotal_ex_vat * $vat_rate, 2);
     $subtotal_inc_vat = $subtotal_ex_vat + $vat_amount;
 
-    $delivery_fee = calculate_delivery_fee($fulfillment_type, $subtotal_inc_vat, $details['delivery_address'] ?? '');
+    $delivery_fee = calculate_delivery_fee(
+        $fulfillment_type,
+        $subtotal_inc_vat,
+        $details['delivery_address'] ?? '',
+        isset($details['latitude']) && is_numeric($details['latitude']) ? (float)$details['latitude'] : null,
+        isset($details['longitude']) && is_numeric($details['longitude']) ? (float)$details['longitude'] : null
+    );
 
     $total = $subtotal_inc_vat + $delivery_fee;
     $discount_amount = 0.00;

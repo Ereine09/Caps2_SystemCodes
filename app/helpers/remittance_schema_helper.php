@@ -31,6 +31,18 @@ function ensure_remittance_schema(mysqli $conn): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ");
 
+    // Repair older installations that already have the table without newer columns.
+    $columns = [
+        'reference_number' => "ALTER TABLE `tbl_rider_remittances` ADD COLUMN `reference_number` VARCHAR(100) NULL AFTER `rider_id`",
+        'remitted_at' => "ALTER TABLE `tbl_rider_remittances` ADD COLUMN `remitted_at` TIMESTAMP NULL DEFAULT NULL AFTER `requested_at`",
+    ];
+    foreach ($columns as $column => $alter_sql) {
+        $column_check = $conn->query("SHOW COLUMNS FROM `tbl_rider_remittances` LIKE '$column'");
+        if ($column_check && $column_check->num_rows === 0) {
+            $conn->query($alter_sql);
+        }
+    }
+
     // 3. Add a column to tbl_orders to track if the COD payment has been settled by the rider
     $check_col_sql = "SHOW COLUMNS FROM `tbl_orders` LIKE 'payment_settled'";
     $res = $conn->query($check_col_sql);

@@ -58,8 +58,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quan
         $delivery_address = trim($_POST['new_delivery_address'] ?? '');
         $delivery_phone = trim($_POST['new_delivery_phone'] ?? '');
     } else {
-        $delivery_address = trim($_POST['saved_address_text'] ?? ''); // This is correct
-        $delivery_phone = trim($_POST['saved_address_phone'] ?? ''); // This was the missing link
+        $saved_address_stmt = $conn->prepare(
+            "SELECT full_address, phone, latitude, longitude
+             FROM customer_addresses WHERE id = ? AND customer_id = ? LIMIT 1"
+        );
+        $saved_address_id = (int)$address_option;
+        $saved_address_stmt->bind_param('ii', $saved_address_id, $customer['id']);
+        $saved_address_stmt->execute();
+        $saved_address = $saved_address_stmt->get_result()->fetch_assoc();
+        $saved_address_stmt->close();
+
+        if ($saved_address) {
+            $delivery_address = trim($saved_address['full_address']);
+            $delivery_phone = trim($saved_address['phone'] ?? '');
+            $latitude = is_numeric($saved_address['latitude']) ? (float)$saved_address['latitude'] : null;
+            $longitude = is_numeric($saved_address['longitude']) ? (float)$saved_address['longitude'] : null;
+        } else {
+            $errors[] = 'Please select a valid saved delivery address.';
+        }
     }
     $order_notes = trim($_POST['order_notes'] ?? '');
     $delivery_instructions = trim($_POST['delivery_instructions'] ?? '');
@@ -86,10 +102,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quan
         //     $errors[] = 'Delivery is currently limited to Caloocan, 10th Avenue, and Grace Park.';
         // }
         
-        // Validate map coordinates ONLY if a new address is being entered.
-        // Saved addresses might not have coordinates, and that's okay.
-        if ($address_option === 'new' && ($latitude === null || $longitude === null)) {
-            $errors[] = 'Please select your location on the map for a new delivery address.';
+        if ($latitude === null || $longitude === null) {
+            if ($address_option === 'new') {
+                $errors[] = 'Please select your location on the map for a new delivery address.';
+            }
+        } elseif ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
+            $errors[] = 'The selected delivery location is invalid. Please update it in your profile.';
         }
 
         if ($payment_method === 'pay_at_shop') {
@@ -239,6 +257,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quan
             'gcash_reference_number' => ($payment_method === 'gcash') ? $gcash_reference_number : $bank_reference_number,
             'reference_number' => ($payment_method === 'gcash') ? $gcash_reference_number : $bank_reference_number,
             'delivery_fee' => $delivery_fee,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
             'voucher_code' => $voucher_code_input, // Pass voucher to order creation
             'discount_amount' => $discount_amount, // Pass discount amount
             'bank_name' => $bank_name,
@@ -717,6 +737,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quan
                                         data-address="<?php echo htmlspecialchars($addr['full_address']); ?>" 
                                         data-phone="<?php echo htmlspecialchars($addr['phone']); ?>"
                                         data-label="<?php echo htmlspecialchars($addr['label']); ?>"
+                                        data-latitude="<?php echo htmlspecialchars($addr['latitude'] ?? ''); ?>"
+                                        data-longitude="<?php echo htmlspecialchars($addr['longitude'] ?? ''); ?>"
                                         <?php echo $addr['is_default'] ? 'selected' : ''; ?>>
                                     <?php echo htmlspecialchars($addr['label']); ?> — <?php echo htmlspecialchars($addr['full_address']); ?>
                                 </option>
@@ -757,11 +779,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['update_checkout_quan
 
                     <input type="hidden" name="saved_address_text" id="saved_address_text">
                     <input type="hidden" name="saved_address_phone" id="saved_address_phone">
-
-                    <div class="form-row">
-                        <label for="delivery_instructions">Delivery Instructions</label>
-                        <textarea name="delivery_instructions" id="delivery_instructions"><?php echo htmlspecialchars($_POST['delivery_instructions'] ?? ''); ?></textarea>
-                    </div>
                 </div>
                 <div class="form-row" style="margin-top: 20px;">
                     <label for="order_notes">Order Notes (Optional)</label>
@@ -906,6 +923,8 @@ function toggleNewAddressForm() {
         newAddressFields.style.display = 'block';
         savedAddressText.value = ''; 
         savedAddressPhone.value = '';
+        latitudeInput.value = '';
+        longitudeInput.value = '';
         deliveryPhoneInput.value = '<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>'; // Reset to default customer phone
         setTimeout(initFreeMap, 100); // Initialize map when shown
         if (customSelectContainer) { // Ensure the custom dropdown is closed
@@ -920,9 +939,54 @@ function toggleNewAddressForm() {
             latitudeInput.value = selectedOption.dataset.latitude || '';
             longitudeInput.value = selectedOption.dataset.longitude || '';
             deliveryPhoneInput.value = selectedOption.dataset.phone; // Use phone from saved address
+            if (!selectedOption.dataset.latitude || !selectedOption.dataset.longitude) {
+                resolveSavedAddressCoordinates(selectedOption);
+            }
         }
     }
     updateTotals();
+}
+
+async function resolveSavedAddressCoordinates(selectedOption) {
+    const address = (selectedOption.dataset.address || '').trim();
+    if (!address) return false;
+
+    const validationContainer = document.getElementById('delivery-validation-container');
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(address)}`);
+        if (!response.ok) throw new Error('Address lookup failed');
+        const results = await response.json();
+        const result = results[0];
+        if (!result || !isFinite(parseFloat(result.lat)) || !isFinite(parseFloat(result.lon))) {
+            throw new Error('Address coordinates not found');
+        }
+
+        const addressSelect = document.getElementById('address_option');
+        if (addressSelect.value !== selectedOption.value) return false;
+        document.getElementById('latitude').value = result.lat;
+        document.getElementById('longitude').value = result.lon;
+        selectedOption.dataset.latitude = result.lat;
+        selectedOption.dataset.longitude = result.lon;
+        updateTotals();
+        return true;
+    } catch (error) {
+        if (validationContainer && document.getElementById('address_option').value === selectedOption.value) {
+            validationContainer.innerHTML = '<div class="delivery-validation-msg valid">Address selected. Standard delivery fee will be applied because map coordinates are unavailable.</div>';
+        }
+        updateTotals();
+        return false;
+    }
+}
+
+function syncSelectedSavedAddress() {
+    const addressSelect = document.getElementById('address_option');
+    const selectedOption = addressSelect.options[addressSelect.selectedIndex];
+    if (!selectedOption || selectedOption.value === 'new') return;
+
+    document.getElementById('saved_address_text').value = selectedOption.dataset.address || '';
+    document.getElementById('saved_address_phone').value = selectedOption.dataset.phone || '';
+    document.getElementById('latitude').value = selectedOption.dataset.latitude || '';
+    document.getElementById('longitude').value = selectedOption.dataset.longitude || '';
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -978,6 +1042,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     updateDisplay(); // Initial display update
+    syncSelectedSavedAddress();
+    const initialOption = hiddenSelect.options[hiddenSelect.selectedIndex];
+    if (initialOption && initialOption.value !== 'new' && (!initialOption.dataset.latitude || !initialOption.dataset.longitude)) {
+        resolveSavedAddressCoordinates(initialOption);
+    }
 });
 
 function updateDeliveryFeeDisplay() {
@@ -1001,6 +1070,7 @@ function updateTotals(discount = 0) {
         validationContainer.innerHTML = ''; // Clear previous messages
         if (subtotal_gross >= 2000) {
             fee = 0;
+            validationContainer.innerHTML = '<div class="delivery-validation-msg valid">✓ Delivery available! Free delivery applies to this order.</div>';
         } else if (!isNaN(lat) && !isNaN(lon)) {
             const storeLat = 14.6594;
             const storeLon = 120.9838;
@@ -1026,6 +1096,11 @@ function updateTotals(discount = 0) {
             } else {
                 validationContainer.innerHTML = `<div class="delivery-validation-msg invalid">✕ Sorry, this location is outside our Caloocan service area.</div>`;
             }
+        } else if (document.getElementById('address_option').value !== 'new') {
+            fee = 50.00;
+            validationContainer.innerHTML = '<div class="delivery-validation-msg valid">Address selected. Standard delivery fee: <strong>PHP 50.00</strong>.</div>';
+        } else {
+            validationContainer.innerHTML = '<div class="delivery-validation-msg invalid">Please select a saved address with a valid map location or choose a location from the map.</div>';
         }
     }
     
@@ -1175,14 +1250,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add client-side validation before form submission
     const checkoutForm = document.getElementById('checkout-form');
     if (checkoutForm) {
-        checkoutForm.addEventListener('submit', function(e) {
+        checkoutForm.addEventListener('submit', async function(e) {
             const fulfillmentType = document.querySelector('input[name="fulfillment_type"]:checked').value;
             
             if (fulfillmentType === 'delivery') {
                 const addressSelect = document.getElementById('address_option');
                 const isUsingNewAddress = addressSelect.value === 'new';
                 
-                // If using a new address, require map coordinates. This now correctly checks the dropdown value.
                 if (isUsingNewAddress) {
                     const lat = document.getElementById('latitude').value;
                     const lon = document.getElementById('longitude').value;

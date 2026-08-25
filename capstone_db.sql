@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 12, 2026 at 07:04 PM
+-- Generation Time: Aug 24, 2026 at 02:58 PM
 -- Server version: 10.4.32-MariaDB
--- PHP Version: 8.2.12
+-- PHP Version: 8.0.30
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -71,7 +71,9 @@ INSERT INTO `activity_logs` (`id`, `user_id`, `customer_id`, `action`, `details`
 (34, 1, NULL, 'POINT_ADJUSTMENT', 'Processed points for Elaisa Reine Belandres (Type: Addition, Value: 10). Reason: Addition: Walk-in Purchase Points', '2026-07-31 17:27:49'),
 (35, 2, NULL, 'POINT_ADJUSTMENT', 'Processed points for Elaisa Reine Belandres (Type: Addition, Value: 5). Reason: Addition: Walk-in Purchase Points', '2026-08-02 12:22:04'),
 (36, NULL, 1, 'Customer Login', 'Customer \'Elaisa Reine Belandres\' (ID: 1) logged in.', '2026-08-04 03:01:36'),
-(37, 1, NULL, 'POINT_ADJUSTMENT', 'Processed points for Elaisa Reine Belandres (Type: Addition, Value: 5). Reason: Addition: Walk-in Purchase Points', '2026-08-04 08:25:39');
+(37, 1, NULL, 'POINT_ADJUSTMENT', 'Processed points for Elaisa Reine Belandres (Type: Addition, Value: 5). Reason: Addition: Walk-in Purchase Points', '2026-08-04 08:25:39'),
+(38, NULL, 1, 'Customer Login', 'Customer \'Elaisa Reine Belandres\' (ID: 1) logged in.', '2026-08-22 09:01:13'),
+(39, 1, NULL, 'POINT_ADJUSTMENT', 'Processed points for Marichelle D. Gono (Type: Addition, Value: 100). Reason: Addition: Walk-in Purchase Points', '2026-08-23 05:16:47');
 
 -- --------------------------------------------------------
 
@@ -98,8 +100,8 @@ CREATE TABLE `customers` (
 --
 
 INSERT INTO `customers` (`id`, `name`, `email`, `phone`, `gender`, `age`, `address`, `loyalty_points`, `created_at`, `admin_typing_at`, `last_typing_at`) VALUES
-(1, 'Elaisa Reine Belandres', 'ereinebelandres09@gmail.com', '09634998174', 'Female', 21, '269 Stotsenburg St. Caloocan City', 17.20, '2026-04-28 17:25:04', '2026-07-21 19:09:02', NULL),
-(2, 'Marichelle D. Gono', 'gonomarichelle@gmail.com', '09385381016', 'Female', 22, 'kawal phase 1 road, kawal phase 1 rd, blk 100 lot 6 purok 4 kawal st. dagat-dagatan caloocan city', 290.00, '2026-05-20 12:52:48', NULL, NULL);
+(1, 'Elaisa Reine Belandres', 'ereinebelandres09@gmail.com', '09634998174', 'Female', 21, '269 Stotsenburg St. Caloocan City', 23.20, '2026-04-28 17:25:04', '2026-07-21 19:09:02', NULL),
+(2, 'Marichelle D. Gono', 'gonomarichelle@gmail.com', '09385381016', 'Female', 22, 'kawal phase 1 road, kawal phase 1 rd, blk 100 lot 6 purok 4 kawal st. dagat-dagatan caloocan city', 100.00, '2026-05-20 12:52:48', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -113,6 +115,8 @@ CREATE TABLE `customer_addresses` (
   `label` varchar(50) NOT NULL,
   `full_address` text NOT NULL,
   `phone` varchar(20) DEFAULT NULL,
+  `latitude` decimal(10,8) DEFAULT NULL,
+  `longitude` decimal(11,8) DEFAULT NULL,
   `is_default` tinyint(1) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -121,8 +125,9 @@ CREATE TABLE `customer_addresses` (
 -- Dumping data for table `customer_addresses`
 --
 
-INSERT INTO `customer_addresses` (`id`, `customer_id`, `label`, `full_address`, `phone`, `is_default`, `created_at`) VALUES
-(1, 2, 'blk 100', 'kawal dagat-dagatan caloocan city', '09385381016', 0, '2026-06-24 12:45:10');
+INSERT INTO `customer_addresses` (`id`, `customer_id`, `label`, `full_address`, `phone`, `latitude`, `longitude`, `is_default`, `created_at`) VALUES
+(1, 2, 'blk 100', 'kawal dagat-dagatan caloocan city', '09385381016', NULL, NULL, 0, '2026-06-24 12:45:10'),
+(2, 1, 'Home', 'Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metro Manila, 1406, Philippines', '09634998174', NULL, NULL, 1, '2026-08-21 12:33:17');
 
 -- --------------------------------------------------------
 
@@ -245,7 +250,10 @@ INSERT INTO `loyalty_transactions` (`id`, `customer_id`, `user_id`, `product_nam
 (15, 1, NULL, 'Online Purchase (Order #87)', 0.00, 5.00, 87, '2026-08-02 12:34:50'),
 (16, 1, NULL, 'Online Purchase (Order #88)', 0.00, 22.70, 88, '2026-08-04 05:19:43'),
 (17, 1, NULL, 'Online Purchase (Order #89)', 0.00, 5.00, 89, '2026-08-04 08:01:54'),
-(18, 1, 1, 'Addition: Walk-in Purchase Points', 0.00, 5.00, NULL, '2026-08-04 08:25:33');
+(18, 1, 1, 'Addition: Walk-in Purchase Points', 0.00, 5.00, NULL, '2026-08-04 08:25:33'),
+(19, 1, NULL, 'Online Purchase (Order #90)', 0.00, 5.00, 90, '2026-08-21 13:03:53'),
+(20, 1, NULL, 'Online Purchase (Order #91)', 0.00, 1.00, 91, '2026-08-22 10:29:01'),
+(21, 2, 1, 'Addition: Walk-in Purchase Points', 0.00, 100.00, NULL, '2026-08-23 05:16:34');
 
 -- --------------------------------------------------------
 
@@ -278,42 +286,54 @@ CREATE TABLE `notifications` (
 --
 
 INSERT INTO `notifications` (`id`, `user_id`, `customer_id`, `type`, `channel`, `title`, `message`, `reference_table`, `reference_id`, `points_value`, `is_read`, `read_at`, `email_to`, `delivery_status`, `delivery_error`, `sent_at`, `created_at`) VALUES
-(1, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-490E76B7-1785333660 for PHP 560.00 was placed as Delivery. Free delivery applied.', 'tbl_orders', 82, NULL, 0, NULL, NULL, 'pending', NULL, NULL, '2026-07-29 14:01:01'),
-(2, NULL, 1, 'points_earned', 'both', 'You earned 5.00 points!', 'Elaisa Reine Belandres earned 5.00 points from your purchase. New usable balance: 0.00 points. Points expire after 12 months.', 'loyalty_transactions', 1, 5.00, 0, NULL, '0', 'sent', NULL, '2026-07-29 22:01:07', '2026-07-29 14:01:01'),
+(1, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-490E76B7-1785333660 for PHP 560.00 was placed as Delivery. Free delivery applied.', 'tbl_orders', 82, NULL, 1, '2026-08-21 20:55:29', NULL, 'pending', NULL, NULL, '2026-07-29 14:01:01'),
+(2, NULL, 1, 'points_earned', 'both', 'You earned 5.00 points!', 'Elaisa Reine Belandres earned 5.00 points from your purchase. New usable balance: 0.00 points. Points expire after 12 months.', 'loyalty_transactions', 1, 5.00, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-07-29 22:01:07', '2026-07-29 14:01:01'),
 (3, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 10.00 points. Reason: Addition: Special Bonus. Your new balance is 15.00 points.', NULL, NULL, 10.00, 1, '2026-07-29 23:10:40', '0', 'sent', NULL, '2026-07-29 22:55:02', '2026-07-29 14:54:57'),
-(4, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-0AE575F8-1785336944 for PHP 1,120.00 was placed as Delivery. Bulk order flagged for priority handling. Free delivery applied.', 'tbl_orders', 83, NULL, 0, NULL, NULL, 'pending', NULL, NULL, '2026-07-29 14:55:44'),
-(5, NULL, 1, 'points_earned', 'both', 'You earned 10.00 points!', 'Elaisa Reine Belandres earned 10.00 points from your purchase. New usable balance: 25.00 points. Points expire after 12 months.', 'loyalty_transactions', 3, 10.00, 0, NULL, '0', 'sent', NULL, '2026-07-29 22:55:49', '2026-07-29 14:55:45'),
+(4, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-0AE575F8-1785336944 for PHP 1,120.00 was placed as Delivery. Bulk order flagged for priority handling. Free delivery applied.', 'tbl_orders', 83, NULL, 1, '2026-08-21 20:55:29', NULL, 'pending', NULL, NULL, '2026-07-29 14:55:44'),
+(5, NULL, 1, 'points_earned', 'both', 'You earned 10.00 points!', 'Elaisa Reine Belandres earned 10.00 points from your purchase. New usable balance: 25.00 points. Points expire after 12 months.', 'loyalty_transactions', 3, 10.00, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-07-29 22:55:49', '2026-07-29 14:55:45'),
 (6, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 10.00 points. Reason: Addition: System Correction. Your new balance is 35.00 points.', NULL, NULL, 10.00, 1, '2026-07-29 23:10:40', '0', 'sent', NULL, '2026-07-29 22:56:29', '2026-07-29 14:56:24'),
-(7, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 10.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 45.00 points.', NULL, NULL, 10.00, 0, NULL, '0', 'sent', NULL, '2026-07-29 23:36:06', '2026-07-29 15:36:01'),
-(8, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-FBACE43C-1785342941 for PHP 560.00 was placed as Delivery. Free delivery applied.', 'tbl_orders', 84, NULL, 0, NULL, NULL, 'pending', NULL, NULL, '2026-07-29 16:35:42'),
-(9, NULL, 1, 'points_earned', 'both', 'You earned 5.00 points!', 'Elaisa Reine Belandres earned 5.00 points from your purchase. New usable balance: 50.00 points. Points expire after 12 months.', 'loyalty_transactions', 6, 5.00, 0, NULL, '0', 'sent', NULL, '2026-07-30 00:35:46', '2026-07-29 16:35:42'),
-(10, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 5.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 55.00 points.', NULL, NULL, 5.00, 0, NULL, '0', 'sent', NULL, '2026-07-30 00:36:06', '2026-07-29 16:36:02'),
-(11, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-5B3EC9C1-1785343042 for PHP 560.00 was placed as Delivery. Free delivery applied.', 'tbl_orders', 85, NULL, 0, NULL, NULL, 'pending', NULL, NULL, '2026-07-29 16:37:22'),
-(12, NULL, 1, 'points_earned', 'both', 'You earned 4.75 points!', 'Elaisa Reine Belandres earned 4.75 points from your purchase. New usable balance: 9.75 points. Points expire after 12 months.', 'loyalty_transactions', 8, 4.75, 0, NULL, '0', 'sent', NULL, '2026-07-30 00:37:27', '2026-07-29 16:37:22'),
-(13, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 10.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 19.75 points.', NULL, NULL, 10.00, 0, NULL, '0', 'sent', NULL, '2026-07-30 00:38:07', '2026-07-29 16:38:02'),
-(14, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 40.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 59.75 points.', NULL, NULL, 40.00, 0, NULL, '0', 'sent', NULL, '2026-07-30 00:49:56', '2026-07-29 16:49:51'),
-(15, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-500D3C37-1785428430 for PHP 560.00 was placed as Delivery. Free delivery applied.', 'tbl_orders', 86, NULL, 0, NULL, NULL, 'pending', NULL, NULL, '2026-07-30 16:20:31'),
-(16, NULL, 1, 'points_earned', 'both', 'You earned 4.75 points!', 'Elaisa Reine Belandres earned 4.75 points from your purchase. New usable balance: 14.50 points. Points expire after 12 months.', 'loyalty_transactions', 11, 4.75, 0, NULL, '0', 'sent', NULL, '2026-07-31 00:20:36', '2026-07-30 16:20:31'),
-(17, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 50.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 64.50 points.', NULL, NULL, 50.00, 0, NULL, '0', 'sent', NULL, '2026-07-31 00:21:12', '2026-07-30 16:21:08'),
-(18, NULL, 1, 'order_status_update', 'email', 'Order DPS-0AE575F8-1785336944 status update', 'Hi Elaisa Reine Belandres,\n\nYour order DPS-0AE575F8-1785336944 has been updated to: Completed.\n\nIf you have any questions, please contact us.', 'tbl_orders', 83, NULL, 0, NULL, '0', 'sent', NULL, '2026-08-01 00:54:25', '2026-07-31 16:54:20'),
-(19, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 10.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 24.50 points.', NULL, NULL, 10.00, 0, NULL, '0', 'sent', NULL, '2026-08-01 01:27:49', '2026-07-31 17:27:44'),
-(20, NULL, 1, 'order_status_update', 'email', 'Order DPS-FBACE43C-1785342941 status update', 'Hi Elaisa Reine Belandres,\n\nYour order DPS-FBACE43C-1785342941 has been updated to: Completed.\n\nIf you have any questions, please contact us.', 'tbl_orders', 84, NULL, 0, NULL, '0', 'sent', NULL, '2026-08-01 01:30:15', '2026-07-31 17:30:11'),
-(21, 6, 1, 'rider_qr_confirm', 'in_app', 'Delivery confirmed', 'Your delivery has been confirmed by the rider.', 'tbl_orders', 84, NULL, 0, NULL, NULL, 'sent', NULL, '2026-08-01 16:46:39', '2026-08-01 08:46:39'),
-(22, 6, 1, 'rider_qr_confirm', 'in_app', 'Delivery confirmed', 'Your delivery has been confirmed by the rider.', 'tbl_orders', 86, NULL, 0, NULL, NULL, 'sent', NULL, '2026-08-01 16:49:32', '2026-08-01 08:49:32'),
-(23, NULL, 1, 'order_status_update', 'email', 'Order DPS-500D3C37-1785428430 status update', 'Hi Elaisa Reine Belandres,\n\nYour order DPS-500D3C37-1785428430 has been updated to: To Receive.\n\nIf you have any questions, please contact us.', 'tbl_orders', 86, NULL, 0, NULL, '0', 'sent', NULL, '2026-08-01 16:53:06', '2026-08-01 08:52:58'),
-(24, NULL, 1, 'order_status_update', 'email', 'Order DPS-5B3EC9C1-1785343042 status update', 'Hi Elaisa Reine Belandres,\n\nYour order DPS-5B3EC9C1-1785343042 has been updated to: To Receive.\n\nIf you have any questions, please contact us.', 'tbl_orders', 85, NULL, 0, NULL, '0', 'sent', NULL, '2026-08-01 16:58:06', '2026-08-01 08:58:01'),
-(25, 6, 1, 'rider_qr_confirm', 'in_app', 'Delivery confirmed', 'Your delivery has been confirmed by the rider.', 'tbl_orders', 85, NULL, 0, NULL, NULL, 'sent', NULL, '2026-08-01 16:58:29', '2026-08-01 08:58:29'),
-(26, NULL, 1, 'order_status_update', 'email', 'Order DPS-500D3C37-1785428430 status update', 'Hi Elaisa Reine Belandres,\n\nYour order DPS-500D3C37-1785428430 has been updated to: Completed.\n\nIf you have any questions, please contact us.', 'tbl_orders', 86, NULL, 0, NULL, '0', 'sent', NULL, '2026-08-01 17:00:40', '2026-08-01 09:00:35'),
-(27, NULL, 1, 'order_status_update', 'email', 'Order DPS-0AE575F8-1785336944 status update', 'Hi Elaisa Reine Belandres,\n\nYour order DPS-0AE575F8-1785336944 has been updated to: Completed.\n\nIf you have any questions, please contact us.', 'tbl_orders', 83, NULL, 0, NULL, '0', 'sent', NULL, '2026-08-01 17:42:48', '2026-08-01 09:42:43'),
+(7, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 10.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 45.00 points.', NULL, NULL, 10.00, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-07-29 23:36:06', '2026-07-29 15:36:01'),
+(8, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-FBACE43C-1785342941 for PHP 560.00 was placed as Delivery. Free delivery applied.', 'tbl_orders', 84, NULL, 1, '2026-08-21 20:55:29', NULL, 'pending', NULL, NULL, '2026-07-29 16:35:42'),
+(9, NULL, 1, 'points_earned', 'both', 'You earned 5.00 points!', 'Elaisa Reine Belandres earned 5.00 points from your purchase. New usable balance: 50.00 points. Points expire after 12 months.', 'loyalty_transactions', 6, 5.00, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-07-30 00:35:46', '2026-07-29 16:35:42'),
+(10, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 5.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 55.00 points.', NULL, NULL, 5.00, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-07-30 00:36:06', '2026-07-29 16:36:02'),
+(11, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-5B3EC9C1-1785343042 for PHP 560.00 was placed as Delivery. Free delivery applied.', 'tbl_orders', 85, NULL, 1, '2026-08-21 20:55:29', NULL, 'pending', NULL, NULL, '2026-07-29 16:37:22'),
+(12, NULL, 1, 'points_earned', 'both', 'You earned 4.75 points!', 'Elaisa Reine Belandres earned 4.75 points from your purchase. New usable balance: 9.75 points. Points expire after 12 months.', 'loyalty_transactions', 8, 4.75, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-07-30 00:37:27', '2026-07-29 16:37:22'),
+(13, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 10.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 19.75 points.', NULL, NULL, 10.00, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-07-30 00:38:07', '2026-07-29 16:38:02'),
+(14, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 40.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 59.75 points.', NULL, NULL, 40.00, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-07-30 00:49:56', '2026-07-29 16:49:51'),
+(15, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-500D3C37-1785428430 for PHP 560.00 was placed as Delivery. Free delivery applied.', 'tbl_orders', 86, NULL, 1, '2026-08-21 20:55:29', NULL, 'pending', NULL, NULL, '2026-07-30 16:20:31'),
+(16, NULL, 1, 'points_earned', 'both', 'You earned 4.75 points!', 'Elaisa Reine Belandres earned 4.75 points from your purchase. New usable balance: 14.50 points. Points expire after 12 months.', 'loyalty_transactions', 11, 4.75, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-07-31 00:20:36', '2026-07-30 16:20:31'),
+(17, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 50.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 64.50 points.', NULL, NULL, 50.00, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-07-31 00:21:12', '2026-07-30 16:21:08'),
+(18, NULL, 1, 'order_status_update', 'email', 'Order DPS-0AE575F8-1785336944 status update', 'Hi Elaisa Reine Belandres,\n\nYour order DPS-0AE575F8-1785336944 has been updated to: Completed.\n\nIf you have any questions, please contact us.', 'tbl_orders', 83, NULL, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-08-01 00:54:25', '2026-07-31 16:54:20'),
+(19, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 10.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 24.50 points.', NULL, NULL, 10.00, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-08-01 01:27:49', '2026-07-31 17:27:44'),
+(20, NULL, 1, 'order_status_update', 'email', 'Order DPS-FBACE43C-1785342941 status update', 'Hi Elaisa Reine Belandres,\n\nYour order DPS-FBACE43C-1785342941 has been updated to: Completed.\n\nIf you have any questions, please contact us.', 'tbl_orders', 84, NULL, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-08-01 01:30:15', '2026-07-31 17:30:11'),
+(21, 6, 1, 'rider_qr_confirm', 'in_app', 'Delivery confirmed', 'Your delivery has been confirmed by the rider.', 'tbl_orders', 84, NULL, 1, '2026-08-21 20:55:29', NULL, 'sent', NULL, '2026-08-01 16:46:39', '2026-08-01 08:46:39'),
+(22, 6, 1, 'rider_qr_confirm', 'in_app', 'Delivery confirmed', 'Your delivery has been confirmed by the rider.', 'tbl_orders', 86, NULL, 1, '2026-08-21 20:55:29', NULL, 'sent', NULL, '2026-08-01 16:49:32', '2026-08-01 08:49:32'),
+(23, NULL, 1, 'order_status_update', 'email', 'Order DPS-500D3C37-1785428430 status update', 'Hi Elaisa Reine Belandres,\n\nYour order DPS-500D3C37-1785428430 has been updated to: To Receive.\n\nIf you have any questions, please contact us.', 'tbl_orders', 86, NULL, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-08-01 16:53:06', '2026-08-01 08:52:58'),
+(24, NULL, 1, 'order_status_update', 'email', 'Order DPS-5B3EC9C1-1785343042 status update', 'Hi Elaisa Reine Belandres,\n\nYour order DPS-5B3EC9C1-1785343042 has been updated to: To Receive.\n\nIf you have any questions, please contact us.', 'tbl_orders', 85, NULL, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-08-01 16:58:06', '2026-08-01 08:58:01'),
+(25, 6, 1, 'rider_qr_confirm', 'in_app', 'Delivery confirmed', 'Your delivery has been confirmed by the rider.', 'tbl_orders', 85, NULL, 1, '2026-08-21 20:55:29', NULL, 'sent', NULL, '2026-08-01 16:58:29', '2026-08-01 08:58:29'),
+(26, NULL, 1, 'order_status_update', 'email', 'Order DPS-500D3C37-1785428430 status update', 'Hi Elaisa Reine Belandres,\n\nYour order DPS-500D3C37-1785428430 has been updated to: Completed.\n\nIf you have any questions, please contact us.', 'tbl_orders', 86, NULL, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-08-01 17:00:40', '2026-08-01 09:00:35'),
+(27, NULL, 1, 'order_status_update', 'email', 'Order DPS-0AE575F8-1785336944 status update', 'Hi Elaisa Reine Belandres,\n\nYour order DPS-0AE575F8-1785336944 has been updated to: Completed.\n\nIf you have any questions, please contact us.', 'tbl_orders', 83, NULL, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-08-01 17:42:48', '2026-08-01 09:42:43'),
 (28, 2, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 5.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 29.50 points.', NULL, NULL, 5.00, 1, '2026-08-02 20:22:12', '0', 'sent', NULL, '2026-08-02 20:22:04', '2026-08-02 12:21:57'),
-(29, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-40473E2D-1785674089 for PHP 560.00 was placed as Delivery. Free delivery applied.', 'tbl_orders', 87, NULL, 0, NULL, NULL, 'pending', NULL, NULL, '2026-08-02 12:34:49'),
-(30, NULL, 1, 'points_earned', 'both', 'You earned 5.00 points!', 'Elaisa Reine Belandres earned 5.00 points from your purchase. New usable balance: 34.50 points. Points expire after 12 months.', 'loyalty_transactions', 15, 5.00, 0, NULL, '0', 'sent', NULL, '2026-08-02 20:34:58', '2026-08-02 12:34:50'),
-(31, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-7C13E433-1785820783 for PHP 2,570.40 was placed as Delivery. Bulk order flagged for priority handling. Free delivery applied.', 'tbl_orders', 88, NULL, 0, NULL, NULL, 'pending', NULL, NULL, '2026-08-04 05:19:43'),
-(32, NULL, 1, 'points_earned', 'both', 'You earned 22.70 points!', 'Elaisa Reine Belandres earned 22.70 points from your purchase. New usable balance: 57.20 points. Points expire after 12 months.', 'loyalty_transactions', 16, 22.70, 0, NULL, '0', 'sent', NULL, '2026-08-04 13:19:49', '2026-08-04 05:19:43'),
-(33, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-1ACFEAF5-1785830513 for PHP 560.00 was placed as Pickup. Free delivery applied.', 'tbl_orders', 89, NULL, 0, NULL, NULL, 'pending', NULL, NULL, '2026-08-04 08:01:54'),
-(34, NULL, 1, 'points_earned', 'both', 'You earned 5.00 points!', 'Elaisa Reine Belandres earned 5.00 points from your purchase. New usable balance: 12.20 points. Points expire after 12 months.', 'loyalty_transactions', 17, 5.00, 0, NULL, '0', 'sent', NULL, '2026-08-04 16:02:01', '2026-08-04 08:01:54'),
-(35, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 5.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 17.20 points.', NULL, NULL, 5.00, 0, NULL, '0', 'sent', NULL, '2026-08-04 16:25:39', '2026-08-04 08:25:33'),
-(36, 6, 1, 'rider_qr_confirm', 'in_app', 'Delivery confirmed', 'Your delivery has been confirmed by the rider.', 'tbl_orders', 88, NULL, 0, NULL, NULL, 'sent', NULL, '2026-08-04 20:33:05', '2026-08-04 12:33:05');
+(29, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-40473E2D-1785674089 for PHP 560.00 was placed as Delivery. Free delivery applied.', 'tbl_orders', 87, NULL, 1, '2026-08-21 20:55:29', NULL, 'pending', NULL, NULL, '2026-08-02 12:34:49'),
+(30, NULL, 1, 'points_earned', 'both', 'You earned 5.00 points!', 'Elaisa Reine Belandres earned 5.00 points from your purchase. New usable balance: 34.50 points. Points expire after 12 months.', 'loyalty_transactions', 15, 5.00, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-08-02 20:34:58', '2026-08-02 12:34:50'),
+(31, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-7C13E433-1785820783 for PHP 2,570.40 was placed as Delivery. Bulk order flagged for priority handling. Free delivery applied.', 'tbl_orders', 88, NULL, 1, '2026-08-21 20:55:29', NULL, 'pending', NULL, NULL, '2026-08-04 05:19:43'),
+(32, NULL, 1, 'points_earned', 'both', 'You earned 22.70 points!', 'Elaisa Reine Belandres earned 22.70 points from your purchase. New usable balance: 57.20 points. Points expire after 12 months.', 'loyalty_transactions', 16, 22.70, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-08-04 13:19:49', '2026-08-04 05:19:43'),
+(33, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-1ACFEAF5-1785830513 for PHP 560.00 was placed as Pickup. Free delivery applied.', 'tbl_orders', 89, NULL, 1, '2026-08-21 20:55:29', NULL, 'pending', NULL, NULL, '2026-08-04 08:01:54'),
+(34, NULL, 1, 'points_earned', 'both', 'You earned 5.00 points!', 'Elaisa Reine Belandres earned 5.00 points from your purchase. New usable balance: 12.20 points. Points expire after 12 months.', 'loyalty_transactions', 17, 5.00, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-08-04 16:02:01', '2026-08-04 08:01:54'),
+(35, 1, 1, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Elaisa Reine Belandres, your loyalty points have been updated by 5.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 17.20 points.', NULL, NULL, 5.00, 1, '2026-08-21 20:55:29', '0', 'sent', NULL, '2026-08-04 16:25:39', '2026-08-04 08:25:33'),
+(36, 6, 1, 'rider_qr_confirm', 'in_app', 'Delivery confirmed', 'Your delivery has been confirmed by the rider.', 'tbl_orders', 88, NULL, 1, '2026-08-21 20:55:29', NULL, 'sent', NULL, '2026-08-04 20:33:05', '2026-08-04 12:33:05'),
+(37, 1, 1, 'rider_message', 'in_app', 'Message from your rider', 'Your rider sent you a message.', 'tbl_messages', 1, NULL, 1, '2026-08-21 20:55:11', NULL, 'sent', NULL, '2026-08-21 17:38:36', '2026-08-21 09:38:36'),
+(38, NULL, 1, 'order_status_update', 'both', 'Order #DPS-40473E2D-1785674089 Status Updated', 'Hello Elaisa Reine Belandres,\n\nYour order #DPS-40473E2D-1785674089 has been updated.\n\nCurrent Order Status:\nCompleted\n\nOrder Date: August 2, 2026\nFulfillment: Delivery\nPickup Date: 0000-00-00\n\nYou can log in to your Darius Poultry Supplies customer portal to view the latest details of your order.\n\nThank you for shopping with Darius Poultry Supplies.', 'tbl_orders', 87, NULL, 1, '2026-08-21 20:55:05', '0', 'sent', NULL, '2026-08-21 20:22:17', '2026-08-21 12:22:10'),
+(39, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-15A7D141-1787315573 for PHP 560.00 was placed as Delivery.', 'tbl_orders', 90, NULL, 1, '2026-08-21 20:55:00', NULL, 'pending', NULL, NULL, '2026-08-21 12:32:54'),
+(40, NULL, 1, 'order_status_update', 'both', 'Order Confirmed!', 'Your order #DPS-15A7D141-1787315573 has been confirmed and is now being processed.', 'tbl_orders', 90, NULL, 1, '2026-08-21 20:45:06', NULL, 'failed', 'Invalid recipient email address.', NULL, '2026-08-21 12:44:52'),
+(41, NULL, 1, 'points_earned', 'both', 'Loyalty points earned', 'Elaisa Reine Belandres earned 5.00 points from order #90. Current balance: 22.20 points.', 'tbl_orders', 90, 5.00, 0, NULL, '0', 'sent', NULL, '2026-08-21 21:03:58', '2026-08-21 13:03:53'),
+(42, NULL, 1, 'order_status_update', 'both', 'Order DPS-15A7D141-1787315573 status update', 'Hi Elaisa Reine Belandres,\n\nYour order DPS-15A7D141-1787315573 has been updated to: Completed.\n\nIf you have any questions, please contact us.\n\nLoyalty Points Earned: 5.00\nCurrent Loyalty Points Balance: 22.20', 'tbl_orders', 90, NULL, 0, NULL, '0', 'sent', NULL, '2026-08-21 21:04:03', '2026-08-21 13:03:58'),
+(43, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-980E2683-1787394411 for PHP 112.00 was placed as Delivery.', 'tbl_orders', 91, NULL, 0, NULL, NULL, 'pending', NULL, NULL, '2026-08-22 10:26:52'),
+(44, NULL, 1, 'points_earned', 'both', 'Loyalty points earned', 'Elaisa Reine Belandres earned 1.00 points from order #91. Current balance: 23.20 points.', 'tbl_orders', 91, 1.00, 0, NULL, '0', 'sent', NULL, '2026-08-22 18:29:07', '2026-08-22 10:29:01'),
+(45, NULL, 1, 'order_status_update', 'both', 'Order #DPS-980E2683-1787394411 Status Updated', 'Hello Elaisa Reine Belandres,\n\nYour order #DPS-980E2683-1787394411 has been updated.\n\nCurrent Order Status:\nTo Ship\n\nOrder Date: August 22, 2026\nFulfillment: Delivery\nPickup Date: 0000-00-00\n\nYou can log in to your Darius Poultry Supplies customer portal to view the latest details of your order.\n\nThank you for shopping with Darius Poultry Supplies.', 'tbl_orders', 91, NULL, 0, NULL, '0', 'sent', NULL, '2026-08-22 18:29:14', '2026-08-22 10:29:08'),
+(46, NULL, 1, 'order_status_update', 'both', 'Order #DPS-980E2683-1787394411 Status Updated', 'Hello Elaisa Reine Belandres,\n\nYour order #DPS-980E2683-1787394411 has been updated.\n\nCurrent Order Status:\nCompleted\n\nOrder Date: August 22, 2026\nFulfillment: Delivery\nPickup Date: 0000-00-00\n\nLoyalty Points Earned: 1.00\nCurrent Loyalty Points Balance: 23.20\n\nYou can log in to your Darius Poultry Supplies customer portal to view the latest details of your order.\n\nThank you for shopping with Darius Poultry Supplies.', 'tbl_orders', 91, NULL, 0, NULL, '0', 'sent', NULL, '2026-08-22 18:29:54', '2026-08-22 10:29:46'),
+(47, NULL, 1, 'ORDER', 'in_app', 'New Customer Order', 'Order #DPS-71B2DF7B-1787447328 for PHP 207.20 was placed as Delivery.', 'tbl_orders', 92, NULL, 0, NULL, NULL, 'pending', NULL, NULL, '2026-08-23 01:08:49'),
+(48, 1, 2, 'point_adjustment', 'both', 'Points Balance Updated', 'Hello Marichelle D. Gono, your loyalty points have been updated by 100.00 points. Reason: Addition: Walk-in Purchase Points. Your new balance is 100.00 points.', NULL, NULL, 100.00, 0, NULL, '0', 'sent', NULL, '2026-08-23 13:16:46', '2026-08-23 05:16:34');
 
 -- --------------------------------------------------------
 
@@ -400,6 +420,7 @@ CREATE TABLE `riders` (
   `vehicle_type` varchar(50) DEFAULT NULL COMMENT 'e.g., Motorcycle, Bicycle',
   `plate_number` varchar(20) DEFAULT NULL,
   `is_on_duty` tinyint(1) DEFAULT 0,
+  `availability_status` enum('available','unavailable') NOT NULL DEFAULT 'available',
   `last_seen` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -407,10 +428,10 @@ CREATE TABLE `riders` (
 -- Dumping data for table `riders`
 --
 
-INSERT INTO `riders` (`id`, `user_id`, `vehicle_type`, `plate_number`, `is_on_duty`, `last_seen`) VALUES
-(2, 2, NULL, NULL, 0, NULL),
-(3, 1, NULL, NULL, 0, NULL),
-(4, 6, NULL, NULL, 0, NULL);
+INSERT INTO `riders` (`id`, `user_id`, `vehicle_type`, `plate_number`, `is_on_duty`, `availability_status`, `last_seen`) VALUES
+(2, 2, NULL, NULL, 0, 'available', NULL),
+(3, 1, NULL, NULL, 0, 'available', NULL),
+(4, 6, NULL, NULL, 1, 'available', '2026-08-21 09:33:35');
 
 -- --------------------------------------------------------
 
@@ -544,7 +565,10 @@ INSERT INTO `tbl_delivery` (`id`, `order_id`, `rider_id`, `delivery_type`, `addr
 (5, 86, 6, 'delivery', 'Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metro Manila, 1406, Philippines', '09634998174', '', 'delivered', NULL, '2026-08-01 16:49:32', 'f1c83f240f23d5337f286cbc6793f9a7', '2026-07-30 16:20:30', '2026-08-01 16:49:32'),
 (6, 87, NULL, 'delivery', 'Baltazar Bukid, Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metropolitan Manila, 1406, Philippines', '09634998174', '', 'pending', NULL, NULL, '429fde8fd9695536ba72d3ac48e4cd87', '2026-08-02 12:34:49', NULL),
 (7, 88, 6, 'delivery', 'Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metro Manila, 1406, Philippines', '09634998174', '', 'delivered', NULL, '2026-08-04 20:33:05', NULL, '2026-08-04 05:19:43', '2026-08-04 20:33:05'),
-(8, 89, NULL, 'pickup', '', '', '', 'pending', '2026-08-09 09:00:00', NULL, '69648348afeae10b1fcee5e5629dac9b', '2026-08-04 08:01:53', NULL);
+(8, 89, NULL, 'pickup', '', '', '', 'pending', '2026-08-09 09:00:00', NULL, '69648348afeae10b1fcee5e5629dac9b', '2026-08-04 08:01:53', NULL),
+(9, 90, NULL, 'delivery', 'Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metro Manila, 1406, Philippines', '09634998174', '', 'pending', NULL, NULL, '8deeec6f604e0ae00bc2594be8777521', '2026-08-21 12:32:53', NULL),
+(10, 91, NULL, 'delivery', 'Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metro Manila, 1406, Philippines', '09634998174', '', 'pending', NULL, NULL, '173fa04a7a18a9140043c6ef0a23f68d', '2026-08-22 10:26:51', NULL),
+(11, 92, NULL, 'delivery', 'Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metro Manila, 1406, Philippines', '09634998174', '', 'pending', NULL, NULL, '15aa166328cc12fe19ec856134e0a554', '2026-08-23 01:08:48', NULL);
 
 -- --------------------------------------------------------
 
@@ -563,6 +587,13 @@ CREATE TABLE `tbl_messages` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `tbl_messages`
+--
+
+INSERT INTO `tbl_messages` (`id`, `customer_id`, `user_id`, `sender_type`, `message`, `is_read`, `read_at`, `created_at`) VALUES
+(1, 1, 6, 'rider', 'DPS DELIVERY! ID: DPS-1ACFEAF5-1785830513, Rider: testrider1.  Your COD amount is 1000.00. You can pay by cash or conveniently online when the rider arrives.  Please note that a photo proof of delivery is required.  Thank you for choosing DPS Express Philippines! Stay safe and have a great day ahead.', 1, '2026-08-21 17:38:50', '2026-08-21 09:38:36');
+
 -- --------------------------------------------------------
 
 --
@@ -575,6 +606,7 @@ CREATE TABLE `tbl_orders` (
   `rider_id` int(11) DEFAULT NULL,
   `order_number` varchar(100) NOT NULL,
   `order_status` enum('pending','confirmed','processing','ready_for_pickup','out_for_delivery','to_ship','to_receive','reviews','completed','cancelled') NOT NULL DEFAULT 'pending',
+  `cancellation_reason` text DEFAULT NULL,
   `fulfillment_type` enum('pickup','delivery') NOT NULL DEFAULT 'pickup',
   `pickup_date` date DEFAULT NULL,
   `pickup_time` varchar(50) DEFAULT NULL,
@@ -585,6 +617,7 @@ CREATE TABLE `tbl_orders` (
   `subtotal` decimal(10,2) NOT NULL DEFAULT 0.00,
   `vat_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
   `delivery_fee` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `tip` decimal(10,2) NOT NULL DEFAULT 0.00,
   `bulk_order` tinyint(1) NOT NULL DEFAULT 0,
   `free_delivery` tinyint(1) NOT NULL DEFAULT 0,
   `loyalty_points_earned` decimal(10,2) NOT NULL DEFAULT 0.00,
@@ -607,14 +640,17 @@ CREATE TABLE `tbl_orders` (
 -- Dumping data for table `tbl_orders`
 --
 
-INSERT INTO `tbl_orders` (`id`, `customer_id`, `rider_id`, `order_number`, `order_status`, `fulfillment_type`, `pickup_date`, `pickup_time`, `delivery_address`, `order_notes`, `delivery_phone`, `delivery_instructions`, `subtotal`, `vat_amount`, `delivery_fee`, `bulk_order`, `free_delivery`, `loyalty_points_earned`, `discount_amount`, `voucher_code`, `total`, `created_at`, `updated_at`, `payment_method`, `payment_settled`, `payment_reference`, `bank_name`, `bank_account_name`, `payment_proof_path`, `qr_code_path`, `payment_confirmation_token`) VALUES
-(83, 1, 4, 'DPS-0AE575F8-1785336944', 'out_for_delivery', 'delivery', '0000-00-00', '', 'Baltazar Bukid, Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metropolitan Manila, 1406, Philippines', NULL, '09634998174', '', 1000.00, 120.00, 0.00, 1, 1, 10.00, 0.00, '', 1120.00, '2026-07-29 14:55:44', NULL, 'gcash', 0, '1038780232114', NULL, NULL, NULL, NULL, NULL),
-(84, 1, NULL, 'DPS-FBACE43C-1785342941', 'completed', 'delivery', '0000-00-00', '', 'Baltazar Bukid, Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metropolitan Manila, 1406, Philippines', NULL, '09634998174', '', 500.00, 60.00, 0.00, 0, 1, 5.00, 0.00, '', 560.00, '2026-07-29 16:35:41', '2026-08-01 16:46:39', 'gcash', 0, '1038780232114', NULL, NULL, NULL, NULL, NULL),
-(85, 1, NULL, 'DPS-5B3EC9C1-1785343042', 'completed', 'delivery', '0000-00-00', '', 'Baltazar Bukid, Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metropolitan Manila, 1406, Philippines', NULL, '09634998174', '', 500.00, 60.00, 0.00, 0, 1, 4.75, 25.00, 'V-BBA197E1ADE1', 535.00, '2026-07-29 16:37:22', '2026-08-01 16:58:29', 'cod', 0, '', NULL, NULL, NULL, NULL, NULL),
-(86, 1, NULL, 'DPS-500D3C37-1785428430', 'completed', 'delivery', '0000-00-00', '', 'Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metro Manila, 1406, Philippines', NULL, '09634998174', '', 500.00, 60.00, 0.00, 0, 1, 4.75, 25.00, 'V-DD818CEFFF3F', 535.00, '2026-07-30 16:20:30', '2026-08-01 16:49:32', 'gcash', 0, '4043017654741', NULL, NULL, NULL, NULL, NULL),
-(87, 1, 4, 'DPS-40473E2D-1785674089', 'out_for_delivery', 'delivery', '0000-00-00', '', 'Baltazar Bukid, Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metropolitan Manila, 1406, Philippines', '', '09634998174', '0', 500.00, 60.00, 0.00, 0, 1, 5.00, 0.00, '', 560.00, '2026-08-02 12:34:49', NULL, 'cod', 0, '', NULL, NULL, NULL, NULL, NULL),
-(88, 1, 4, 'DPS-7C13E433-1785820783', 'completed', 'delivery', '0000-00-00', '', 'Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metro Manila, 1406, Philippines', 'hahahahahahhahahahaha', '09634998174', '0', 2295.00, 275.40, 0.00, 1, 1, 22.70, 25.00, 'V-6AF68E60774A', 2545.40, '2026-08-04 05:19:43', '2026-08-04 20:33:05', 'cod', 0, '', NULL, NULL, NULL, NULL, NULL),
-(89, 1, NULL, 'DPS-1ACFEAF5-1785830513', 'pending', 'pickup', '2026-08-09', '09:00', '', '', '', '0', 500.00, 60.00, 0.00, 0, 1, 5.00, 25.00, 'V-018CFACF75EF', 535.00, '2026-08-04 08:01:53', NULL, 'gcash', 0, '4043017654741', NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `tbl_orders` (`id`, `customer_id`, `rider_id`, `order_number`, `order_status`, `cancellation_reason`, `fulfillment_type`, `pickup_date`, `pickup_time`, `delivery_address`, `order_notes`, `delivery_phone`, `delivery_instructions`, `subtotal`, `vat_amount`, `delivery_fee`, `tip`, `bulk_order`, `free_delivery`, `loyalty_points_earned`, `discount_amount`, `voucher_code`, `total`, `created_at`, `updated_at`, `payment_method`, `payment_settled`, `payment_reference`, `bank_name`, `bank_account_name`, `payment_proof_path`, `qr_code_path`, `payment_confirmation_token`) VALUES
+(83, 1, 4, 'DPS-0AE575F8-1785336944', 'out_for_delivery', NULL, 'delivery', '0000-00-00', '', 'Baltazar Bukid, Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metropolitan Manila, 1406, Philippines', NULL, '09634998174', '', 1000.00, 120.00, 0.00, 0.00, 1, 1, 10.00, 0.00, '', 1120.00, '2026-07-29 14:55:44', NULL, 'gcash', 0, '1038780232114', NULL, NULL, NULL, NULL, NULL),
+(84, 1, NULL, 'DPS-FBACE43C-1785342941', 'completed', NULL, 'delivery', '0000-00-00', '', 'Baltazar Bukid, Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metropolitan Manila, 1406, Philippines', NULL, '09634998174', '', 500.00, 60.00, 0.00, 0.00, 0, 1, 5.00, 0.00, '', 560.00, '2026-07-29 16:35:41', '2026-08-01 16:46:39', 'gcash', 0, '1038780232114', NULL, NULL, NULL, NULL, NULL),
+(85, 1, NULL, 'DPS-5B3EC9C1-1785343042', 'completed', NULL, 'delivery', '0000-00-00', '', 'Baltazar Bukid, Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metropolitan Manila, 1406, Philippines', NULL, '09634998174', '', 500.00, 60.00, 0.00, 0.00, 0, 1, 4.75, 25.00, 'V-BBA197E1ADE1', 535.00, '2026-07-29 16:37:22', '2026-08-01 16:58:29', 'cod', 0, '', NULL, NULL, NULL, NULL, NULL),
+(86, 1, NULL, 'DPS-500D3C37-1785428430', 'completed', NULL, 'delivery', '0000-00-00', '', 'Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metro Manila, 1406, Philippines', NULL, '09634998174', '', 500.00, 60.00, 0.00, 0.00, 0, 1, 4.75, 25.00, 'V-DD818CEFFF3F', 535.00, '2026-07-30 16:20:30', '2026-08-01 16:49:32', 'gcash', 0, '4043017654741', NULL, NULL, NULL, NULL, NULL),
+(87, 1, 4, 'DPS-40473E2D-1785674089', 'completed', NULL, 'delivery', '0000-00-00', '', 'Baltazar Bukid, Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metropolitan Manila, 1406, Philippines', '', '09634998174', '0', 500.00, 60.00, 0.00, 0.00, 0, 1, 5.00, 0.00, '', 560.00, '2026-08-02 12:34:49', '2026-08-21 20:22:10', 'cod', 0, '', NULL, NULL, NULL, NULL, NULL),
+(88, 1, 4, 'DPS-7C13E433-1785820783', 'completed', NULL, 'delivery', '0000-00-00', '', 'Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metro Manila, 1406, Philippines', 'hahahahahahhahahahaha', '09634998174', '0', 2295.00, 275.40, 0.00, 0.00, 1, 1, 22.70, 25.00, 'V-6AF68E60774A', 2545.40, '2026-08-04 05:19:43', '2026-08-04 20:33:05', 'cod', 0, '', NULL, NULL, NULL, NULL, NULL),
+(89, 1, NULL, 'DPS-1ACFEAF5-1785830513', 'completed', NULL, 'pickup', '2026-08-09', '09:00', '', '', '', '0', 500.00, 60.00, 0.00, 0.00, 0, 1, 5.00, 25.00, 'V-018CFACF75EF', 535.00, '2026-08-04 08:01:53', '2026-08-21 17:22:14', 'gcash', 0, '4043017654741', NULL, NULL, NULL, NULL, NULL),
+(90, 1, NULL, 'DPS-15A7D141-1787315573', 'completed', NULL, 'delivery', '0000-00-00', '', 'Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metro Manila, 1406, Philippines', '', '09634998174', '0', 500.00, 60.00, 50.00, 0.00, 0, 0, 5.00, 0.00, '', 610.00, '2026-08-21 12:32:53', NULL, 'cod', 0, '', NULL, NULL, NULL, NULL, NULL),
+(91, 1, NULL, 'DPS-980E2683-1787394411', 'completed', NULL, 'delivery', '0000-00-00', '', 'Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metro Manila, 1406, Philippines', '', '09634998174', '0', 100.00, 12.00, 50.00, 0.00, 0, 0, 1.00, 0.00, '', 162.00, '2026-08-22 10:26:51', '2026-08-22 18:29:46', 'cod', 0, '', NULL, NULL, NULL, NULL, NULL),
+(92, 1, NULL, 'DPS-71B2DF7B-1787447328', 'cancelled', 'ang galing mo pokingina', 'delivery', '0000-00-00', '', 'Barangay 70, Zone 6, Grace Park West, District 2, Caloocan, Northern Manila District, Metro Manila, 1406, Philippines', '', '09634998174', '0', 185.00, 22.20, 50.00, 0.00, 0, 0, 0.00, 0.00, '', 257.20, '2026-08-23 01:08:48', NULL, 'cod', 0, '', NULL, NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -652,7 +688,10 @@ INSERT INTO `tbl_order_items` (`id`, `order_id`, `product_id`, `product_name`, `
 (16, 89, 34, 'Supercoat Adult Small Sensitive Skin Ocean Fish Dry Dog Food', NULL, 2, 100.00, 200.00, '2026-08-04 08:01:53'),
 (17, 89, 7, 'Friskies Kitten Discoveries Kitten Dry Cat Food', NULL, 1, 100.00, 100.00, '2026-08-04 08:01:53'),
 (18, 89, 32, 'Fancy Feast Savory Salmon Adult Wet Cat Food', NULL, 1, 100.00, 100.00, '2026-08-04 08:01:53'),
-(19, 89, 4, 'PURINA ONE® Active Kitten with Chicken Dry Cat Food', NULL, 1, 100.00, 100.00, '2026-08-04 08:01:53');
+(19, 89, 4, 'PURINA ONE® Active Kitten with Chicken Dry Cat Food', NULL, 1, 100.00, 100.00, '2026-08-04 08:01:53'),
+(20, 90, 34, 'Supercoat Adult Small Sensitive Skin Ocean Fish Dry Dog Food', NULL, 5, 100.00, 500.00, '2026-08-21 12:32:53'),
+(21, 91, 34, 'Supercoat Adult Small Sensitive Skin Ocean Fish Dry Dog Food', NULL, 1, 100.00, 100.00, '2026-08-22 10:26:51'),
+(22, 92, 31, 'FELIX As Good As It Looks Adult Chicken in Jelly Wet Cat Food (340G)', NULL, 1, 185.00, 185.00, '2026-08-23 01:08:48');
 
 -- --------------------------------------------------------
 
@@ -716,7 +755,7 @@ INSERT INTO `tbl_product_inventory` (`id`, `sku`, `name`, `description`, `price`
 (31, 'FELIX-007', 'FELIX As Good As It Looks Adult Chicken in Jelly Wet Cat Food', 'With tender pieces of chicken making our FELIX wet cat food utterly irresistible, we\'re sure your cat will love this delicious dish! FELIX As Good As It Looks Adult Cat Chicken in Jelly Wet Food is a single pouch packed with essential nutrients and key ingredients to help your adult cat maintain a healthy and active lifestyle. Our vets and nutritionists have specially formulated this mouth-watering meal to ensure your cat gets all he needs from his daily diet.\r\n\r\n \r\n\r\nMouth-watering tastes and textures, it really does taste as good as it looks\r\nPacked with essential vitamins and minerals\r\nA great way to keep your cat nourished through complete and balanced nutrition\r\nDelicious flavour including chicken', 185.00, 49, 'Cat Food, Adult (1 - 7), Wet Food, FELIX', NULL, NULL, NULL, NULL, 'https://www.purina.ph/sites/default/files/2025-06/AGAIL_ADULT%2520CHICKEN_FRONT_0.jpg', '2026-05-05 09:16:42', '2026-08-01 00:54:14'),
 (32, 'Fancy Feast-001', 'Fancy Feast Savory Salmon Adult Wet Cat Food', 'Just like dry cat food, wet cat food offers balanced nutrition. Wet cat food also helps provide additional moisture to balanced nutrition, because of the delicious juices and savory gravy in each entrée. Fancy Feast wet cat food entrées are complete and balanced, and rich in protein - made with high-quality ingredients, from real beef, poultry and seafood to cheddar cheese, garden veggies and egg (depending on the recipe).\r\n\r\n \r\n\r\nMade in the USA\r\nComplete & balanced nutrition\r\nSmooth paté made with salmon\r\nConvenient flip top can makes feeding quick & easy', 100.00, 93, 'Cat Food, Adult (1 - 7), Wet Food, Fancy Feast', NULL, NULL, NULL, NULL, 'https://www.purina.ph/sites/default/files/2025-06/29%20FANCY%20FEAST%20SAVORY%20SALMON%2085G_0.jpg', '2026-05-05 13:13:32', NULL),
 (33, 'Fancy Feast-002', 'Fancy Feast Grilled Tuna Feast Adult Wet Cat Food', 'Every Fancy Feast selection is made with high-quality protein sources and ingredients. This Grilled Feast is a luscious, slow-cooked feast of tuna and chicken with a sumptuous basting of gravy.\r\n\r\n \r\n\r\nMade in the USA\r\nComplete & balanced nutrition\r\nDelicious entree of succulent pieces\r\nA great way to add moisture to your cat’s diet', 100.00, 99, 'Cat Food, Adult (1 - 7), Wet Food, Fancy Feast', NULL, NULL, NULL, NULL, 'https://www.purina.ph/sites/default/files/styles/search_result_narrow/public/2025-06/3520FEAST20TUNA2085G_0.jpg.webp?itok=ZjMPFgQA', '2026-05-05 13:14:23', NULL),
-(34, 'SUPERCOAT®-001', 'Supercoat Adult Small Sensitive Skin Ocean Fish Dry Dog Food', 'Supercoat provides tailored nutrition specially formulated for Small Breed Dogs. Developed with Smartblend® technology, a precise combination of high-quality ingredients blended with 21 essential vitamins & minerals to cater to the unique needs of small dogs. Supercoat contains higher* protein & fat levels to keep up with small dogs\' high metabolism level, formulated with calcium for stronger bones and teeth and is sized perfectly to suit their small jaws. Comes in variants to suit all lifestages with no added artificial colours or flavours.\r\n\r\n \r\n\r\n*vs Supercoat All Breed Range\r\n\r\n \r\n\r\nDeveloped with Smartblend® technology, a combination of high-quality ingredients to meet the unique needs of small dogs\r\nHigher* protein & fat levels to keep up with your Small Dog’s high metabolism level. (vs Supercoat All Breed Range)\r\nPerfectly szied kibble to suit smaller jaws while being nutrient dense to nourish small dogs with everything they need\r\nFormulated with calcium for stronger bones & teeth', 100.00, 88, 'Dog Food, Adult (1 - 7), Dry Food, Sensitive Skin, SUPERCOAT®', NULL, NULL, NULL, NULL, 'https://www.purina.ph/sites/default/files/2025-06/1_6.jpg', '2026-07-21 11:36:15', '2026-07-29 13:59:01'),
+(34, 'SUPERCOAT®-001', 'Supercoat Adult Small Sensitive Skin Ocean Fish Dry Dog Food', 'Supercoat provides tailored nutrition specially formulated for Small Breed Dogs. Developed with Smartblend® technology, a precise combination of high-quality ingredients blended with 21 essential vitamins & minerals to cater to the unique needs of small dogs. Supercoat contains higher* protein & fat levels to keep up with small dogs\' high metabolism level, formulated with calcium for stronger bones and teeth and is sized perfectly to suit their small jaws. Comes in variants to suit all lifestages with no added artificial colours or flavours.\r\n\r\n \r\n\r\n*vs Supercoat All Breed Range\r\n\r\n \r\n\r\nDeveloped with Smartblend® technology, a combination of high-quality ingredients to meet the unique needs of small dogs\r\nHigher* protein & fat levels to keep up with your Small Dog’s high metabolism level. (vs Supercoat All Breed Range)\r\nPerfectly szied kibble to suit smaller jaws while being nutrient dense to nourish small dogs with everything they need\r\nFormulated with calcium for stronger bones & teeth', 100.00, 83, 'Dog Food, Adult (1 - 7), Dry Food, Sensitive Skin, SUPERCOAT®', NULL, NULL, NULL, NULL, 'https://www.purina.ph/sites/default/files/2025-06/1_6.jpg', '2026-07-21 11:36:15', '2026-07-29 13:59:01'),
 (35, 'SUPERCOAT®-002', 'Supercoat Adult Small Breed Tuna Dry Dog Food', 'Supercoat provides tailored nutrition specially formulated for Small Breed Dogs. Developed with Smartblend® technology, a precise combination of high-quality ingredients blended with 21 essential vitamins & minerals to cater to the unique needs of small dogs. Supercoat contains higher* protein & fat levels to keep up with small dogs\' high metabolism level, formulated with calcium for stronger bones and teeth and is sized perfectly to suit their small jaws. Comes in variants to suit all lifestages with no added artificial colours or flavours.     *vs Supercoat All Breed Range     Developed with Smartblend® technology, a combination of high-quality ingredients to meet the unique needs of small dogs Higher* protein & fat levels to keep up with your Small Dog’s high metabolism level. (vs Supercoat All Breed Range) Perfectly sized kibble to suit smaller jaws while being nutrient dense to nourish small dogs with everything they need Formulated with calcium for stronger bones & teeth', 100.00, 100, 'Dog Food, Adult (1 - 7), Dry Food, Small Breeds, SUPERCOAT®', NULL, NULL, NULL, NULL, 'https://www.purina.ph/sites/default/files/2025-06/1_4.jpg', '2026-07-21 11:59:38', '2026-07-21 21:25:27'),
 (36, 'SUPERCOAT®-003', 'Supercoat Puppy Small Breed Chicken Dry Dog Food', 'Supercoat provides tailored nutrition specially formulated for Small Breed Dogs. Developed with Smartblend® technology, a precise combination of high-quality ingredients blended with 21 essential vitamins & minerals to cater to the unique needs of small dogs. Supercoat contains higher* protein & fat levels to keep up with small dogs\' high metabolism level, formulated with calcium for stronger bones and teeth and is sized perfectly to suit their small jaws. Comes in variants to suit all lifestages with no added artificial colours or flavours.\r\n\r\n \r\n\r\n*vs Supercoat All Breed Range\r\n\r\n \r\n\r\nDeveloped with Smartblend® technology, a combination of high-quality ingredients to meet the unique needs of small dogs\r\nHigher* protein & fat levels to keep up with your Small Dog’s high metabolism level. (vs Supercoat All Breed Range)\r\nPerfectly sized kibble to suit smaller jaws while being nutrient dense to nourish small dogs with everything they need\r\nFormulated with calcium for stronger bones & teeth', 100.00, 100, 'Dog Food, Puppy, Dry Food, Small Breeds, SUPERCOAT®', NULL, NULL, NULL, NULL, 'https://www.purina.ph/sites/default/files/2025-06/1_1.webp', '2026-07-21 14:45:05', NULL),
 (37, 'SUPERCOAT®-004', 'Supercoat Chicken Adult Small Breed Dry Dog Food', 'Specifically formulated for small breed dogs, up to 10kg. SUPERCOAT® SMARTBLEND® Adult Small Breed with Real Chicken provides complete and balanced nutrition, with no artificial colors or flavors, to help keep your dog happy and healthy\r\n\r\n \r\n\r\nSpecifically formulated for small breed dogs, up to 10kg\r\nProvides complete and balanced nutrition, with no artificial colours or flavours, to help keep your dog happy and healthy\r\nMade with Real Chicken\r\nTailored nutrition for your dog’s overall health to bring out his active best', 100.00, 99, 'Dog Food, Adult (1 - 7), Dry Food, SUPERCOAT®', NULL, NULL, NULL, NULL, 'https://www.purina.ph/sites/default/files/2025-06/2.7kg_Chicken%2520Front_0.jpg', '2026-07-21 14:46:17', NULL),
@@ -780,10 +819,12 @@ INSERT INTO `tbl_product_variants` (`id`, `product_id`, `size`, `price`, `stock`
 CREATE TABLE `tbl_rider_remittances` (
   `id` int(11) NOT NULL,
   `rider_id` int(11) NOT NULL,
+  `reference_number` varchar(100) DEFAULT NULL,
   `amount` decimal(10,2) NOT NULL,
   `status` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   `notes` text DEFAULT NULL COMMENT 'Reason for rejection, etc.',
   `requested_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `remitted_at` timestamp NULL DEFAULT NULL,
   `processed_by_user_id` int(11) DEFAULT NULL,
   `processed_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -1200,7 +1241,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `activity_logs`
 --
 ALTER TABLE `activity_logs`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=40;
 
 --
 -- AUTO_INCREMENT for table `customers`
@@ -1212,7 +1253,7 @@ ALTER TABLE `customers`
 -- AUTO_INCREMENT for table `customer_addresses`
 --
 ALTER TABLE `customer_addresses`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `customer_login_credentials`
@@ -1242,13 +1283,13 @@ ALTER TABLE `delivery_tracking`
 -- AUTO_INCREMENT for table `loyalty_transactions`
 --
 ALTER TABLE `loyalty_transactions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
 
 --
 -- AUTO_INCREMENT for table `notifications`
 --
 ALTER TABLE `notifications`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=49;
 
 --
 -- AUTO_INCREMENT for table `products`
@@ -1284,7 +1325,7 @@ ALTER TABLE `rider_remittances`
 -- AUTO_INCREMENT for table `tbl_cart`
 --
 ALTER TABLE `tbl_cart`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=119;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=122;
 
 --
 -- AUTO_INCREMENT for table `tbl_custom_categories`
@@ -1302,25 +1343,25 @@ ALTER TABLE `tbl_deliveries`
 -- AUTO_INCREMENT for table `tbl_delivery`
 --
 ALTER TABLE `tbl_delivery`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `tbl_messages`
 --
 ALTER TABLE `tbl_messages`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `tbl_orders`
 --
 ALTER TABLE `tbl_orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=90;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=93;
 
 --
 -- AUTO_INCREMENT for table `tbl_order_items`
 --
 ALTER TABLE `tbl_order_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
 
 --
 -- AUTO_INCREMENT for table `tbl_order_messages`
@@ -1350,7 +1391,7 @@ ALTER TABLE `tbl_product_variants`
 -- AUTO_INCREMENT for table `tbl_rider_remittances`
 --
 ALTER TABLE `tbl_rider_remittances`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `tbl_rider_remittance_items`
