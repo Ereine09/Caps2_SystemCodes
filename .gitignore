@@ -1,0 +1,41 @@
+# --- Secrets / local config (rotate anything already committed to history) ---
+/app/config/config.local.php
+.env
+*.env
+
+# --- Dependencies ---
+/vendor/
+
+# --- Runtime uploads & user data ---
+/uploads/*
+!/uploads/.htaccess
+/customer/includes/last_auto_confirm_run.txt
+
+# --- Database dumps / backups ---
+/database_backups/
+capstone_db.sql
+*.sql
+
+# --- Editor / OS cruft ---
+.vscode/
+desktop.ini
+*.code-workspace
+
+# --- Scratch / debug files ---
+/_gen.php
+/_update_actions.php
+/_httpdcheck.txt
+/_login_resp.txt
+/_login_status.txt
+/_mysqlcheck.txt
+/_mysqldcheck.txt
+/_portcheck.txt
+/query
+*.vsix
+
+# --- Logs ---
+*.log
+
+.vercel
+/customer/includes/last_batch_maintenance_run.txt
+/customer/includes/last_batch_maintenance_run.txt.lock

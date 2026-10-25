@@ -1,0 +1,217 @@
+<?php
+/**
+ * Rider Proof of Delivery API
+ *
+ * Accepts a captured proof-of-delivery photo (base64) + optional notes for a
+ * completed/out-for-delivery order and logs it into the `delivery_tracking`
+ * table (status = 'delivered', proof_image_url, notes).
+ *
+* POST JSON: {
+ *   "delivery_id": 123,
+ *   "order_id": 456,
+ *   "image": "data:image/png;base64,...",  // base64 encoded photo
+ *   "notes": "Left at front desk"          // optional
+ * }
+ *
+ * Requires a rider JWT.
+ */
+
+header('Content-Type: application/json');
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
+
+require_once __DIR__ . '/../../app/config/config.php';
+require_once __DIR__ . '/../../app/helpers/jwt_helper.php';
+require_once __DIR__ . '/../../app/helpers/db_schema_helper.php';
+
+$response = ['success' => false, 'message' => 'An error occurred.', 'data' => null];
+
+try {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        throw new Exception('POST required');
+    }
+
+    // --- JWT Authentication ---
+    $token = '';
+    $headers = getallheaders();
+    if (isset($headers['Authorization'])) {
+        if (preg_match('/Bearer\s(\S+)/', $headers['Authorization'], $matches)) {
+            $token = $matches[1];
+        }
+    }
+    if (empty($token)) {
+        $token = getJWTFromCookie();
+    }
+
+    $payload = verifyJWT($token);
+    if (!$payload || ($payload['role'] ?? '') !== 'rider') {
+        throw new Exception('Unauthorized access.');
+    }
+    $rider_user_id = (int)$payload['user_id'];
+    if ($rider_user_id <= 0) {
+        throw new Exception('Invalid rider account.');
+    }
+
+    ensureRiderSchema($conn);
+
+    // Resolve riders.id from users.id
+    $rider_id = 0;
+    $rider_stmt = $conn->prepare("SELECT id FROM riders WHERE user_id = ? LIMIT 1");
+    $rider_stmt->bind_param('i', $rider_user_id);
+    $rider_stmt->execute();
+    $rider_res = $rider_stmt->get_result()->fetch_assoc();
+    $rider_stmt->close();
+    if ($rider_res) {
+        $rider_id = (int)$rider_res['id'];
+    }
+    if ($rider_id <= 0) {
+        throw new Exception('Rider profile not found.');
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (!is_array($input)) $input = [];
+
+    $delivery_id = (int)($input['delivery_id'] ?? 0);
+    $order_id = (int)($input['order_id'] ?? 0);
+    $image_data = trim((string)($input['image'] ?? ''));
+    $notes = trim((string)($input['notes'] ?? ''));
+    // Which photo: 'pickup' (parcel leaving the shop) or 'delivery' (proof of delivery, the default).
+    $stage = ($input['stage'] ?? '') === 'pickup' ? 'pickup' : 'delivery';
+
+    if ($delivery_id <= 0 && $order_id <= 0) {
+        throw new Exception('delivery_id or order_id is required.');
+    }
+    if ($image_data === '') {
+        throw new Exception('Proof of delivery photo is required.');
+    }
+
+    // --- Authorization (before anything is written to disk) ---
+    // A delivery_id must belong to the order; the order must be assigned to this rider
+    // (tbl_orders.rider_id = riders.id, or tbl_delivery.rider_id = users.id), or be an unclaimed
+    // To Ship pickup - the same rule rider_update_status_api.php applies.
+    if ($order_id <= 0) {
+        $oq = $conn->prepare("SELECT order_id FROM tbl_delivery WHERE id = ? LIMIT 1");
+        $oq->bind_param('i', $delivery_id);
+        $oq->execute();
+        $order_id = (int)($oq->get_result()->fetch_assoc()['order_id'] ?? 0);
+        $oq->close();
+    }
+    $aq = $conn->prepare(
+        "SELECT o.order_status, o.rider_id,
+                (SELECT d.rider_id FROM tbl_delivery d WHERE d.order_id = o.id ORDER BY d.id DESC LIMIT 1) AS delivery_rider_id
+         FROM tbl_orders o WHERE o.id = ? LIMIT 1"
+    );
+    $aq->bind_param('i', $order_id);
+    $aq->execute();
+    $auth_order = $aq->get_result()->fetch_assoc();
+    $aq->close();
+    if (!$auth_order) {
+        throw new Exception('Order not found.');
+    }
+    if ($delivery_id > 0) {
+        $dq = $conn->prepare("SELECT id FROM tbl_delivery WHERE id = ? AND order_id = ? LIMIT 1");
+        $dq->bind_param('ii', $delivery_id, $order_id);
+        $dq->execute();
+        $delivery_matches = (bool)$dq->get_result()->fetch_assoc();
+        $dq->close();
+        if (!$delivery_matches) {
+            throw new Exception('This delivery does not belong to the order.');
+        }
+    }
+    $auth_order_rider = (int)($auth_order['rider_id'] ?? 0);
+    $auth_delivery_rider = (int)($auth_order['delivery_rider_id'] ?? 0);
+    $proof_is_mine = ($auth_order_rider > 0 && $auth_order_rider === $rider_id)
+        || ($auth_delivery_rider > 0 && $auth_delivery_rider === $rider_user_id);
+    $proof_is_open_pickup = ($auth_order['order_status'] ?? '') === 'to_ship'
+        && $auth_order_rider === 0 && $auth_delivery_rider === 0;
+    if (!$proof_is_mine && !$proof_is_open_pickup) {
+        throw new Exception('You are not authorized to upload proof for this order.');
+    }
+
+    // --- Validate / decode the base64 image ---
+    // Accept either a full data URI or raw base64.
+    $mime = 'image/png';
+    if (preg_match('#^data:(image/\w+);base64,(.+)$#s', $image_data, $m)) {
+        $mime = $m[1];
+        $image_data = $m[2];
+    }
+    $image_bytes = base64_decode($image_data, true);
+    if ($image_bytes === false || $image_bytes === '') {
+        throw new Exception('Invalid image data.');
+    }
+
+    // Confirm the decoded bytes really are an image, and take the extension
+    // from what they actually are — not from the client-declared mime type.
+    $probe = @getimagesizefromstring($image_bytes);
+    if ($probe === false) {
+        throw new Exception('Invalid image data.');
+    }
+    $ext_by_type = [
+        IMAGETYPE_PNG  => 'png',
+        IMAGETYPE_JPEG => 'jpg',
+        IMAGETYPE_GIF  => 'gif',
+        IMAGETYPE_WEBP => 'webp',
+    ];
+    if (!isset($ext_by_type[$probe[2]])) {
+        throw new Exception('Unsupported image type.');
+    }
+    $ext = $ext_by_type[$probe[2]];
+
+    if (strlen($image_bytes) > 8 * 1024 * 1024) {
+        throw new Exception('Image is too large (max 8MB).');
+    }
+
+    // --- Save the image to uploads/proofs ---
+    $upload_dir = __DIR__ . '/../../uploads/proofs/';
+    if (!is_dir($upload_dir)) {
+        mkdir($upload_dir, 0755, true);
+    }
+    $filename = ($stage === 'pickup' ? 'pickup_' : 'proof_') . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $file_path = $upload_dir . $filename;
+    if (file_put_contents($file_path, $image_bytes) === false) {
+        throw new Exception('Failed to save proof image.');
+    }
+    $proof_url = 'uploads/proofs/' . $filename;
+
+    // --- Optionally resolve delivery_id from order_id if not provided ---
+    if ($delivery_id <= 0) {
+        $dstmt = $conn->prepare("SELECT id FROM tbl_delivery WHERE order_id = ? ORDER BY id DESC LIMIT 1");
+        $dstmt->bind_param('i', $order_id);
+        $dstmt->execute();
+        $drow = $dstmt->get_result()->fetch_assoc();
+        $dstmt->close();
+        if ($drow) {
+            $delivery_id = (int)$drow['id'];
+        }
+    }
+
+    // --- Log into delivery_tracking ---
+    $track_status = $stage === 'pickup' ? 'picked_up' : 'delivered';
+    $track = $conn->prepare(
+        "INSERT INTO delivery_tracking (order_id, rider_id, status, notes, proof_image_url, created_at)
+         VALUES (?, ?, ?, ?, ?, NOW())"
+    );
+    $track->bind_param('iisss', $order_id, $rider_id, $track_status, $notes, $proof_url);
+    $track->execute();
+    $track_id = $conn->insert_id;
+    $track->close();
+
+    $response['success'] = true;
+    $response['message'] = $stage === 'pickup' ? 'Pickup photo uploaded.' : 'Proof of delivery uploaded successfully.';
+    $response['data'] = [
+        'tracking_id' => (int)$track_id,
+        'delivery_id' => (int)$delivery_id,
+        'order_id' => (int)$order_id,
+        'proof_url' => $proof_url,
+        'stage' => $stage,
+    ];
+
+} catch (Exception $e) {
+    $response['message'] = $e->getMessage();
+    http_response_code(400);
+}
+
+echo json_encode($response);

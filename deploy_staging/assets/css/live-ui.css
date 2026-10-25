@@ -1,0 +1,45 @@
+/* Live UI - toast notifications and small "busy" states shared by the admin pages
+   that update without a page refresh (assets/js/live-ui.js). Colours follow the
+   existing --dm-* theme variables so light and dark mode both work. */
+#liveui-toasts {
+    position: fixed; right: 18px; bottom: 18px; z-index: 2147483000;
+    display: flex; flex-direction: column; gap: 10px; align-items: flex-end;
+    max-width: calc(100vw - 36px); pointer-events: none;
+}
+.liveui-toast {
+    pointer-events: auto; display: flex; align-items: flex-start; gap: 10px;
+    min-width: 240px; max-width: 420px; padding: 12px 14px; border-radius: 10px;
+    background: var(--dm-surface, #fff); color: var(--dm-text, #1e293b);
+    border: 1px solid var(--dm-border, #e5e7eb); border-left: 4px solid #16a34a;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, .18); font-size: .9rem; line-height: 1.4;
+    animation: liveui-in .18s ease-out;
+}
+.liveui-toast.error { border-left-color: #dc2626; }
+.liveui-toast.warn  { border-left-color: #d97706; }
+.liveui-toast.info  { border-left-color: #2563eb; }
+.liveui-toast .liveui-ic { font-weight: 800; width: 18px; text-align: center; flex: 0 0 18px; color: #16a34a; }
+.liveui-toast.error .liveui-ic { color: #dc2626; }
+.liveui-toast.warn  .liveui-ic { color: #d97706; }
+.liveui-toast.info  .liveui-ic { color: #2563eb; }
+.liveui-toast .liveui-msg { flex: 1; overflow-wrap: anywhere; }
+.liveui-toast button { appearance: none; border: 0; background: none; color: var(--dm-text-muted, #64748b); cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0 2px; }
+.liveui-toast.leaving { opacity: 0; transform: translateY(6px); transition: opacity .18s, transform .18s; }
+@keyframes liveui-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* A control whose request is in flight (only that control is disabled, never the page) */
+.liveui-busy { opacity: .65; cursor: progress !important; pointer-events: none; }
+/* A table row / card whose request is in flight */
+.liveui-row-busy { opacity: .6; transition: opacity .15s; }
+/* A row that was just changed by an update */
+.liveui-flash { animation: liveui-flash 1.2s ease-out; }
+@keyframes liveui-flash { from { background: rgba(37, 99, 235, .16); } to { background: transparent; } }
+/* A row that is being removed */
+.liveui-removing { opacity: 0; transition: opacity .25s; }
+
+@media (max-width: 480px) {
+    #liveui-toasts { left: 12px; right: 12px; bottom: 12px; align-items: stretch; }
+    .liveui-toast { min-width: 0; max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .liveui-toast, .liveui-flash { animation: none; }
+}

@@ -1,0 +1,42 @@
+{
+    "id": "dps-staff",
+    "name": "DPS Staff",
+    "short_name": "DPS Staff",
+    "description": "Darius Poultry Supplies staff: orders, products, customers and loyalty points.",
+    "start_url": "../../modules/staff/dashboard.php",
+    "scope": "../../modules/",
+    "display": "standalone",
+    "background_color": "#f4f6fa",
+    "theme_color": "#0f766e",
+    "icons": [
+        {
+            "src": "staff.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        },
+        {
+            "src": "staff-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "staff-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "staff-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "staff-180.png",
+            "sizes": "180x180",
+            "type": "image/png"
+        }
+    ]
+}

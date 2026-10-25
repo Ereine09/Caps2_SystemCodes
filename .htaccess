@@ -1,0 +1,68 @@
+# =============================================================================
+# Root .htaccess — safe for both XAMPP (local) and Hostinger shared hosting
+# (production). Nothing here requires VPS/root access or a custom Apache
+# config; every directive is either wrapped in an <IfModule> guard (so it's a
+# no-op if that module isn't loaded) or a plain FilesMatch/Options directive
+# that plain shared hosting already supports.
+#
+# This file does NOT implement API routing/URL rewriting for the app itself
+# — every existing PHP page and API endpoint is already reached by its real,
+# existing path (see README_DEPLOYMENT.md's API inventory), so no rewrite
+# rules are needed for the app to keep working exactly as it does today.
+# =============================================================================
+
+# --- Force HTTPS in production only ---------------------------------------
+# Skipped entirely on localhost/127.0.0.1 AND on any private-network IP
+# (192.168.x.x, 10.x.x.x, 172.16-31.x.x) so local XAMPP development —
+# including testing from a phone/other device on the same Wi-Fi via the
+# PC's LAN IP — stays plain http:// with no redirect and no self-signed-
+# certificate warning. On Hostinger (or any real public domain), visitors
+# get redirected to https:// once your SSL certificate is active (Hostinger
+# issues a free one automatically for hosted domains — enable it in hPanel
+# if a request still isn't detected as HTTPS after that).
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    # Behind an HTTPS tunnel/proxy (ngrok, a load balancer) the visitor is already on https://
+    # even though Apache sees plain http; redirecting would loop forever.
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
+    RewriteCond %{HTTP_HOST} !^localhost [NC]
+    RewriteCond %{HTTP_HOST} !^127\.0\.0\.1
+    RewriteCond %{HTTP_HOST} !^192\.168\.
+    RewriteCond %{HTTP_HOST} !^10\.
+    RewriteCond %{HTTP_HOST} !^172\.(1[6-9]|2[0-9]|3[0-1])\.
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# --- Never serve secrets, local config, or dotfiles over HTTP --------------
+# Defense in depth: config.local.php/.env already live outside any web-
+# reachable "public" folder in this project's current layout, but a direct
+# hit to their exact path would otherwise still be served as plain text by
+# a default Apache config. Block that explicitly, along with any dotfile
+# (.env, .env.example, .git/*, .gitignore, this .htaccess itself, etc.) and
+# composer.lock (reveals exact dependency versions — not secret, just not
+# anyone else's business).
+<FilesMatch "^(config\.local\.php|composer\.lock|\..*)$">
+    Require all denied
+</FilesMatch>
+
+# --- Never serve database dumps, archives, notes, or dev-only scripts ------
+# The project folder holds SQL dumps (customer data, password hashes, API
+# keys), deploy zips, design files and one-off maintenance scripts that write
+# to the database. None of them is ever loaded by a page; once the site is
+# public (Hostinger, or an ngrok tunnel) they must not be downloadable/runnable.
+<FilesMatch "\.(sql|zip|txt|log|bak|md|yml|yaml|drawio|vsix|code-workspace)$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^_">
+    Require all denied
+</FilesMatch>
+# Whole folders that are never part of the site. RedirectMatch (not RewriteRule): a subfolder's own
+# .htaccess (deploy_staging has one) replaces the parent's rewrite rules, but not this.
+RedirectMatch 403 /(\.git|database_backups|deploy_staging|tests)(/|$)
+
+# --- Don't let Apache list directory contents when there's no index -------
+Options -Indexes
+
+# --- Sensible default charset for anything served without one --------------
+AddDefaultCharset UTF-8

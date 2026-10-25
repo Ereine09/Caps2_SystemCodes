@@ -1,0 +1,13 @@
+{
+    "require": {
+        "phpmailer/phpmailer": "7.1",
+        "firebase/php-jwt": "7.1",
+        "endroid/qr-code": "4.8",
+        "cboden/ratchet": "^0.4.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Ws\\": "ws/"
+        }
+    }
+}

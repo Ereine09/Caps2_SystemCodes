@@ -1,0 +1,436 @@
+/* ==========================================================================
+   customer_style.css — Customer portal (and customer auth pages)
+   --------------------------------------------------------------------------
+   Built on assets/css/ui-kit.css (design tokens, app shell, components).
+   Dark mode is the existing html[data-theme="dark"] hook; its colors come
+   from the shared tokens, so this file only maps legacy class names onto
+   them. Sidebar/drawer layout lives in ui-kit.css (.app-sidebar).
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Portal frame
+   -------------------------------------------------------------------------- */
+body.customer-portal {
+    display: block;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+}
+body.customer-portal * { box-sizing: border-box; }
+body.customer-portal img { max-width: 100%; height: auto; }
+
+.customer-main-content { min-height: 100vh; }
+/* Fills the space beside the sidebar; only on very wide / zoomed-out screens does it stop
+   growing, and then it is centred instead of leaving a big empty area on the right. */
+.customer-page { padding: 24px var(--gutter) 96px; max-width: 2200px; margin: 0 auto; }
+
+/* Legacy wrappers from the pre-sidebar layout stay hidden */
+.customer-wrapper, .customer-header, .customer-nav, .customer-main { display: none !important; }
+
+/* App-shell buttons must not inherit the legacy global `button` look below */
+.app-sidebar button, .app-topbar button, .mobile-topbar button { background-image: none; }
+.app-sidebar button:hover, .app-topbar button:hover, .mobile-topbar button:hover { transform: none; box-shadow: none; }
+
+/* --------------------------------------------------------------------------
+   Top bar (greeting · points · cart · notifications)
+   -------------------------------------------------------------------------- */
+.app-topbar {
+    position: sticky; top: 0; z-index: 900;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    min-height: var(--topbar-h); padding: 10px var(--gutter);
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px);
+    border-bottom: 1px solid var(--border);
+}
+.app-topbar-greeting { min-width: 0; }
+.app-topbar-hello { display: block; color: var(--text-2); font-size: var(--fs-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-topbar-hello strong { color: var(--text); font-weight: 600; }
+.app-topbar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.app-points-pill {
+    display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px 0 12px; margin-right: 4px;
+    border-radius: var(--radius-pill); background: var(--gold-soft); color: var(--gold) !important;
+    font-size: var(--fs-sm); text-decoration: none; white-space: nowrap; border: 1px solid color-mix(in srgb, var(--gold) 22%, transparent);
+}
+.app-points-pill strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+.app-points-pill:hover { border-color: var(--gold); }
+.app-icon-btn {
+    position: relative; display: inline-grid; place-items: center; width: 40px; height: 40px; min-height: 0; padding: 0;
+    border-radius: 10px; border: 1px solid transparent; background: transparent; color: var(--text-2) !important;
+    font-size: 1.05rem; cursor: pointer; text-decoration: none; box-shadow: none;
+}
+.app-icon-btn:hover { background: var(--surface-3); color: var(--text) !important; }
+.app-icon-count, .notif-bell-badge {
+    position: absolute; top: 2px; right: 1px; min-width: 18px; height: 18px; padding: 0 5px;
+    display: flex; align-items: center; justify-content: center; border-radius: var(--radius-pill);
+    background: var(--danger); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 1;
+    box-shadow: 0 0 0 2px var(--bg);
+}
+
+/* Notifications dropdown */
+.notif-bell-wrap { position: relative; }
+.notif-panel {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 950;
+    width: 380px; max-width: calc(100vw - 24px); display: none; flex-direction: column; overflow: hidden;
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow-lg); animation: ui-rise .16s var(--ease);
+}
+.notif-panel.open { display: flex; }
+.notif-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.notif-panel-header h3 { margin: 0; font-size: var(--fs-md); font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; }
+.notif-panel-markall {
+    min-height: 0 !important; padding: 6px 10px !important; border-radius: 7px !important;
+    background: var(--primary-soft) !important; color: var(--link) !important; border: 0;
+    font-size: var(--fs-xs) !important; font-weight: 600; cursor: pointer; box-shadow: none !important; transform: none !important;
+}
+.notif-panel-body { max-height: 400px; overflow-y: auto; padding: 6px; }
+.notif-panel-item { display: flex; gap: 12px; align-items: flex-start; padding: 10px; border-radius: 10px; cursor: pointer; }
+.notif-panel-item:hover { background: var(--surface-2); }
+.notif-panel-item.unread { background: var(--primary-soft); }
+.notif-panel-icon { width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; display: grid; place-items: center; background: var(--primary-soft); color: var(--link); font-size: .85rem; }
+.notif-panel-title { font-weight: 600; color: var(--text); font-size: var(--fs-sm); margin: 0 0 2px; }
+.notif-panel-msg { color: var(--text-2); font-size: var(--fs-xs); margin: 0 0 4px; line-height: 1.45; }
+.notif-panel-time { color: var(--faint); font-size: 11px; }
+.notif-panel-empty { text-align: center; padding: 32px 16px; color: var(--muted); }
+.notif-panel-empty svg, .notif-panel-empty i { font-size: 1.8rem; color: var(--faint); margin-bottom: 8px; }
+.notif-panel-footer { border-top: 1px solid var(--border); padding: 10px; text-align: center; }
+.notif-panel-footer a { color: var(--link); font-weight: 500; font-size: var(--fs-sm); text-decoration: none; }
+.notif-panel-footer a:hover { text-decoration: underline; }
+
+/* Floating mini cart (top-bar cart icon; header.php markup, footer.php script) */
+.mini-cart-wrap { position: relative; }
+.app-icon-btn.is-current { background: var(--primary-soft); color: var(--link) !important; }
+.mini-cart-panel {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 950;
+    width: 360px; max-width: calc(100vw - 24px); display: none; flex-direction: column; overflow: hidden;
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow-lg); animation: ui-rise .16s var(--ease);
+}
+.mini-cart-panel.open { display: flex; }
+.mini-cart-qty { font-size: var(--fs-xs); font-weight: 500; color: var(--muted); }
+.mini-cart-close {
+    width: 30px; height: 30px; min-height: 0 !important; padding: 0 !important; border: 0; border-radius: 8px;
+    background: transparent !important; color: var(--muted) !important; cursor: pointer; box-shadow: none !important;
+}
+.mini-cart-close:hover { background: var(--surface-3) !important; color: var(--text) !important; }
+.mini-cart-body { max-height: min(360px, 55vh); overflow-y: auto; padding: 6px; }
+.mini-cart-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; }
+.mini-cart-item:hover { background: var(--surface-2); }
+.mini-cart-item img { width: 44px; height: 44px; border-radius: 9px; object-fit: cover; flex-shrink: 0; background: var(--surface-2); }
+.mini-cart-info { flex: 1; min-width: 0; }
+.mini-cart-name { margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-cart-meta { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--muted); }
+.mini-cart-line { font-size: var(--fs-sm); font-weight: 600; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mini-cart-remove {
+    width: 28px; height: 28px; min-height: 0 !important; padding: 0 !important; border: 0; border-radius: 7px; flex-shrink: 0;
+    background: transparent !important; color: var(--faint) !important; cursor: pointer; box-shadow: none !important; transform: none !important;
+}
+.mini-cart-remove:hover { background: var(--danger-soft) !important; color: var(--danger) !important; }
+.mini-cart-remove:disabled { opacity: .4; cursor: wait; }
+.mini-cart-foot { border-top: 1px solid var(--border); padding: 12px 14px 14px; display: grid; gap: 10px; }
+.mini-cart-foot[hidden] { display: none; }
+.mini-cart-total { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--fs-sm); color: var(--text-2); }
+.mini-cart-total small { color: var(--muted); }
+.mini-cart-total strong { font-size: var(--fs-md); color: var(--text); font-variant-numeric: tabular-nums; }
+.mini-cart-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mini-cart-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; border-radius: 10px;
+    border: 1px solid var(--primary); color: var(--primary) !important; background: var(--surface);
+    font-weight: 600; font-size: var(--fs-sm); text-decoration: none;
+}
+.mini-cart-btn:hover { background: var(--primary-soft); }
+.mini-cart-btn.primary { background: var(--primary); color: var(--on-primary) !important; }
+.mini-cart-btn.primary:hover { background: var(--primary-hover, var(--primary)); }
+.mini-cart-empty-cta { display: inline-block; margin-top: 10px; color: var(--link); font-weight: 600; font-size: var(--fs-sm); text-decoration: none; }
+@media (max-width: 480px) {
+    /* Phones: a sheet pinned under the top bar, full width */
+    .mini-cart-panel { position: fixed; top: calc(var(--topbar-h, 60px) + 6px); left: 12px; right: 12px; width: auto; max-width: none; }
+}
+
+/* Floating "Contact Staff" button (footer.php) */
+.contact-staff-fab {
+    position: fixed; right: 22px; bottom: 22px; z-index: 500;
+    display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px;
+    border-radius: var(--radius-pill); background: var(--primary); color: var(--on-primary) !important;
+    font-weight: 600; font-size: var(--fs-sm); text-decoration: none; white-space: nowrap;
+    box-shadow: 0 8px 22px color-mix(in srgb, var(--primary) 38%, transparent);
+    transition: background-color .15s, transform .15s;
+}
+.contact-staff-fab:hover { background: var(--primary-hover); transform: translateY(-2px); }
+
+/* --------------------------------------------------------------------------
+   Headings used across customer pages
+   -------------------------------------------------------------------------- */
+.section-header { margin-bottom: 18px; }
+.section-header h2, .customer-panel > .section-header h2 { margin: 0 0 4px; font-size: var(--fs-2xl); font-weight: 600; letter-spacing: -.01em; color: var(--text); }
+.section-header p { margin: 0; color: var(--muted); line-height: 1.55; font-size: var(--fs-base); }
+.wrapper h2 { margin: 0 0 8px; color: var(--text); }
+.wrapper p { color: var(--text-2); }
+
+/* The old portal wrapped each page in a white .customer-panel card; pages
+   now sit directly on the page background with their own cards inside. */
+.customer-panel { background: transparent; color: var(--text); }
+
+/* --------------------------------------------------------------------------
+   Legacy cards & surfaces
+   -------------------------------------------------------------------------- */
+.checkout-form, .customer-card, .cart-summary, .order-summary, .checkout-summary {
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;
+}
+.customer-card-row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 20px; }
+.customer-card { box-shadow: var(--shadow-sm); }
+.customer-card h3 { margin-bottom: 8px; color: var(--muted); font-size: var(--fs-sm); font-weight: 500; }
+.customer-portal .stat-value { font-size: var(--fs-xl); font-weight: 600; color: var(--text); }
+.customer-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+
+/* --------------------------------------------------------------------------
+   Buttons (legacy global look, modernized)
+   -------------------------------------------------------------------------- */
+.button, button, .input-box.button input, a.button {
+    display: inline-flex; justify-content: center; align-items: center; gap: 8px;
+    min-height: 42px; padding: 9px 16px;
+    background: var(--primary); color: var(--on-primary);
+    border: 1px solid transparent; border-radius: var(--radius-sm);
+    font-family: inherit; font-weight: 500; font-size: var(--fs-base); line-height: 1.2;
+    cursor: pointer; text-decoration: none;
+    transition: background-color .15s, box-shadow .15s, transform .05s;
+}
+.button:hover, button:hover, .input-box.button input:hover, a.button:hover { background-color: var(--primary-hover); }
+.button:active, button:active { transform: translateY(1px); }
+/* Auth forms wrap their submit input in <div class="input-box button">; only the input is the button. */
+div.input-box.button { display: block; min-height: 0; padding: 0; background: none; border: 0; box-shadow: none; transform: none; }
+.input-box.button input { width: 100%; height: 48px; font-weight: 600; }
+.button-secondary { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+.button-secondary:hover { background: var(--surface-2); }
+
+/* --------------------------------------------------------------------------
+   Alerts
+   -------------------------------------------------------------------------- */
+.alert-message { border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px; font-size: var(--fs-base); border: 1px solid transparent; }
+.alert-error, .alert-box.error, .alert.error, .delivery-validation-msg.invalid { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+.alert-success, .alert-box.success, .alert.success, .delivery-validation-msg.valid { background: var(--success-soft); color: var(--success); border-color: transparent; }
+.alert-message:not(.alert-success):not(.alert-error) { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+
+/* --------------------------------------------------------------------------
+   Products (legacy grid; products.php has its own richer styles)
+   -------------------------------------------------------------------------- */
+.product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.product-card {
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm);
+}
+.product-card img { width: 100%; height: 160px; object-fit: contain; background: var(--surface-2); }
+.product-content { padding: 12px; display: flex; flex-direction: column; flex-grow: 1; }
+.product-content h3 { margin-bottom: 6px; font-size: var(--fs-base); color: var(--text); font-weight: 600; }
+.product-content p { margin-bottom: 8px; color: var(--muted); line-height: 1.45; font-size: var(--fs-sm); }
+.product-price { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+.quantity-row { align-items: center; gap: 10px; font-size: var(--fs-sm); }
+.quantity-row input { width: 64px; text-align: center; border: 1px solid var(--border-strong); padding: 6px; border-radius: 6px; background: var(--surface); color: var(--text); }
+
+/* --------------------------------------------------------------------------
+   Tables
+   -------------------------------------------------------------------------- */
+.table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.customer-table { min-width: 100%; border-collapse: collapse; }
+.customer-table th, .customer-table td { padding: 11px 12px; font-size: var(--fs-sm); border-bottom: 1px solid var(--border); text-align: left; }
+.customer-table th { background: var(--surface-2); color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.customer-portal th { color: var(--muted); border-color: var(--border); }
+.customer-portal td { border-color: var(--border); }
+
+/* --------------------------------------------------------------------------
+   Forms
+   -------------------------------------------------------------------------- */
+.checkout-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; }
+.form-row { margin-bottom: 14px; }
+.form-row label, .form-group label { display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-2); font-size: var(--fs-sm); }
+.form-row input, .form-row textarea, .input-box input {
+    width: 100%; padding: 9px 12px; min-height: 42px;
+    border-radius: var(--radius-sm); border: 1px solid var(--border-strong);
+    font-size: var(--fs-base); color: var(--text); background: var(--surface);
+}
+.form-row textarea { min-height: 110px; resize: vertical; }
+.input-box { margin-top: 12px; }
+.customer-portal input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+.customer-portal select,
+.customer-portal textarea { color: var(--text); background-color: var(--surface); border-color: var(--border-strong); font-family: inherit; }
+.customer-portal input:focus, .customer-portal select:focus, .customer-portal textarea:focus,
+.form-row input:focus, .form-row textarea:focus, .input-box input:focus {
+    outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring);
+}
+.customer-portal input::placeholder, .customer-portal textarea::placeholder { color: var(--faint); }
+.customer-portal input[type="checkbox"], .customer-portal input[type="radio"] { accent-color: var(--primary); }
+.customer-portal option { background: var(--surface); color: var(--text); }
+.password-container { position: relative; }
+.toggle { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); cursor: pointer; color: var(--muted); }
+input::-ms-reveal, input::-ms-clear { display: none; }
+form .text h3 { font-size: var(--fs-sm); color: var(--text-2); margin-bottom: 6px; }
+form .text a { color: var(--link); font-weight: 600; font-size: var(--fs-sm); }
+.empty-state { color: var(--muted); font-size: var(--fs-base); }
+.option-group { flex-wrap: wrap; }
+
+/* --------------------------------------------------------------------------
+   Modals (legacy markup)
+   -------------------------------------------------------------------------- */
+.modal, .modal-zoomer { padding: 16px; box-sizing: border-box; }
+.modal-content, .modal-content-zoomer {
+    max-width: min(600px, calc(100vw - 32px)); width: 100%; max-height: calc(100vh - 64px);
+    overflow-y: auto; box-sizing: border-box;
+    background: var(--surface); color: var(--text); border-radius: var(--radius-lg);
+}
+.modal-content-wrapper { background: var(--surface); color: var(--text); }
+
+/* --------------------------------------------------------------------------
+   Order status tracker (orders.php)
+   -------------------------------------------------------------------------- */
+html[data-theme="dark"] .status-tracker { background: var(--surface); box-shadow: none; border: 1px solid var(--border); }
+html[data-theme="dark"] .status-tracker::before { background: var(--border); }
+html[data-theme="dark"] .step-icon { background: var(--surface-2); border-color: var(--border); color: var(--muted); }
+html[data-theme="dark"] .step-label, html[data-theme="dark"] .step-time { color: var(--muted); }
+html[data-theme="dark"] .status-step.active .step-icon { border-color: var(--primary); background: var(--primary); box-shadow: 0 0 0 4px var(--primary-ring); }
+html[data-theme="dark"] .status-step.active .step-label { color: var(--link); }
+html[data-theme="dark"] .status-step.completed .step-icon { border-color: var(--success); background: var(--success); }
+html[data-theme="dark"] .status-step.completed .step-label { color: var(--success); }
+
+/* ==========================================================================
+   Dark mode — page-specific classes mapped to the shared palette
+   ========================================================================== */
+/* Card-like surfaces used across customer pages */
+html[data-theme="dark"] .customer-wrapper, html[data-theme="dark"] .wrapper, html[data-theme="dark"] .cart-container,
+html[data-theme="dark"] .info-card, html[data-theme="dark"] .order-summary-box, html[data-theme="dark"] .address-card,
+html[data-theme="dark"] .address-card-option, html[data-theme="dark"] .add-address-form, html[data-theme="dark"] .profile-card,
+html[data-theme="dark"] .notif-card, html[data-theme="dark"] .about-us-container, html[data-theme="dark"] .catalog-card,
+html[data-theme="dark"] .shop-filters, html[data-theme="dark"] .stat-card, html[data-theme="dark"] .status-summary-box,
+html[data-theme="dark"] .table-container, html[data-theme="dark"] .reward-voucher-card, html[data-theme="dark"] .rider-chat-container,
+html[data-theme="dark"] .no-rider-box, html[data-theme="dark"] .messages-container, html[data-theme="dark"] .gift-card-container,
+html[data-theme="dark"] .card-body, html[data-theme="dark"] .card-footer, html[data-theme="dark"] .user-points-banner {
+    background: var(--surface); color: var(--text); border-color: var(--border); box-shadow: var(--shadow-sm);
+}
+html[data-theme="dark"] .product-detail-shell { background: var(--surface) !important; color: var(--text); }
+html[data-theme="dark"] .checkout-form *, html[data-theme="dark"] .product-card *, html[data-theme="dark"] .customer-card *,
+html[data-theme="dark"] .cart-container *, html[data-theme="dark"] .info-card *, html[data-theme="dark"] .order-summary-box *,
+html[data-theme="dark"] .address-card *, html[data-theme="dark"] .profile-card *, html[data-theme="dark"] .notif-card *,
+html[data-theme="dark"] .about-us-container *, html[data-theme="dark"] .catalog-card *, html[data-theme="dark"] .stat-card *,
+html[data-theme="dark"] .status-summary-box *, html[data-theme="dark"] .table-container *, html[data-theme="dark"] .no-rider-box *,
+html[data-theme="dark"] .gift-card-container *, html[data-theme="dark"] .product-detail-shell *,
+html[data-theme="dark"] .modal-content *, html[data-theme="dark"] .modal-content-wrapper * { color: inherit; }
+
+/* Image letterboxes (the <img> pixels are never altered) */
+html[data-theme="dark"] .product-image-box, html[data-theme="dark"] .product-card img, html[data-theme="dark"] .cart-item-img,
+html[data-theme="dark"] .item-img, html[data-theme="dark"] .summary-item-img, html[data-theme="dark"] .variant-summary-item img,
+html[data-theme="dark"] .product-gallery-main img { background: var(--surface-2); }
+
+/* Neutral inner surfaces */
+html[data-theme="dark"] .filter-toggle-btn:hover, html[data-theme="dark"] .variant-summary-item, html[data-theme="dark"] .product-detail-gallery,
+html[data-theme="dark"] .product-gallery-main, html[data-theme="dark"] .gallery-thumb, html[data-theme="dark"] .product-detail-info,
+html[data-theme="dark"] .qty-box, html[data-theme="dark"] .qty-box button, html[data-theme="dark"] .variant-button,
+html[data-theme="dark"] .ship-feature, html[data-theme="dark"] .address-actions button, html[data-theme="dark"] .btn-search-nav,
+html[data-theme="dark"] .back-link, html[data-theme="dark"] .search-input-wrapper, html[data-theme="dark"] .custom-select-trigger,
+html[data-theme="dark"] .custom-select-options, html[data-theme="dark"] .rider-form-group textarea, html[data-theme="dark"] .contact-table td:first-child {
+    background: var(--surface-2) !important; color: var(--text) !important; border-color: var(--border) !important;
+}
+html[data-theme="dark"] .btn-search-nav:hover, html[data-theme="dark"] .custom-select-option:hover { background: var(--surface-3) !important; }
+html[data-theme="dark"] .custom-select-option, html[data-theme="dark"] .contact-table td { border-color: var(--border); }
+
+/* Chat surfaces */
+html[data-theme="dark"] .messages-header, html[data-theme="dark"] .messages-list, html[data-theme="dark"] .rider-chat-header,
+html[data-theme="dark"] .rider-messages-list, html[data-theme="dark"] .rider-chat-form, html[data-theme="dark"] .quick-suggests {
+    background: var(--surface); border-color: var(--border);
+}
+html[data-theme="dark"] .message-content, html[data-theme="dark"] .rider-message.received .bubble,
+html[data-theme="dark"] .message.received .message-content {
+    background: var(--surface-2) !important; color: var(--text) !important; border-color: var(--border) !important;
+}
+
+/* Semantic chips */
+html[data-theme="dark"] .support-avatar, html[data-theme="dark"] .voucher-points, html[data-theme="dark"] .shop-filters .filter-tag,
+html[data-theme="dark"] .product-meta .meta-tag, html[data-theme="dark"] .icon-orders {
+    background: var(--info-soft) !important; color: var(--info) !important;
+}
+html[data-theme="dark"] .icon-points, html[data-theme="dark"] .variant-stock-indicator.low, html[data-theme="dark"] .stock-pill.low-stock,
+html[data-theme="dark"] .product-badge, html[data-theme="dark"] .variant-button.selected, html[data-theme="dark"] .product-price-box {
+    background: var(--warning-soft) !important; color: var(--warning) !important; border-color: transparent !important;
+}
+html[data-theme="dark"] .icon-last, html[data-theme="dark"] .variant-stock-indicator, html[data-theme="dark"] .stock-pill.in-stock,
+html[data-theme="dark"] .quick-chip {
+    background: var(--success-soft) !important; color: var(--success) !important; border-color: transparent !important;
+}
+html[data-theme="dark"] .variant-stock-indicator.out, html[data-theme="dark"] .stock-pill.out-stock,
+html[data-theme="dark"] .address-actions button.delete {
+    background: var(--danger-soft) !important; color: var(--danger) !important; border-color: transparent !important;
+}
+html[data-theme="dark"] .progress-bar-container, html[data-theme="dark"] .progress-bar-bg { background: var(--border); }
+html[data-theme="dark"] .reward-slider-header h2 { color: var(--text); }
+html[data-theme="dark"] .card-top::before, html[data-theme="dark"] .card-top::after { background: var(--bg); }
+
+/* Badges on dark surfaces get a hairline */
+html[data-theme="dark"] .status-pill, html[data-theme="dark"] .status-badge, html[data-theme="dark"] .notif-count-badge,
+html[data-theme="dark"] .unread-badge { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+
+/* Page-local variable names that several pages declare for the same purpose */
+html[data-theme="dark"] body {
+    --text-dark: var(--text);
+    --text-muted: var(--muted);
+    --border-color: var(--border);
+    --chat-bg: var(--bg);
+    --staff-purple: var(--link);
+}
+
+/* Inline-style catch-all (dark mode) — common light literals only */
+html[data-theme="dark"] [style*="background: #fff"], html[data-theme="dark"] [style*="background:#fff"],
+html[data-theme="dark"] [style*="background: white"], html[data-theme="dark"] [style*="background:white"],
+html[data-theme="dark"] [style*="background-color: #fff"], html[data-theme="dark"] [style*="background-color:#fff"],
+html[data-theme="dark"] [style*="background-color: white"], html[data-theme="dark"] [style*="background: #f8fafc"],
+html[data-theme="dark"] [style*="background:#f8fafc"], html[data-theme="dark"] [style*="background: #f8f9fa"],
+html[data-theme="dark"] [style*="background-color: #f8f9fa"], html[data-theme="dark"] [style*="background: #f1f5f9"],
+html[data-theme="dark"] [style*="background:#f1f5f9"], html[data-theme="dark"] [style*="background: #fefefe"] {
+    background: var(--surface-2) !important; border-color: var(--border) !important;
+}
+html[data-theme="dark"] [style*="color: #1e293b"], html[data-theme="dark"] [style*="color:#1e293b"],
+html[data-theme="dark"] [style*="color: #0f172a"], html[data-theme="dark"] [style*="color: #111827"],
+html[data-theme="dark"] [style*="color: #334155"], html[data-theme="dark"] [style*="color:#334155"],
+html[data-theme="dark"] [style*="color: #312e81"], html[data-theme="dark"] [style*="color: #333"],
+html[data-theme="dark"] [style*="color:#333"], html[data-theme="dark"] [style*="color: #000"],
+html[data-theme="dark"] [style*="color:#000"], html[data-theme="dark"] [style*="color: black"],
+html[data-theme="dark"] [style*="color:black"] { color: var(--text) !important; }
+html[data-theme="dark"] [style*="color: #64748b"], html[data-theme="dark"] [style*="color:#64748b"],
+html[data-theme="dark"] [style*="color: #475569"], html[data-theme="dark"] [style*="color: #94a3b8"],
+html[data-theme="dark"] [style*="color: #777"], html[data-theme="dark"] [style*="color: #666"],
+html[data-theme="dark"] [style*="color:#666"], html[data-theme="dark"] [style*="color: #999"],
+html[data-theme="dark"] [style*="color: #888"], html[data-theme="dark"] [style*="color: #555"] { color: var(--muted) !important; }
+html[data-theme="dark"] [style*="color: #4a3e94"], html[data-theme="dark"] [style*="color:#4a3e94"],
+html[data-theme="dark"] [style*="color: #4338ca"], html[data-theme="dark"] [style*="color:#4338ca"] { color: var(--link) !important; }
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+@media (max-width: 1200px) {
+    .customer-page { padding: 22px 22px 96px; }
+    .app-topbar { padding-left: 22px; padding-right: 22px; }
+}
+@media (max-width: 900px) {
+    .checkout-grid { grid-template-columns: 1fr; }
+    /* The drawer's sticky top bar sits above; this bar scrolls away. */
+    .app-topbar { position: relative; top: auto; min-height: 0; padding: 10px 16px; background: var(--surface); }
+    .customer-page { padding: 16px 16px 90px; }
+}
+@media (max-width: 640px) {
+    .app-topbar-greeting { display: none; }
+    .app-topbar { justify-content: flex-end; }
+    .app-points-pill { margin-right: auto; }
+    .contact-staff-fab { right: 14px; bottom: 14px; padding: 12px 16px; }
+    .contact-staff-fab span { display: none; }
+    .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .customer-card-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .summary-line, .customer-actions { flex-wrap: wrap; }
+    .section-header h2 { font-size: var(--fs-xl); }
+}
+@media (max-width: 480px) {
+    .customer-page { padding: 12px 12px 86px; }
+    .customer-wrapper, .wrapper { width: 100%; margin: 0; padding: 14px; border-radius: 0; }
+    .modal-content, .modal-content-zoomer { max-height: calc(100vh - 32px); }
+    .notif-panel { position: fixed; top: 60px; left: 12px; right: 12px; width: auto; max-width: none; }
+}

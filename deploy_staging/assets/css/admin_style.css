@@ -1,0 +1,499 @@
+/* ==========================================================================
+   admin_style.css — Admin + Staff portal styles
+   --------------------------------------------------------------------------
+   Built on the shared design tokens in assets/css/ui-kit.css (loaded first
+   on every page). This file only:
+     1. keeps the legacy class names the Admin/Staff pages already use
+        (.stat-card, .table-box, .table-container, .page-title, ...) and
+        restyles them with the shared tokens;
+     2. normalizes generic elements (tables, inputs, modals) for pages that
+        still use raw markup;
+     3. maps per-page "chip" classes (badge-*, icon-*, role-*, log-*, ...)
+        onto the semantic palette so they read correctly in Dark Mode.
+   The sidebar, mobile drawer and theme tokens live in ui-kit.css — there is
+   exactly one theme system (body.dark-mode, toggled by nav-toggle.js).
+   ========================================================================== */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    display: flex;
+    min-height: 100vh;
+    overflow-x: hidden;
+    background: var(--bg);
+    color: var(--text);
+}
+
+/* --------------------------------------------------------------------------
+   Layout
+   -------------------------------------------------------------------------- */
+.main-content {
+    padding: 28px var(--gutter) 40px;
+}
+
+/* Sidebar — structure comes from .app-sidebar in ui-kit.css. These legacy
+   selectors are kept for any page that still prints the bare markup. */
+.sidebar:not(.app-sidebar) {
+    position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
+    display: flex; flex-direction: column; overflow: hidden; z-index: 1000;
+    background: var(--navy); color: #cbd5e1;
+}
+.sidebar:not(.app-sidebar) .nav-links { flex: 1 1 auto; min-height: 0; overflow-y: auto; list-style: none; padding: 8px 12px; }
+.sidebar:not(.app-sidebar) .nav-links a { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 9px; color: #b7c0cf; text-decoration: none; }
+.sidebar:not(.app-sidebar) .nav-links a:hover,
+.sidebar:not(.app-sidebar) .nav-links a.active { background: rgba(255, 255, 255, .08); color: #fff; }
+.sidebar:not(.app-sidebar) .sidebar-brand { padding: 18px 16px; text-align: center; border-bottom: 1px solid rgba(255, 255, 255, .07); }
+.sidebar:not(.app-sidebar) .sidebar-brand h2 { color: #fff; font-size: 1rem; }
+.sidebar:not(.app-sidebar) .sidebar-footer { padding: 12px 16px; border-top: 1px solid rgba(255, 255, 255, .07); }
+.logout-link { display: flex; align-items: center; gap: 10px; color: #fca5a5; font-weight: 500; text-decoration: none; }
+
+/* Theme toggle outside the sidebar footer (e.g. pages with custom chrome) */
+.theme-toggle-btn {
+    display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
+    padding: 8px 12px; border-radius: 9px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text-2); font: inherit; font-size: var(--fs-sm); font-weight: 500;
+}
+
+/* --------------------------------------------------------------------------
+   Typography & page headers
+   -------------------------------------------------------------------------- */
+.main-content h1 { font-size: var(--fs-2xl); font-weight: 600; color: var(--text); line-height: 1.25; }
+.main-content h2 { font-size: var(--fs-lg); font-weight: 600; color: var(--text); }
+.main-content h3 { font-size: var(--fs-md); font-weight: 600; color: var(--text); }
+
+.page-title {
+    margin-bottom: 22px;
+    padding-bottom: 0;
+    border-bottom: 0;
+    color: var(--text);
+}
+.page-title h1 { font-size: var(--fs-2xl); margin: 0; color: var(--text); }
+.page-title p { color: var(--muted); margin-top: 4px; }
+.welcome-header { margin-bottom: 24px; }
+.welcome-header h1 { color: var(--text); }
+.welcome-header p { color: var(--muted); }
+
+/* --------------------------------------------------------------------------
+   Legacy cards & containers
+   -------------------------------------------------------------------------- */
+.card-row { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+.stat-card {
+    flex: 1 1 180px;
+    background: var(--surface);
+    color: var(--text);
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    text-align: center;
+}
+.stats-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+}
+.card {
+    background: var(--surface);
+    color: var(--text);
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    text-align: center;
+}
+.card i { font-size: 1.6rem; color: var(--link); margin-bottom: 8px; }
+
+.table-box,
+.table-container {
+    background: var(--surface);
+    color: var(--text);
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    min-width: 0;
+}
+.table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.table-header h2, .table-header h3 { margin: 0; }
+
+/* Shared surface treatment for the many page-specific card classes. Only
+   background/border/text — each page keeps its own spacing and layout. */
+.content-card, .content-box, .info-card, .order-summary-box, .review-card,
+.summary-card, .empty-card, .remit-amount-box, .rider-remit-card, .form-container,
+.delivery-container, .about-us-container, .admin-shop-container, .inventory-summary,
+.variants-container, .print-report-header, .search-container, .progress-container,
+.admin-filters, .page-header {
+    background-color: var(--surface);
+    color: var(--text);
+    border-color: var(--border);
+}
+
+/* --------------------------------------------------------------------------
+   Buttons (legacy)
+   -------------------------------------------------------------------------- */
+.btn-add {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--primary);
+    color: var(--on-primary);
+    padding: 9px 16px;
+    min-height: 40px;
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    font-size: var(--fs-base);
+    float: right;
+    transition: background-color .15s;
+}
+.btn-add:hover { background: var(--primary-hover); color: var(--on-primary); }
+.button-link { border-radius: var(--radius-sm); }
+
+/* --------------------------------------------------------------------------
+   Tables (raw <table> markup across Admin/Staff)
+   -------------------------------------------------------------------------- */
+table { width: 100%; border-collapse: collapse; color: var(--text); }
+th {
+    text-align: left;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    border-bottom: 1px solid var(--border);
+}
+td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+.table-box table, .table-container table { margin-top: 4px; }
+tbody tr { transition: background-color .12s; }
+tbody tr:hover > td { background-color: var(--surface-2); }
+
+/* --------------------------------------------------------------------------
+   Forms (raw inputs)
+   -------------------------------------------------------------------------- */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+select,
+textarea {
+    font: inherit;
+    font-size: var(--fs-base);
+    color: var(--text);
+    background-color: var(--surface);
+    border-color: var(--border-strong);
+}
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-ring);
+}
+input::placeholder, textarea::placeholder { color: var(--faint); }
+input:disabled, select:disabled, textarea:disabled { background-color: var(--surface-2); color: var(--muted); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
+option { background: var(--surface); color: var(--text); }
+label { color: var(--text-2); }
+.form-group label { color: var(--text-2); }
+body.dark-mode input[type="date"]::-webkit-calendar-picker-indicator,
+body.dark-mode input[type="time"]::-webkit-calendar-picker-indicator,
+body.dark-mode input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(.8); }
+
+/* --------------------------------------------------------------------------
+   Modals (legacy .modal/.modal-content markup)
+   -------------------------------------------------------------------------- */
+.modal-content,
+.modal-content-zoomer,
+.confirm-modal-box {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+}
+.modal-title, .modal-footer, .modal-header { border-color: var(--border); }
+.modal-close, .modal-close-btn, .close-modal, .close {
+    color: var(--muted);
+    cursor: pointer;
+    line-height: 1;
+}
+.modal-close:hover, .modal-close-btn:hover, .close-modal:hover, .close:hover { color: var(--text); }
+
+/* --------------------------------------------------------------------------
+   Alerts (legacy: .alert is hidden until .show)
+   -------------------------------------------------------------------------- */
+.alert { padding: 12px 14px; margin: 16px 0; border-radius: var(--radius-sm); display: none; border: 1px solid transparent; }
+.alert.show { display: block; }
+.alert.success, .alert-success { background: var(--success-soft); color: var(--success); border-color: transparent; }
+.alert.error, .alert-error, .cf-warning { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+.alert-message:not(.alert-success):not(.alert-error) { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+
+/* --------------------------------------------------------------------------
+   Messaging (shared chat layout)
+   -------------------------------------------------------------------------- */
+.messages-wrapper {
+    display: flex;
+    height: calc(100vh - 160px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+.customers-list { flex: 0 0 30%; border-right: 1px solid var(--border); overflow-y: auto; background: var(--surface-2); }
+.customers-list-header { padding: 14px 16px; background: var(--surface); color: var(--text); font-weight: 600; position: sticky; top: 0; border-bottom: 1px solid var(--border); }
+.customer-item { padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; background: var(--surface); transition: background-color .15s; }
+.customer-item:hover { background: var(--surface-2); }
+.customer-item.active { background: var(--primary-soft); box-shadow: inset 3px 0 0 var(--primary); }
+.customer-name { font-weight: 600; margin-bottom: 4px; color: var(--text); }
+.customer-email, .customer-last-msg { font-size: var(--fs-xs); color: var(--muted); }
+.customer-unread { background: var(--danger); color: #fff; padding: 2px 8px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 700; display: inline-block; }
+.conversation-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.conversation-header { padding: 14px 20px; background: var(--surface); color: var(--text); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.conversation-header h3 { margin: 0; font-size: var(--fs-md); }
+.conversation-header p { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--muted); }
+.conversation-messages { flex: 1; overflow-y: auto; padding: 20px; background: var(--bg); }
+.no-conversation, .empty-list { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--muted); text-align: center; padding: 30px 15px; }
+.message { margin-bottom: 16px; display: flex; gap: 10px; }
+.message.sent { justify-content: flex-end; }
+.message-content { max-width: 65%; padding: 10px 14px; border-radius: 16px; background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.message.sent .message-content { background: var(--primary); color: var(--on-primary); border-color: transparent; border-bottom-right-radius: 4px; }
+.message.received .message-content { border-bottom-left-radius: 4px; }
+.message-sender { font-weight: 600; font-size: var(--fs-xs); margin-bottom: 4px; color: var(--link); }
+.message.sent .message-sender { color: rgba(255, 255, 255, .85); }
+.message-time { font-size: 11px; color: var(--faint); margin-top: 4px; }
+.message.sent .message-time { color: rgba(255, 255, 255, .7); text-align: right; }
+.conversation-input { padding: 14px 20px; background: var(--surface); border-top: 1px solid var(--border); }
+.input-group { display: flex; gap: 10px; }
+.input-group textarea { flex: 1; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); resize: none; height: 48px; background: var(--surface); color: var(--text); }
+.input-group button { background: var(--primary); color: var(--on-primary); border: 0; padding: 10px 18px; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; white-space: nowrap; }
+.input-group button:hover { background: var(--primary-hover); }
+.mobile-back-btn { background: var(--surface-2); color: var(--link); }
+.seen-status { color: var(--link); }
+
+@media (max-width: 768px) {
+    .messages-wrapper { flex-direction: column; }
+    .customers-list { flex: 0 0 auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--border); }
+    .message-content { max-width: 85%; }
+}
+
+/* ==========================================================================
+   Semantic chip families
+   --------------------------------------------------------------------------
+   Page-level badge/status/icon classes are grouped by meaning so their
+   colors follow the shared palette in both themes. Pages still own their
+   size/shape; only color is unified here (dark mode only, so Light Mode
+   keeps each page's tuned pastel exactly as before).
+   ========================================================================== */
+body.dark-mode .badge-delivered, body.dark-mode .badge-active, body.dark-mode .badge-approved,
+body.dark-mode .status-approved, body.dark-mode .stock-in, body.dark-mode .icon-green,
+body.dark-mode .btn-approve, body.dark-mode .role-staff, body.dark-mode .log-positive,
+body.dark-mode .icon-action-btn.view, body.dark-mode .result-panel, body.dark-mode .quick-chip {
+    background: var(--success-soft) !important; color: var(--success) !important; border-color: transparent !important;
+}
+body.dark-mode .badge-in_transit, body.dark-mode .icon-blue, body.dark-mode .avatar-circle,
+body.dark-mode .brand-chip, body.dark-mode #add-variant-btn, body.dark-mode .btn-edit,
+body.dark-mode .channel-note, body.dark-mode .role-customer, body.dark-mode .log-info,
+body.dark-mode .icon-action-btn.edit, body.dark-mode .rider-avatar, body.dark-mode .aco-customer-banner .avatar {
+    background: var(--info-soft) !important; color: var(--info) !important; border-color: transparent !important;
+}
+body.dark-mode .badge-pending, body.dark-mode .status-pending, body.dark-mode .icon-yellow,
+body.dark-mode .status-reviews, body.dark-mode .quick-add-btn, body.dark-mode .log-warning,
+body.dark-mode .aco-address-warning {
+    background: var(--warning-soft) !important; color: var(--warning) !important; border-color: transparent !important;
+}
+body.dark-mode .badge-cancelled, body.dark-mode .badge-rejected, body.dark-mode .stock-out,
+body.dark-mode .icon-red, body.dark-mode .btn-cancel, body.dark-mode .btn-remove-variant,
+body.dark-mode .btn-delete, body.dark-mode .role-admin, body.dark-mode .btn-remove-access,
+body.dark-mode .log-danger, body.dark-mode .icon-action-btn.delete, body.dark-mode .aco-alert.error {
+    background: var(--danger-soft) !important; color: var(--danger) !important; border-color: transparent !important;
+}
+body.dark-mode .icon-purple, body.dark-mode .role-rider, body.dark-mode .icon-action-btn.order,
+body.dark-mode .aco-cart-table .variant-chip {
+    background: var(--accent-soft) !important; color: var(--accent) !important; border-color: transparent !important;
+}
+body.dark-mode .badge-inactive, body.dark-mode .btn-muted, body.dark-mode .log-neutral,
+body.dark-mode .icon-gray, body.dark-mode .btn-modal-reject, body.dark-mode .btn-clear-filter,
+body.dark-mode .btn-refresh, body.dark-mode .log-pagination a, body.dark-mode .btn-reset,
+body.dark-mode .btn-cancel-delete, body.dark-mode .aco-btn-secondary, body.dark-mode .aco-customer-banner .cid-pill,
+body.dark-mode .aco-customer-card .cid-pill, body.dark-mode .aco-qty-stepper button,
+body.dark-mode .confirm-actions .btn-cancel-modal {
+    background: var(--surface-2) !important; color: var(--text-2) !important; border-color: var(--border) !important;
+}
+body.dark-mode .btn-refresh:hover, body.dark-mode .log-pagination a:hover { background: var(--surface-3) !important; }
+body.dark-mode .confirm-actions .btn-confirm-modal:disabled { background: var(--surface-3); color: var(--muted); border-color: var(--border); }
+body.dark-mode .result-panel h2 { color: var(--success); }
+body.dark-mode .you-pill, body.dark-mode .button-link { background: var(--primary-soft); color: var(--link); border-color: transparent; }
+
+/* Badges on dark cards get a hairline so they stay crisp */
+body.dark-mode .status-badge, body.dark-mode .stock-badge, body.dark-mode .notification-badge,
+body.dark-mode .tier-badge, body.dark-mode .badge-status { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); }
+
+/* ==========================================================================
+   Page-specific surfaces (dark-mode) — selectors found in page <style> blocks
+   ========================================================================== */
+body.dark-mode .product-image-container, body.dark-mode .carousel-container, body.dark-mode .dropdown-grid,
+body.dark-mode .aco-card, body.dark-mode .aco-customer-banner, body.dark-mode .aco-success-box,
+body.dark-mode .notification-bell, body.dark-mode .notification-dropdown {
+    background: var(--surface) !important; border-color: var(--border) !important;
+}
+body.dark-mode .product-actions button, body.dark-mode .product-tag, body.dark-mode .review-content,
+body.dark-mode .notif-header, body.dark-mode code.redemption-code, body.dark-mode .timeline-item,
+body.dark-mode .aco-payment-fields, body.dark-mode .aco-success-details, body.dark-mode .aco-product-row:hover,
+body.dark-mode .aco-fulfillment-card.active, body.dark-mode .aco-view-profile-btn,
+body.dark-mode .contact-table td:first-child {
+    background: var(--surface-2) !important; color: var(--text) !important; border-color: var(--border) !important;
+}
+body.dark-mode .timeline-item { border-left-color: var(--link) !important; }
+body.dark-mode .aco-view-profile-btn { color: var(--link) !important; }
+body.dark-mode .dot.active { background: var(--link); }
+body.dark-mode .aco-remove-btn:hover { background: var(--danger-soft) !important; }
+body.dark-mode .receipt-thumb { border-color: var(--border); }
+body.dark-mode .contact-table td { border-color: var(--border); }
+
+/* Text colors on page-specific elements */
+body.dark-mode .carousel-item-info, body.dark-mode .cell-strong, body.dark-mode .header-action h2,
+body.dark-mode .header-action .sub, body.dark-mode .status-label, body.dark-mode .profile-cell,
+body.dark-mode .customer-name-link, body.dark-mode .log-user-cell strong, body.dark-mode .activity-modal dd,
+body.dark-mode .cust-modal p strong, body.dark-mode .aco-success-details dd, body.dark-mode .aco-card-title,
+body.dark-mode .aco-customer-card .name, body.dark-mode .aco-customer-card .contact-list span,
+body.dark-mode .aco-product-row .info strong, body.dark-mode .aco-fulfillment-card .label,
+body.dark-mode .aco-cart-table .prod-name, body.dark-mode .aco-summary-row span:last-child,
+body.dark-mode .aco-summary-row.total span:first-child, body.dark-mode .aco-summary-row.total {
+    color: var(--text) !important;
+}
+body.dark-mode .current-account-tag, body.dark-mode .current-account-tag i, body.dark-mode .user-cell small,
+body.dark-mode .empty-row td, body.dark-mode .log-toolbar .field-label, body.dark-mode .result-count,
+body.dark-mode .log-details-summary, body.dark-mode .empty-state-box, body.dark-mode .empty-state-box p.main,
+body.dark-mode .log-pagination span.page-info, body.dark-mode .activity-modal dt, body.dark-mode .cust-modal p,
+body.dark-mode .progress-percent, body.dark-mode .contact-cell small, body.dark-mode .aco-customer-banner p,
+body.dark-mode .aco-product-row .info span, body.dark-mode .aco-empty-cart, body.dark-mode .aco-summary-row,
+body.dark-mode .aco-success-box .sub, body.dark-mode .aco-success-details dt, body.dark-mode .aco-btn-tertiary,
+body.dark-mode .aco-card-title .sub, body.dark-mode .aco-customer-card .contact-list i, body.dark-mode .aco-field-group .hint,
+body.dark-mode .aco-product-row .info .meta, body.dark-mode .aco-empty-list, body.dark-mode .aco-fulfillment-card .icon,
+body.dark-mode .aco-fulfillment-card .desc, body.dark-mode .aco-cancel-link, body.dark-mode .aco-payment-note,
+body.dark-mode .aco-cart-table td[data-label]::before {
+    color: var(--muted) !important;
+}
+body.dark-mode .empty-row i, body.dark-mode .empty-state-box i { color: var(--border-strong); }
+body.dark-mode .btn-view-details, body.dark-mode .customer-name-link i, body.dark-mode .aco-fulfillment-card.active .icon,
+body.dark-mode .aco-summary-row.total span:last-child { color: var(--link) !important; }
+body.dark-mode .account-status.is-active { color: var(--success); }
+body.dark-mode .account-status.is-locked { color: var(--warning); }
+body.dark-mode .aco-field-error { color: var(--danger) !important; }
+body.dark-mode .aco-success-box .icon { background: var(--success-soft) !important; color: var(--success) !important; }
+body.dark-mode .log-row:hover { background: var(--surface-2); }
+body.dark-mode .aco-product-list, body.dark-mode .aco-product-row, body.dark-mode .aco-qty-stepper,
+body.dark-mode .aco-qty-stepper input, body.dark-mode .aco-fulfillment-card, body.dark-mode .aco-cart-table tr,
+body.dark-mode .aco-summary-card { border-color: var(--border) !important; }
+
+/* Cards: text inside legacy containers follows the card color in dark mode */
+body.dark-mode .card *, body.dark-mode .stat-card *, body.dark-mode .table-box *, body.dark-mode .table-container *,
+body.dark-mode .content-card *, body.dark-mode .content-box *, body.dark-mode .info-card *, body.dark-mode .order-summary-box *,
+body.dark-mode .review-card *, body.dark-mode .summary-card *, body.dark-mode .empty-card *, body.dark-mode .remit-amount-box *,
+body.dark-mode .rider-remit-card *, body.dark-mode .form-container *, body.dark-mode .delivery-container *,
+body.dark-mode .about-us-container *, body.dark-mode .admin-shop-container *, body.dark-mode .inventory-summary *,
+body.dark-mode .variants-container *, body.dark-mode .print-report-header *, body.dark-mode .progress-container *,
+body.dark-mode .review-header *, body.dark-mode .search-container *, body.dark-mode .admin-filters * { color: inherit; }
+body.dark-mode .review-card, body.dark-mode .review-header, body.dark-mode .product-card,
+body.dark-mode .carousel-item-details { background: var(--surface); color: var(--text); border-color: var(--border); }
+
+/* ==========================================================================
+   Inline-style catch-all (dark mode)
+   --------------------------------------------------------------------------
+   Some pages still paint one-off elements with inline hex colors. These map
+   the common light literals onto theme tokens. Intentional image/QR/logo
+   colors are never inline-styled this way, so they're unaffected.
+   ========================================================================== */
+body.dark-mode [style*="background: #fff"], body.dark-mode [style*="background:#fff"],
+body.dark-mode [style*="background: white"], body.dark-mode [style*="background:white"],
+body.dark-mode [style*="background-color: #fff"], body.dark-mode [style*="background-color:#fff"],
+body.dark-mode [style*="background-color: white"],
+body.dark-mode [style*="background: #f8fafc"], body.dark-mode [style*="background:#f8fafc"],
+body.dark-mode [style*="background: #f8f9fa"], body.dark-mode [style*="background-color: #f8f9fa"],
+body.dark-mode [style*="background: #f9f9f9"], body.dark-mode [style*="background:#f9f9f9"],
+body.dark-mode [style*="background: #f1f5f9"], body.dark-mode [style*="background:#f1f5f9"],
+body.dark-mode [style*="background: #f4f7f6"], body.dark-mode [style*="background: #fafafa"] {
+    background: var(--surface-2) !important;
+    border-color: var(--border) !important;
+}
+body.dark-mode [style*="background: #bdc3c7"], body.dark-mode [style*="background:#bdc3c7"],
+body.dark-mode [style*="background: #ecf0f1"], body.dark-mode [style*="background:#ecf0f1"],
+body.dark-mode [style*="background: #eee"], body.dark-mode [style*="background:#eee"] {
+    background: var(--surface-3) !important;
+    border-color: var(--border) !important;
+}
+body.dark-mode [style*="color: #1e293b"], body.dark-mode [style*="color:#1e293b"],
+body.dark-mode [style*="color: #0f172a"], body.dark-mode [style*="color:#0f172a"],
+body.dark-mode [style*="color: #333"], body.dark-mode [style*="color:#333"],
+body.dark-mode [style*="color: #000"], body.dark-mode [style*="color:#000"],
+body.dark-mode [style*="color: black"], body.dark-mode [style*="color:black"],
+body.dark-mode [style*="color: #2c3e50"], body.dark-mode [style*="color:#2c3e50"],
+body.dark-mode [style*="color: #0C2340"], body.dark-mode [style*="color:#0C2340"],
+body.dark-mode [style*="color: #334155"], body.dark-mode [style*="color:#334155"],
+body.dark-mode [style*="color: #444"], body.dark-mode [style*="color:#444"],
+body.dark-mode [style*="color: #111"], body.dark-mode [style*="color:#111"] { color: var(--text) !important; }
+body.dark-mode [style*="color: #64748b"], body.dark-mode [style*="color:#64748b"],
+body.dark-mode [style*="color: #777"], body.dark-mode [style*="color:#777"],
+body.dark-mode [style*="color: #999"], body.dark-mode [style*="color:#999"],
+body.dark-mode [style*="color: #888"], body.dark-mode [style*="color:#888"],
+body.dark-mode [style*="color: #666"], body.dark-mode [style*="color:#666"],
+body.dark-mode [style*="color: #555"], body.dark-mode [style*="color:#555"],
+body.dark-mode [style*="color: #7f8c8d"], body.dark-mode [style*="color:#7f8c8d"],
+body.dark-mode [style*="color: #95a5a6"], body.dark-mode [style*="color: #8e8e8e"],
+body.dark-mode [style*="color: #475569"], body.dark-mode [style*="color:#475569"],
+body.dark-mode [style*="color: #94a3b8"], body.dark-mode [style*="color:#94a3b8"] { color: var(--muted) !important; }
+body.dark-mode [style*="color: #4a3e94"], body.dark-mode [style*="color:#4a3e94"] { color: var(--link) !important; }
+body.dark-mode [style*="color: #C8102E"], body.dark-mode [style*="color:#C8102E"],
+body.dark-mode [style*="color: #e74c3c"], body.dark-mode [style*="color:#e74c3c"] { color: var(--danger) !important; }
+body.dark-mode [style*="color: #27ae60"], body.dark-mode [style*="color:#27ae60"] { color: var(--success) !important; }
+body.dark-mode [style*="background: #eafaf1"], body.dark-mode [style*="background:#eafaf1"] { background: var(--success-soft) !important; color: var(--success) !important; }
+body.dark-mode [style*="background: #fff5f5"], body.dark-mode [style*="background:#fff5f5"] { background: var(--danger-soft) !important; color: var(--danger) !important; }
+body.dark-mode [style*="border: 1px solid #ddd"], body.dark-mode [style*="border:1px solid #ddd"],
+body.dark-mode [style*="border: 1px solid #eee"], body.dark-mode [style*="border: 1px solid #e5e7eb"] { border-color: var(--border) !important; }
+
+/* Page-local variable names used by several pages for the same purpose */
+body.dark-mode {
+    --text-dark: var(--text);
+    --text-muted: var(--muted);
+    --border-color: var(--border);
+    --bg-light: var(--surface-2);
+    --chat-bg: var(--bg);
+    --bubble-received: var(--surface-2);
+}
+
+/* ==========================================================================
+   Responsive (legacy containers)
+   ========================================================================== */
+@media (max-width: 1200px) {
+    .main-content { padding: 24px 22px 36px; }
+}
+@media (max-width: 900px) {
+    .main-content { padding: 18px 16px 32px !important; }
+    .card-row .stat-card { flex: 1 1 140px; }
+    .stats-container { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important; }
+    .table-box, .table-container { overflow-x: auto; padding: 16px; }
+    .btn-add { float: none; }
+    input, select, textarea, button { max-width: 100%; }
+    img { max-width: 100%; height: auto; }
+}
+@media (max-width: 480px) {
+    .main-content { padding: 14px 12px 28px !important; }
+    .page-title h1, .main-content h1 { font-size: var(--fs-xl); }
+}

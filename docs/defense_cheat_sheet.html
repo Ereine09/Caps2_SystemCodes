@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DPS Defense Cheat Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+<style>
+  /* Layout: one printable sheet; a header band, then a two-column grid of sections that stacks on phones. */
+  :root {
+    --bg: #f4f5f8;
+    --paper: #ffffff;
+    --ink: #1c1d26;
+    --muted: #5a5d70;
+    --line: #dcdde6;
+    --accent: #4a3e94;      /* the system's own admin purple */
+    --accent-soft: #ecebf7;
+    --warn: #9a5b00;
+    --warn-soft: #fff4e0;
+    --ok: #1f7a4d;
+    --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12131a; --paper: #1b1c25; --ink: #e9e9f1; --muted: #a3a5b8; --line: #2e3040;
+      --accent: #a99cf2; --accent-soft: #262344; --warn: #f0b45a; --warn-soft: #2e2414; --ok: #6fd3a0;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12131a; --paper: #1b1c25; --ink: #e9e9f1; --muted: #a3a5b8; --line: #2e3040;
+    --accent: #a99cf2; --accent-soft: #262344; --warn: #f0b45a; --warn-soft: #2e2414; --ok: #6fd3a0;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--font-body); padding-inline: 16px; padding-block: 24px 40px; }
+  .sheet { max-width: 1080px; margin: 0 auto; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 28px 30px 30px; }
+
+  header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 24px; padding-bottom: 14px; border-bottom: 3px solid var(--accent); margin-bottom: 18px; }
+  header h1 { font: 700 26px/1.15 var(--font-display); margin: 0; text-wrap: balance; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+  .runtime { font-size: 12px; color: var(--muted); text-align: right; }
+  .runtime strong { display: block; font: 700 18px var(--font-display); color: var(--ink); }
+
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; }
+  .span-2 { grid-column: 1 / -1; }
+  section { min-width: 0; }
+  h2 { font: 700 15px/1.2 var(--font-display); margin: 0 0 8px; display: flex; align-items: baseline; gap: 8px; }
+  h2 .tag { font: 600 11px var(--font-body); color: var(--muted); letter-spacing: .02em; }
+
+  .pitch { background: var(--accent-soft); border-radius: 8px; padding: 12px 16px; display: grid; gap: 6px; }
+  .pitch p { margin: 0; }
+  .pitch b { color: var(--accent); }
+
+  ol.route { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 5px; }
+  ol.route li { counter-increment: step; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+  ol.route li::before { content: counter(step); font: 700 12px var(--font-display); color: var(--paper); background: var(--accent); border-radius: 50%; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
+  .where { color: var(--muted); font-size: 12px; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+
+  ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  .limits { background: var(--warn-soft); border-radius: 8px; padding: 10px 14px; }
+  .limits h2 { color: var(--warn); }
+  .limits li b { color: var(--ink); }
+  .say { color: var(--muted); font-style: italic; }
+
+  dl.qa { margin: 0; display: grid; gap: 7px; }
+  dl.qa dt { font-weight: 700; }
+  dl.qa dd { margin: 1px 0 0; color: var(--ink); }
+
+  ul.check { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+  ul.check li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+  ul.check li::before { content: ""; width: 12px; height: 12px; border: 1.5px solid var(--accent); border-radius: 3px; transform: translateY(1px); }
+  ul.check .urgent { font-weight: 700; }
+
+  footer { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; }
+
+  @media screen and (max-width: 760px) {
+    .grid { grid-template-columns: minmax(0, 1fr); }
+    .sheet { padding: 20px 16px; }
+    .runtime { text-align: left; }
+    td:first-child { white-space: normal; }
+  }
+  @media print {
+    @page { size: A4; margin: 10mm; }
+    :root { --bg: #fff; --paper: #fff; --ink: #000; --muted: #444; --line: #bbb; --accent: #3b3080; --accent-soft: #efedf8; --warn: #7a4600; --warn-soft: #fff4e0; }
+    body { padding: 0; font-size: 10.5px; }
+    .sheet { border: 0; padding: 0; max-width: none; }
+    header h1 { font-size: 20px; }
+    body { font-size: 9.6px; line-height: 1.38; }
+    header { padding-bottom: 8px; margin-bottom: 10px; }
+    /* flowing columns pack the sections with no gaps between rows */
+    .grid { display: block; column-count: 2; column-gap: 18px; }
+    .grid > section { break-inside: avoid; margin-bottom: 10px; }
+    .grid > .span-2 { column-span: all; }
+    .pitch { padding: 8px 12px; gap: 3px; }
+    h2 { margin-bottom: 5px; }
+    ol.route, ul.plain, ul.check, dl.qa { gap: 3px; }
+    table { font-size: 9.4px; }
+    th, td { padding: 3px 6px; }
+    tr { break-inside: avoid; }
+    footer { margin-top: 8px; padding-top: 6px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="sheet">
+  <header>
+    <div>
+      <div class="eyebrow">Capstone defense · Darius Poultry Supplies</div>
+      <h1>Loyalty Management System: Defense Cheat Sheet</h1>
+      <p>Panelists judge practical use, not code. For every feature, say who it helps and what problem it removes.</p>
+    </div>
+    <div class="runtime">Target length<strong>15–20 min</strong>demo included</div>
+  </header>
+
+  <div class="grid">
+    <section class="span-2">
+      <h2>Opening pitch <span class="tag">about 1 minute · problem → who → what we built → what changes</span></h2>
+      <div class="pitch">
+        <p><b>Problem.</b> Darius Poultry Supplies in Caloocan sells pet food, poultry feed and pet medicine. Sales, deliveries, rider cash and regular customers were tracked by hand. The owner could not see who the loyal customers were, how much money was actually collected, or which stock was low or expiring.</p>
+        <p><b>Solution.</b> One web system with four parts: a customer shop, an admin portal, a staff portal and a rider portal. Customers earn points on every purchase (1% of the order) and redeem them for vouchers. Every order is tracked from checkout to delivery to the cash being turned in.</p>
+        <p><b>Result.</b> More repeat customers, no missing rider cash, and live numbers the owner can act on.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Demo route <span class="tag">follow one order, start to finish</span></h2>
+      <ol class="route">
+        <li><span><b>Customer shop:</b> browse (point out "Best before"), add to cart, checkout with delivery + COD. <span class="where">customer/products.php</span></span></li>
+        <li><span><b>Admin → Orders:</b> new order arrives, confirm it, assign a rider.</span></li>
+        <li><span><b>Rider portal:</b> mark delivered, confirm with the QR scan.</span></li>
+        <li><span><b>Remittance:</b> rider turns in the cash, admin verifies it.</span></li>
+        <li><span><b>Dashboard → Today's Sales → Sales Breakdown:</b> the money now counts, and you can show where it came from.</span></li>
+        <li><span><b>Loyalty Points:</b> points were added automatically; redeem a voucher.</span></li>
+        <li><span><b>Analytics → Customer Groups:</b> Loyal, Frequent, Regular, At Risk.</span></li>
+        <li><span><b>Print a customer statement:</b> one customer per page, full history.</span></li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Feature → why the shop needs it</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Feature</th><th>Say this</th></tr></thead>
+          <tbody>
+            <tr><td>Points &amp; rewards</td><td>Gives customers a reason to come back here instead of a competitor.</td></tr>
+            <tr><td>Customer Groups</td><td>Shows who to thank and who to win back. At Risk = a good customer who stopped buying.</td></tr>
+            <tr><td>Sales Breakdown</td><td>Separates money received from unpaid orders, and shows where each peso came from.</td></tr>
+            <tr><td>Rider remittance</td><td>Rider cash is tracked per order, so missing money shows up right away.</td></tr>
+            <tr><td>Expiration dates</td><td>Feed and medicine expire. Admin gets a warning; expired items can't be sold.</td></tr>
+            <tr><td>Low-stock alerts</td><td>Restock before running out.</td></tr>
+            <tr><td>Statements &amp; reports</td><td>Paper records to check accounts or show the customer.</td></tr>
+            <tr><td>Activity logs</td><td>Every change shows who did it, for accountability.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="limits">
+      <h2>Say these first <span class="tag">before the panel finds them</span></h2>
+      <ul class="plain">
+        <li><b>Expiration is per product</b>, not per batch or size. <span class="say">"Batch tracking is a future addition."</span></li>
+        <li><b>Customer Groups always make 4 groups</b> and are recalculated from current data each time the page opens, so a customer's group can change as others buy. Customers with no purchases yet show as New.</li>
+        <li><b>Tiers:</b> Silver needs 250 points, about ₱25,000 spent, so most customers are still Bronze. <span class="say">"Tiers reward long-term customers."</span></li>
+        <li><b>Needs internet.</b> Walk-in sales can still be entered through Adjust Points or Create Order.</li>
+        <li><b>Sample data:</b> the @example.com customers and the expiration dates are test data.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Likely questions</h2>
+      <dl class="qa">
+        <dt>How is this different from a POS?</dt>
+        <dd>A POS records sales. This also tracks customers, rewards them, follows deliveries and rider cash, and shows trends.</dd>
+        <dt>Where is the machine learning?</dt>
+        <dd>Customer Groups use K-Means clustering on RFM: how recently a customer bought, how many purchases, and how many points. Similar customers form 4 clusters, named Loyal, Frequent, Regular and At Risk.</dd>
+        <dt>Who can access what?</dt>
+        <dd>Separate logins for admin, staff, customer and rider. Each browser stays signed in to one account at a time, and every change is logged.</dd>
+        <dt>Is customer data safe?</dt>
+        <dd>Passwords are encrypted, accounts lock after repeated wrong passwords, and recovery works by email link or temporary password.</dd>
+        <dt>Will the owner actually use it?</dt>
+        <dd>Show the dashboard's Needs Attention list, low-stock alerts and the printable reports.</dd>
+      </dl>
+    </section>
+
+    <section>
+      <h2>When they suggest something</h2>
+      <ul class="plain">
+        <li><b>Good idea, outside scope:</b> <span class="say">"Thank you, we'll include that in our recommendations for future development."</span></li>
+        <li><b>Not needed by the shop:</b> state the limitation once, based on what the shop really does. <span class="say">"The shop only delivers within Caloocan, so…"</span> Don't argue.</li>
+        <li><b>A real bug they find:</b> acknowledge it, say how you would fix it, move on.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Before defense day</h2>
+      <ul class="check">
+        <li class="urgent">Turn Admin Login back ON (sidebar shows "Login OFF").</li>
+        <li>Place one full test order, including admin "Create Order for Customer".</li>
+        <li>Keep Settings and the SQL file off the projector; change the Gemini key and Gmail app password afterwards.</li>
+        <li>List every 1st-defense feature and confirm each still works.</li>
+        <li>Dry run with friends as panelists; time it and write down every question.</li>
+        <li>Decide who presents which part and who drives the laptop.</li>
+      </ul>
+    </section>
+  </div>
+
+  <footer>
+    <span>Darius Poultry Supplies · Loyalty Management System</span>
+    <span>Practical use first, technical detail only if asked.</span>
+  </footer>
+</div>
+</body>
+</html>

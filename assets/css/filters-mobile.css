@@ -1,0 +1,47 @@
+/*
+ * Product filters on phones (admin, staff and customer products pages).
+ * Desktop: unchanged sidebar. At 900px and below the panel shrinks to one "Filters" bar
+ * (showing the chosen category); tapping it opens the options as compact chips.
+ * Markup: <aside class="... fc"> <button class="fc-toggle"> ... <form class="fc-body"> ...
+ * and the old heading gets .fc-title (hidden on phones, the bar replaces it).
+ */
+.fc-toggle { display: none; }
+
+@media (max-width: 900px) {
+    .fc.fc { padding: 0; overflow: hidden; }
+    .fc .fc-title { display: none; }
+    .fc-toggle {
+        display: flex; align-items: center; gap: 10px; width: 100%;
+        padding: 12px 14px; margin: 0; border: 0; background: transparent;
+        color: inherit; font: inherit; font-size: 0.95rem; font-weight: 700;
+        text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    .fc-toggle > .fa-sliders { color: var(--primary, #4f46e5); }
+    .fc-toggle .fc-current {
+        flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        font-weight: 600; font-size: 0.82rem; color: #64748b;
+    }
+    .fc-toggle .fc-current.is-set {
+        flex: 0 1 auto; padding: 3px 10px; border-radius: 999px;
+        background: var(--primary-soft, #eef2ff); color: var(--primary, #4f46e5);
+    }
+    .fc-toggle .fc-chev { margin-left: auto; font-size: 0.8rem; color: #64748b; transition: transform .2s; }
+    .fc.is-open .fc-toggle .fc-chev { transform: rotate(180deg); }
+
+    .fc > .fc-body { display: none; padding: 4px 14px 14px; border-top: 1px solid var(--border, #e2e8f0); }
+    .fc.is-open > .fc-body { display: block; max-height: 60vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+    /* Options as wrapping chips instead of one per line. */
+    .fc .fc-body label {
+        display: inline-flex !important; align-items: center; gap: 5px;
+        margin: 0 6px 6px 0 !important; padding: 5px 11px;
+        border: 1px solid var(--border, #dbe1ea); border-radius: 999px;
+        font-size: 0.8rem !important; line-height: 1.2; cursor: pointer;
+    }
+    .fc .fc-body label input[type="checkbox"] { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+    .fc .fc-body label:has(input:checked) {
+        background: var(--primary, #4f46e5); border-color: var(--primary, #4f46e5); color: #fff;
+    }
+    .fc .fc-body label:has(input:checked) span { color: rgba(255, 255, 255, .85) !important; }
+    .fc .fc-body label:has(input:focus-visible) { outline: 2px solid var(--primary, #4f46e5); outline-offset: 2px; }
+}

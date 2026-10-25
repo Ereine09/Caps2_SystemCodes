@@ -1,0 +1,388 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        linear-gradient(rgba(20, 24, 48, 0.35), rgba(74, 62, 148, 0.35)),
+        url('./knowledgeville.png') center center / cover no-repeat fixed;
+    padding: 20px;
+}
+
+/* Main Wrapper - Compact and Responsive */
+.wrapper {
+    position: relative;
+    max-width: 400px; /* Saktong lapad lang para sa Login at Register */
+    width: calc(100% - 30px);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 30px 35px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+    /* Tinanggal ang fixed height para mag-adjust ang box sa dami ng fields */
+}
+
+.wrapper h2 {
+    position: relative;
+    font-size: 24px;
+    font-weight: 600;
+    color: #1d1d1f;
+    margin-bottom: 25px;
+    display: inline-block;
+}
+
+/* Purple underline sa heading */
+.wrapper h2::after {
+    content: '';
+    display: block;
+    height: 3.5px;
+    width: 30px;
+    background: #4a3e94;
+    margin-top: 5px;
+    border-radius: 10px;
+}
+
+/* Form Spacing */
+.wrapper form {
+    margin-top: 10px;
+}
+
+.wrapper form .input-box {
+    width: 100%;
+    margin-top: 16px; /* Saktong layo ng bawat input */
+    position: relative;
+}
+
+.input-box input {
+    height: 48px;
+    width: 100%;
+    outline: none;
+    padding: 0 15px;
+    font-size: 15.5px;
+    color: #333;
+    border: 1.5px solid #c7bebe;   
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+/* Focus state para sa input */
+.input-box input:focus,
+.input-box input:valid {
+    border-color: #4a3e94;
+}
+
+/* Password Validation Text */
+#passwordHelp {
+    display: block;
+    font-size: 11px;
+    color: #888;
+    margin-top: 2px;
+    line-height: 1.2;
+}
+
+.password-container {
+    position: relative;
+}
+
+.toggle {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    cursor: pointer;
+}
+
+.password-rules {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: 0.3s;
+    font-size: 13px;
+}
+
+.password-rules.show {
+    max-height: 200px;
+    opacity: 1;
+}
+
+.password-rules p {
+    margin: 2px 0;
+    color: red;
+}
+
+.password-rules p.valid {
+    color: green;
+}
+
+#confirmMessage {
+    font-size: 11px;
+    color: red;
+    display: none;
+}
+
+#confirmMessage.valid {
+    color: green;
+}
+
+input[type="submit"]:disabled {
+    background: gray;
+    cursor: not-allowed;
+}
+
+/* Policy / Checkbox Section */
+.policy {
+    display: flex;
+    align-items: center;
+    margin-top: 5px;
+}
+
+.policy input {
+    accent-color: #0b19d4;
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+}
+
+.policy label {
+    font-size: 13.5px;
+    color: #555;
+    margin-left: 10px;
+    cursor: pointer;
+}
+
+/* Submit Button */
+.input-box.button input {
+    color: #fff;
+    font-weight: 600;
+    font-size: 17px;
+    background: #6b6497;
+    border: 1.5px solid #6b6497;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: all 0.3s ease;
+}
+
+.input-box.button input:hover {
+    background: #4a3e94;
+    border-color: #4a3e94;
+}
+
+/* Footer Links (Sign Up / Login / Forgot) */
+form .text {
+    margin-top: 10px; /* Binawasan natin para hindi sobrang layo sa button */
+    text-align: center;
+    width: 100%; /* Siguradong sakop ang buong lapad ng form */
+    display: block;
+}
+
+form .text h3 {
+    color: #333;
+    font-size: 14px;
+    font-weight: 400; /* Ginawa nating light para mas malapit sa screenshot */
+    display: block;
+    margin-top: 5px; /* Spacing sa pagitan ng mga link */
+}
+
+form .text h3 a {
+    color: #27ae60; /* Green color para sa 'Sign Up' o 'Login' link */
+    text-decoration: none;
+    font-weight: 600;
+    transition: 0.2s;
+}
+
+form .text h3 a:hover {
+    text-decoration: underline;
+    color: #1e8449; /* Darker green kapag hinover */
+}
+
+/* --- FORGOT PASSWORD & ALERT MESSAGES --- */
+.reset-message {
+    text-align: center;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.reset-message p {
+    color: #2ecc71;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.reset-message a {
+    color: #4a3e94;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.reset-message a:hover {
+    color: #6b6497; /*  may kulay pag tinapatan ng mouse */
+    text-decoration: underline; 
+}
+
+.reset-message small {
+    display: block;
+    color: #e74c3c;
+    margin-top: 8px;
+}
+
+.text a {
+    text-decoration: underline; /* Force underline para sa reset links */
+    font-style: italic;
+}
+
+/* Dashboard styles */
+body.dashboard-body {
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    background: #f0f2f5 !important;
+    background-image: none !important;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+
+.sidebar {
+    width: 260px;
+    height: 100vh;
+    background: #4a3e94;
+    color: white;
+    padding: 30px 20px;
+    position: sticky; /* Imbes na fixed, para sumama sa layout flow */
+    top: 0;
+    flex-shrink: 0;
+}
+
+.sidebar h2 {
+    font-size: 20px;
+    margin-bottom: 30px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 15px;
+}
+
+.sidebar-links {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sidebar-links a {
+    color: rgba(255,255,255,0.8);
+    text-decoration: none;
+    padding: 12px 15px;
+    border-radius: 8px;
+    transition: 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.sidebar-links a:hover {
+    background: rgba(255,255,255,0.1);
+    color: white;
+}
+
+.main-content {
+    flex-grow: 1;
+    padding: 40px;
+    min-width: 0; /* Prevents flex items from overflowing */
+}
+
+/* Dashboard Specific Components */
+.card-row {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    flex: 1;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    text-align: center;
+}
+
+.stat-card i {
+    font-size: 28px;
+    color: #4a3e94;
+    margin-bottom: 10px;
+}
+
+.table-box {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.btn-add {
+    background: #27ae60;
+    color: white;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 6px;
+    float: right;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+th {
+    text-align: left;
+    padding: 12px;
+    border-bottom: 2px solid #f0f2f5;
+    color: #888;
+    font-size: 13px;
+    text-transform: uppercase;
+}
+
+td {
+    padding: 15px 12px;
+    border-bottom: 1px solid #f0f2f5;
+    font-size: 14px;
+}
+
+.action-btn {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 12px;
+    margin-right: 5px;
+}
+
+.logout-btn {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 12px 24px;
+    background: #4a3e94;
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: 0.3s;
+}
+
+.logout-btn:hover {
+    background: #6b6497;
+}

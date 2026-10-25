@@ -1,0 +1,447 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+    min-height: 100vh;
+    min-height: 100dvh; /* mobile browsers: 100vh includes space hidden by the address bar,
+        which pushes this flex-centered card below the fold until it scrolls/collapses;
+        100dvh tracks the actually-visible viewport instead (same fix as rider/assets/rider.css). */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        linear-gradient(rgba(20, 24, 48, 0.35), rgba(74, 62, 148, 0.35)),
+        url('./knowledgeville.png') center center / cover no-repeat fixed;
+    padding: 20px;
+}
+
+/* Main Wrapper - Compact and Responsive */
+.wrapper {
+    position: relative;
+    max-width: 400px; /* Saktong lapad lang para sa Login at Register */
+    width: calc(100% - 30px);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 30px 35px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+    /* Tinanggal ang fixed height para mag-adjust ang box sa dami ng fields */
+}
+
+.wrapper h2 {
+    position: relative;
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--dk-text, #1d1d1f);
+    margin-bottom: 25px;
+    display: inline-block;
+}
+
+/* Purple underline sa heading */
+.wrapper h2::after {
+    content: '';
+    display: block;
+    height: 3.5px;
+    width: 30px;
+    background: var(--dk-primary, #4a3e94);
+    margin-top: 5px;
+    border-radius: 10px;
+}
+
+/* Form Spacing */
+.wrapper form {
+    margin-top: 10px;
+}
+
+.wrapper form .input-box {
+    width: 100%;
+    margin-top: 16px; /* Saktong layo ng bawat input */
+    position: relative;
+}
+
+.input-box input {
+    height: 48px;
+    width: 100%;
+    outline: none;
+    padding: 0 15px;
+    font-size: 15.5px;
+    color: var(--dk-text, #333);
+    border: 1.5px solid var(--dk-border, #c7bebe);   
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+/* Focus state para sa input */
+.input-box input:focus,
+.input-box input:valid {
+    border-color: var(--dk-primary, #4a3e94);
+}
+
+/* Password Validation Text */
+#passwordHelp {
+    display: block;
+    font-size: 11px;
+    color: var(--dk-muted, #888);
+    margin-top: 2px;
+    line-height: 1.2;
+}
+
+.password-container {
+    position: relative;
+}
+
+.toggle {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    cursor: pointer;
+}
+
+.password-rules {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: 0.3s;
+    font-size: 13px;
+}
+
+.password-rules.show {
+    max-height: 200px;
+    opacity: 1;
+}
+
+.password-rules p {
+    margin: 2px 0;
+    color: red;
+}
+
+.password-rules p.valid {
+    color: green;
+}
+
+#confirmMessage {
+    font-size: 11px;
+    color: red;
+    display: none;
+}
+
+#confirmMessage.valid {
+    color: green;
+}
+
+input[type="submit"]:disabled {
+    background: gray;
+    cursor: not-allowed;
+}
+
+/* Policy / Checkbox Section */
+.policy {
+    display: flex;
+    align-items: center;
+    margin-top: 5px;
+}
+
+.policy input {
+    accent-color: #0b19d4;
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+}
+
+.policy label {
+    font-size: 13.5px;
+    color: var(--dk-text-2, #555);
+    margin-left: 10px;
+    cursor: pointer;
+}
+
+/* Submit Button */
+.input-box.button input {
+    color: #fff;
+    font-weight: 600;
+    font-size: 17px;
+    background: #6b6497;
+    border: 1.5px solid #6b6497;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: all 0.3s ease;
+}
+
+.input-box.button input:hover {
+    background: var(--dk-primary, #4a3e94);
+    border-color: var(--dk-primary, #4a3e94);
+}
+
+/* Footer Links (Sign Up / Login / Forgot) */
+form .text {
+    margin-top: 10px; /* Binawasan natin para hindi sobrang layo sa button */
+    text-align: center;
+    width: 100%; /* Siguradong sakop ang buong lapad ng form */
+    display: block;
+}
+
+form .text h3 {
+    color: var(--dk-text, #333);
+    font-size: 14px;
+    font-weight: 400; /* Ginawa nating light para mas malapit sa screenshot */
+    display: block;
+    margin-top: 5px; /* Spacing sa pagitan ng mga link */
+}
+
+form .text h3 a {
+    color: var(--dk-success, #27ae60); /* Green color para sa 'Sign Up' o 'Login' link */
+    text-decoration: none;
+    font-weight: 600;
+    transition: 0.2s;
+}
+
+form .text h3 a:hover {
+    text-decoration: underline;
+    color: #1e8449; /* Darker green kapag hinover */
+}
+
+/* --- FORGOT PASSWORD & ALERT MESSAGES --- */
+.reset-message {
+    text-align: center;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: var(--dk-surface-2, #f8f9fa);
+    border-radius: 6px;
+}
+
+.reset-message p {
+    color: #2ecc71;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.reset-message a {
+    color: var(--dk-primary, #4a3e94);
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.reset-message a:hover {
+    color: #6b6497; /*  may kulay pag tinapatan ng mouse */
+    text-decoration: underline; 
+}
+
+.reset-message small {
+    display: block;
+    color: var(--dk-danger, #e74c3c);
+    margin-top: 8px;
+}
+
+.text a {
+    text-decoration: underline; /* Force underline para sa reset links */
+    font-style: italic;
+}
+
+/* Dashboard styles */
+body.dashboard-body {
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    background: var(--dk-surface-2, #f0f2f5) !important;
+    background-image: none !important;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+
+.sidebar {
+    width: 260px;
+    height: 100vh;
+    background: var(--dk-primary, #4a3e94);
+    color: var(--dk-on-primary, white);
+    padding: 30px 20px;
+    position: sticky; /* Imbes na fixed, para sumama sa layout flow */
+    top: 0;
+    flex-shrink: 0;
+}
+
+.sidebar h2 {
+    font-size: 20px;
+    margin-bottom: 30px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 15px;
+}
+
+.sidebar-links {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sidebar-links a {
+    color: rgba(255,255,255,0.8);
+    text-decoration: none;
+    padding: 12px 15px;
+    border-radius: 8px;
+    transition: 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.sidebar-links a:hover {
+    background: rgba(255,255,255,0.1);
+    color: white;
+}
+
+.main-content {
+    flex-grow: 1;
+    padding: 40px;
+    min-width: 0; /* Prevents flex items from overflowing */
+}
+
+/* Dashboard Specific Components */
+.card-row {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: var(--dk-surface, white);
+    padding: 25px;
+    border-radius: 12px;
+    flex: 1;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    text-align: center;
+}
+
+.stat-card i {
+    font-size: 28px;
+    color: var(--dk-primary, #4a3e94);
+    margin-bottom: 10px;
+}
+
+.table-box {
+    background: var(--dk-surface, white);
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.btn-add {
+    background: #27ae60;
+    color: white;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 6px;
+    float: right;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+th {
+    text-align: left;
+    padding: 12px;
+    border-bottom: 2px solid #f0f2f5;
+    color: var(--dk-muted, #888);
+    font-size: 13px;
+    text-transform: uppercase;
+}
+
+td {
+    padding: 15px 12px;
+    border-bottom: 1px solid #f0f2f5;
+    font-size: 14px;
+}
+
+.action-btn {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 12px;
+    margin-right: 5px;
+}
+
+.logout-btn {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 12px 24px;
+    background: var(--dk-primary, #4a3e94);
+    color: var(--dk-on-primary, white);
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: 0.3s;
+}
+
+.logout-btn:hover {
+    background: #6b6497;
+}
+/* ==========================================================================
+   Dark mode for the login / register / password pages (dark only — light is
+   unchanged). Staff/admin auth pages don't load ui-kit.css, so the dark-only
+   --dk-* values used above are defined here too (same palette as ui-kit.css).
+   ========================================================================== */
+:root[data-theme="dark"] {
+    --dk-primary: #ff7a3d; --dk-primary-hover: #ff8f5a; --dk-on-primary: #1a0f08;
+    --dk-surface: #1d1a16; --dk-surface-2: #231f1b; --dk-border: #332e28;
+    --dk-text: #f3eee8; --dk-text-2: #c8bfb4; --dk-muted: #968c80;
+    --dk-success: #51cf66; --dk-success-soft: #173321; --dk-warning: #fcc419; --dk-warning-soft: #3a2f10;
+    --dk-danger: #ff6b6b; --dk-danger-soft: #3d1a1a; --dk-info: #74c0fc; --dk-info-soft: #132a3d;
+    --dk-accent: #b197fc; --dk-accent-soft: #2a2140;
+    color-scheme: dark;
+}
+/* Dim the background photo so the card stands out */
+:root[data-theme="dark"] body:not(.customer-portal)::before {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; background: rgba(20, 18, 15, .72);
+}
+:root[data-theme="dark"] body:not(.customer-portal) .wrapper { z-index: 1; }
+:root[data-theme="dark"] .wrapper {
+    background: rgba(29, 26, 22, .96); border-color: #332e28; color: #f3eee8;
+    box-shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+}
+:root[data-theme="dark"] .wrapper h2 { color: #f3eee8; }
+:root[data-theme="dark"] .wrapper h2::after { background: #ff7a3d; }
+:root[data-theme="dark"] .wrapper p, :root[data-theme="dark"] .wrapper label { color: #c8bfb4; }
+:root[data-theme="dark"] .input-box input,
+:root[data-theme="dark"] .wrapper input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]),
+:root[data-theme="dark"] .wrapper select, :root[data-theme="dark"] .wrapper textarea {
+    background: #1d1a16; color: #f3eee8; border-color: #423b33;
+}
+:root[data-theme="dark"] .input-box input::placeholder, :root[data-theme="dark"] .wrapper input::placeholder { color: #968c80; }
+:root[data-theme="dark"] .input-box input:focus { border-color: #ff7a3d; }
+:root[data-theme="dark"] .input-box.button input,
+:root[data-theme="dark"] .wrapper input[type="submit"], :root[data-theme="dark"] .wrapper button[type="submit"] {
+    background: #ff7a3d; border-color: #ff7a3d; color: #1a0f08;
+}
+:root[data-theme="dark"] .input-box.button input:hover,
+:root[data-theme="dark"] .wrapper input[type="submit"]:hover, :root[data-theme="dark"] .wrapper button[type="submit"]:hover { background: #ff8f5a; border-color: #ff8f5a; }
+:root[data-theme="dark"] .wrapper input[type="submit"]:disabled { background: #423b33; border-color: #423b33; color: #968c80; }
+:root[data-theme="dark"] .text a, :root[data-theme="dark"] form .text h3 a, :root[data-theme="dark"] .wrapper a { color: #ff7a3d; }
+:root[data-theme="dark"] form .text h3 a:hover, :root[data-theme="dark"] .wrapper a:hover { color: #ff8f5a; }
+:root[data-theme="dark"] .toggle { color: #968c80; }
+:root[data-theme="dark"] .password-rules p, :root[data-theme="dark"] #confirmMessage { color: #ff6b6b; }
+:root[data-theme="dark"] .password-rules p.valid, :root[data-theme="dark"] #confirmMessage.valid { color: #51cf66; }
+:root[data-theme="dark"] .reset-message p { color: #51cf66; }
+:root[data-theme="dark"] .policy input { accent-color: #ff7a3d; }
+
+/* Theme toggle on the auth pages (fixed, top-right). */
+.auth-theme-toggle {
+    position: fixed; top: 16px; right: 16px; z-index: 10; width: 42px; height: 42px; padding: 0;
+    display: grid; place-items: center; border-radius: 50%; cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, .5); background: rgba(255, 255, 255, .85); color: #4a3e94;
+    font-size: 1rem; line-height: 1; box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
+}
+.auth-theme-toggle:hover { background: #fff; }
+:root[data-theme="dark"] .auth-theme-toggle { background: #1d1a16; border-color: #423b33; color: #ff7a3d; }
+:root[data-theme="dark"] .auth-theme-toggle:hover { background: #231f1b; }
