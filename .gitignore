@@ -39,3 +39,7 @@ desktop.ini
 .vercel
 /customer/includes/last_batch_maintenance_run.txt
 /customer/includes/last_batch_maintenance_run.txt.lock
+
+just a prompt.txt
+*.drawio
+*.drawio.bkp
